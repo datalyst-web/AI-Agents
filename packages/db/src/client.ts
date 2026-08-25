@@ -23,7 +23,7 @@ import type { TenantContext } from "@chat-agent/shared-types";
 // (confirmed by actually running a chat turn, not assumed). 30s comfortably
 // covers a multi-iteration tool-calling turn without masking a genuinely
 // hung request forever.
-const TRANSACTION_OPTIONS = { timeout: 30_000, maxWait: 10_000 };
+const TRANSACTION_OPTIONS = { timeout: 60_000, maxWait: 10_000 };
 
 export async function withTenant<T>(
   prisma: PrismaClient,
