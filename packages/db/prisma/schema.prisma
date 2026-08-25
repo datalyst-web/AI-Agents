@@ -1,0 +1,732 @@
+// AI Chat Agent Platform — Postgres schema.
+//
+// Lives as the "chat" schema inside the shared Aurora Postgres cluster
+// (see ARCHITECTURE.md "Shared platform hosting") — sibling schemas
+// "voice" and "sales" exist in the same cluster for other products, never
+// mixed with this one. pgvector powers the knowledge-base embeddings.
+//
+// Every tenant-owned table carries tenant_id and is covered by a row-level
+// security policy (see prisma/sql/rls_policies.sql) — this is defense in
+// depth on top of the application-layer scoping enforced by
+// packages/db/src/client.ts. Treat a table without both as a bug.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema", "postgresqlExtensions"]
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("DATABASE_SHADOW_URL")
+  schemas           = ["chat"]
+  extensions        = [vector, pgcrypto]
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy, users, RBAC, staff impersonation
+// ---------------------------------------------------------------------------
+
+enum SubscriptionState {
+  ACTIVE
+  TRIAL
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+
+  @@schema("chat")
+}
+
+enum SubscriptionTier {
+  STARTER
+  GROWTH
+  SCALE
+  ENTERPRISE
+
+  @@schema("chat")
+}
+
+enum ManagedSetupTier {
+  SELF_SERVE
+  ASSISTED_SETUP
+  FULLY_MANAGED
+
+  @@schema("chat")
+}
+
+model Tenant {
+  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                 String
+  slug                 String            @unique
+  subscriptionState    SubscriptionState @default(TRIAL)
+  subscriptionTier     SubscriptionTier  @default(STARTER)
+  managedSetupTier     ManagedSetupTier  @default(SELF_SERVE)
+  delegatesAutoPublish Boolean           @default(false)
+  dataRetentionDays    Int               @default(365)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  users                     User[]
+  agents                    Agent[]
+  knowledgeSources          KnowledgeSource[]
+  conversations             Conversation[]
+  tools                     ToolDefinition[]
+  workflows                 WorkflowDefinition[]
+  workflowRuns              WorkflowRun[]
+  usageRecords              UsageRecord[]
+  billingLineItems          BillingLineItem[]
+  usageLimits               UsageLimits?
+  auditLogEntries           AuditLogEntry[]
+  impersonationSessions     StaffImpersonationSession[]
+  customerIdentities        CustomerIdentity[]
+  crossConversationFacts    CrossConversationMemoryFact[]
+  crossAgentMemoryGrants    CrossAgentMemoryGrant[]
+  memoryForgetRequests      MemoryForgetRequest[]
+  pendingHumanApprovals     PendingHumanApproval[]
+
+  @@map("tenants")
+  @@schema("chat")
+}
+
+enum Role {
+  platform_admin
+  setup_specialist
+  tenant_owner
+  tenant_admin
+  tenant_agent_editor
+  tenant_viewer
+
+  @@schema("chat")
+}
+
+model User {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // null for platform_admin / setup_specialist — they are not scoped to one tenant.
+  tenantId     String?  @map("tenant_id") @db.Uuid
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role
+  displayName  String   @map("display_name")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  impersonationSessionsAsStaff StaffImpersonationSession[] @relation("StaffUser")
+
+  @@index([tenantId])
+  @@map("users")
+  @@schema("chat")
+}
+
+/// Staff "act as tenant" sessions for Managed Setup — time-boxed, audited,
+/// never a bypass of tenant-scoped tools. See CLAUDE.md "Internal roles & access".
+model StaffImpersonationSession {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staffUserId   String    @map("staff_user_id") @db.Uuid
+  staffUser     User      @relation("StaffUser", fields: [staffUserId], references: [id])
+  reason        String
+  startedAt     DateTime  @default(now()) @map("started_at")
+  expiresAt     DateTime  @map("expires_at")
+  endedAt       DateTime? @map("ended_at")
+
+  @@index([tenantId])
+  @@index([staffUserId])
+  @@map("staff_impersonation_sessions")
+  @@schema("chat")
+}
+
+// ---------------------------------------------------------------------------
+// Agents
+// ---------------------------------------------------------------------------
+
+enum AgentStatus {
+  DRAFT
+  CONFIGURING
+  KNOWLEDGE_PROCESSING
+  TESTING
+  APPROVED
+  LIVE
+
+  @@schema("chat")
+}
+
+enum ContentSource {
+  CLIENT
+  STAFF_MANAGED_SETUP
+
+  @@schema("chat")
+}
+
+model Agent {
+  id                    String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId              String        @map("tenant_id") @db.Uuid
+  tenant                Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                  String
+  status                AgentStatus   @default(DRAFT)
+  version               String        @default("v0.1")
+  // JSON blobs validated by shared-types Zod schemas at the app layer —
+  // kept as JSON here so config evolution doesn't require a migration per field.
+  personality           Json
+  modelRouting          Json          @map("model_routing")
+  enabledToolIds        String[]      @map("enabled_tool_ids") @db.Uuid
+  crossAgentMemoryPeerIds String[]    @map("cross_agent_memory_peer_ids") @db.Uuid
+  createdBySource       ContentSource @map("created_by_source")
+  createdByUserId       String        @map("created_by_user_id") @db.Uuid
+  lastEditedBySource     ContentSource @map("last_edited_by_source")
+  lastEditedByUserId    String        @map("last_edited_by_user_id") @db.Uuid
+  approvedByClientUserId String?      @map("approved_by_client_user_id") @db.Uuid
+  approvedAt             DateTime?    @map("approved_at")
+  createdAt              DateTime     @default(now()) @map("created_at")
+  updatedAt              DateTime     @updatedAt @map("updated_at")
+
+  versions        AgentVersionSnapshot[]
+  knowledgeSources KnowledgeSource[]
+  conversations   Conversation[]
+  tools           ToolDefinition[]
+  workflows       WorkflowDefinition[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("agents")
+  @@schema("chat")
+}
+
+model AgentVersionSnapshot {
+  id                  String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agentId             String      @map("agent_id") @db.Uuid
+  agent               Agent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  tenantId            String      @map("tenant_id") @db.Uuid
+  version             String
+  personality         Json
+  modelRouting        Json        @map("model_routing")
+  enabledToolIds      String[]    @map("enabled_tool_ids") @db.Uuid
+  knowledgeSnapshotId String      @map("knowledge_snapshot_id") @db.Uuid
+  status              AgentStatus
+  publishedAt         DateTime?   @map("published_at")
+  rolledBackFromVersion String?   @map("rolled_back_from_version")
+  createdAt           DateTime    @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@index([agentId])
+  @@map("agent_version_snapshots")
+  @@schema("chat")
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge base / RAG pipeline
+// ---------------------------------------------------------------------------
+
+enum KnowledgeSourceType {
+  PDF
+  DOCX
+  TXT
+  CSV
+  WEBSITE_CRAWL
+  MANUAL_FAQ
+  EXTERNAL_API
+
+  @@schema("chat")
+}
+
+enum KnowledgeProcessingStatus {
+  PENDING
+  EXTRACTING
+  CHUNKING
+  EMBEDDING
+  READY
+  FAILED
+
+  @@schema("chat")
+}
+
+model KnowledgeSource {
+  id               String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String                    @map("tenant_id") @db.Uuid
+  tenant           Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId          String                    @map("agent_id") @db.Uuid
+  agent            Agent                     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  type             KnowledgeSourceType
+  status           KnowledgeProcessingStatus @default(PENDING)
+  originalFilename String?                   @map("original_filename")
+  sourceUrl        String?                   @map("source_url")
+  s3Key            String?                   @map("s3_key")
+  addedBySource    ContentSource             @map("added_by_source")
+  addedByUserId    String                    @map("added_by_user_id") @db.Uuid
+  errorMessage     String?                   @map("error_message")
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  updatedAt        DateTime                  @updatedAt @map("updated_at")
+
+  documents Document[]
+
+  @@index([tenantId])
+  @@index([tenantId, agentId])
+  @@map("knowledge_sources")
+  @@schema("chat")
+}
+
+model Document {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String          @map("tenant_id") @db.Uuid
+  agentId           String          @map("agent_id") @db.Uuid
+  knowledgeSourceId String          @map("knowledge_source_id") @db.Uuid
+  knowledgeSource   KnowledgeSource @relation(fields: [knowledgeSourceId], references: [id], onDelete: Cascade)
+  title             String
+  rawText           String          @map("raw_text")
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  chunks Chunk[]
+
+  @@index([tenantId])
+  @@index([tenantId, agentId])
+  @@map("documents")
+  @@schema("chat")
+}
+
+model Chunk {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  agentId           String   @map("agent_id") @db.Uuid
+  knowledgeSourceId String   @map("knowledge_source_id") @db.Uuid
+  documentId        String   @map("document_id") @db.Uuid
+  document          Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  text              String
+  /// Embedding dimensionality matches the configured embedding model
+  /// (1536 for text-embedding-3-small / Gemini text-embedding-004).
+  embedding         Unsupported("vector(1536)")?
+  metadata          Json     @default("{}")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  // Every retrieval query filters by tenantId + agentId before the vector
+  // similarity search, enforced in packages/rag/src/retrieve.ts — an agent
+  // must never retrieve another client's chunks (CLAUDE.md RAG section).
+  @@index([tenantId, agentId])
+  @@map("chunks")
+  @@schema("chat")
+}
+
+// ---------------------------------------------------------------------------
+// Conversations, messages
+// ---------------------------------------------------------------------------
+
+enum ConversationChannel {
+  WIDGET
+  STANDALONE_URL
+  API
+
+  @@schema("chat")
+}
+
+enum ConversationOutcome {
+  RESOLVED
+  ESCALATED_TO_HUMAN
+  ABANDONED
+  IN_PROGRESS
+
+  @@schema("chat")
+}
+
+enum DropOffPoint {
+  GREETING
+  KNOWLEDGE_LOOKUP
+  TOOL_EXECUTION
+  HANDOFF_WAIT
+  NONE
+
+  @@schema("chat")
+}
+
+model Conversation {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String               @map("tenant_id") @db.Uuid
+  tenant             Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId            String               @map("agent_id") @db.Uuid
+  agent              Agent                @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  channel            ConversationChannel
+  customerIdentityId String?              @map("customer_identity_id") @db.Uuid
+  customerIdentity   CustomerIdentity?    @relation(fields: [customerIdentityId], references: [id])
+  outcome            ConversationOutcome  @default(IN_PROGRESS)
+  businessResult     String?              @map("business_result")
+  dropOffPoint       DropOffPoint         @default(NONE) @map("drop_off_point")
+  sentimentTrend     Float[]              @map("sentiment_trend")
+  handoffRequested   Boolean              @default(false) @map("handoff_requested")
+  handoffSummary     Json?                @map("handoff_summary")
+  /// A confirmation-gated tool call awaiting the customer's yes/no, keyed
+  /// by a server-generated id (never the model's tool_use id, which isn't
+  /// stable across turns) — see engine/agentLoop.ts. Cleared once resolved
+  /// or superseded by a later message that isn't a matching confirmation.
+  pendingToolCall    Json?                @map("pending_tool_call")
+  startedAt          DateTime             @default(now()) @map("started_at")
+  endedAt            DateTime?            @map("ended_at")
+
+  messages Message[]
+
+  @@index([tenantId])
+  @@index([tenantId, agentId])
+  @@index([tenantId, agentId, startedAt])
+  @@map("conversations")
+  @@schema("chat")
+}
+
+enum MessageRole {
+  customer
+  agent
+  system
+  tool
+  staff
+
+  @@schema("chat")
+}
+
+model Message {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  agentId        String       @map("agent_id") @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           MessageRole
+  content        String
+  loopTrace      Json?        @map("loop_trace")
+  sentimentScore Float?       @map("sentiment_score")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@index([conversationId])
+  @@map("messages")
+  @@schema("chat")
+}
+
+// ---------------------------------------------------------------------------
+// Memory engine
+// ---------------------------------------------------------------------------
+
+model CustomerIdentity {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId         String   @map("agent_id") @db.Uuid
+  identifierType  String   @map("identifier_type") // authenticated_account | email | widget_session_cookie
+  identifierHash  String   @map("identifier_hash") // hashed at rest, never the raw email/cookie
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  conversations       Conversation[]
+  crossConversationFacts CrossConversationMemoryFact[]
+  forgetRequests       MemoryForgetRequest[]
+
+  @@unique([tenantId, agentId, identifierType, identifierHash])
+  @@index([tenantId])
+  @@map("customer_identities")
+  @@schema("chat")
+}
+
+model CrossConversationMemoryFact {
+  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String            @map("tenant_id") @db.Uuid
+  tenant               Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId              String            @map("agent_id") @db.Uuid
+  customerIdentityId   String            @map("customer_identity_id") @db.Uuid
+  customerIdentity     CustomerIdentity  @relation(fields: [customerIdentityId], references: [id], onDelete: Cascade)
+  fact                 String
+  sourceConversationId String            @map("source_conversation_id") @db.Uuid
+  sourceMessageId      String            @map("source_message_id") @db.Uuid
+  confidence           Float
+  expiresAt            DateTime?         @map("expires_at")
+  createdAt            DateTime          @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@index([customerIdentityId])
+  @@map("cross_conversation_memory_facts")
+  @@schema("chat")
+}
+
+/// Off by default; a tenant must explicitly opt in per agent pair. Never cross-tenant.
+model CrossAgentMemoryGrant {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sourceAgentId  String   @map("source_agent_id") @db.Uuid
+  targetAgentId  String   @map("target_agent_id") @db.Uuid
+  enabledByUserId String  @map("enabled_by_user_id") @db.Uuid
+  enabledAt      DateTime @default(now()) @map("enabled_at")
+
+  @@unique([tenantId, sourceAgentId, targetAgentId])
+  @@index([tenantId])
+  @@map("cross_agent_memory_grants")
+  @@schema("chat")
+}
+
+model MemoryForgetRequest {
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String            @map("tenant_id") @db.Uuid
+  tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId            String            @map("agent_id") @db.Uuid
+  customerIdentityId String            @map("customer_identity_id") @db.Uuid
+  customerIdentity   CustomerIdentity  @relation(fields: [customerIdentityId], references: [id], onDelete: Cascade)
+  requestedAt        DateTime          @default(now()) @map("requested_at")
+  fulfilledAt        DateTime?         @map("fulfilled_at")
+  fulfilledByUserId  String?           @map("fulfilled_by_user_id") @db.Uuid
+
+  @@index([tenantId])
+  @@map("memory_forget_requests")
+  @@schema("chat")
+}
+
+// ---------------------------------------------------------------------------
+// Tool & Action Engine
+// ---------------------------------------------------------------------------
+
+enum ExecutionTier {
+  automatic
+  confirmation_required
+  human_approval
+
+  @@schema("chat")
+}
+
+enum ToolCategory {
+  search_knowledge
+  search_database
+  crm
+  calendar
+  email
+  webhook
+  api
+  ticketing
+  inventory
+  orders
+  custom
+
+  @@schema("chat")
+}
+
+model ToolDefinition {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String        @map("tenant_id") @db.Uuid
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId        String?       @map("agent_id") @db.Uuid
+  agent          Agent?        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  name           String
+  description    String
+  category       ToolCategory
+  inputSchema    Json          @map("input_schema")
+  outputSchema   Json          @map("output_schema")
+  executionTier  ExecutionTier @map("execution_tier")
+  /// Handler-specific runtime config (base URLs, header names, object-type
+  /// mappings, etc.) — never credentials themselves, those live behind
+  /// credentialRef. Shape depends on `category`; validated at the
+  /// apps/api handler-factory boundary, not here.
+  config         Json          @default("{}")
+  credentialRef  String?       @map("credential_ref") // key into packages/secrets, never inline creds
+  enabled        Boolean       @default(true)
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@index([tenantId, agentId])
+  @@map("tool_definitions")
+  @@schema("chat")
+}
+
+enum PendingHumanApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@schema("chat")
+}
+
+/// A tool call gated at the `human_approval` execution tier (CLAUDE.md
+/// principle 5 / Tool & Action Engine) — never auto-executed and never
+/// resolvable by the customer's own "yes"/"confirm" reply, unlike
+/// `confirmation_required` (see Conversation.pendingToolCall). A staff
+/// member must explicitly approve or reject via the staff-facing approvals
+/// API before the underlying tool ever runs.
+model PendingHumanApproval {
+  id                String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String                     @map("tenant_id") @db.Uuid
+  tenant            Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId           String                     @map("agent_id") @db.Uuid
+  conversationId    String                     @map("conversation_id") @db.Uuid
+  /// Server-generated correlation id for this pending action — same
+  /// pattern as Conversation.pendingToolCall's id, never the model's own
+  /// tool_use id (not guaranteed stable across turns).
+  toolCallId        String                     @map("tool_call_id")
+  toolName          String                     @map("tool_name")
+  input             Json
+  status            PendingHumanApprovalStatus @default(PENDING)
+  requestedAt       DateTime                   @default(now()) @map("requested_at")
+  resolvedAt        DateTime?                  @map("resolved_at")
+  /// Staff user who approved/rejected — null while status is PENDING.
+  resolvedByUserId  String?                    @map("resolved_by_user_id") @db.Uuid
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, agentId])
+  @@index([conversationId])
+  @@map("pending_human_approvals")
+  @@schema("chat")
+}
+
+// ---------------------------------------------------------------------------
+// Workflow Engine
+// ---------------------------------------------------------------------------
+
+enum WorkflowTriggerType {
+  NEW_LEAD
+  CONVERSATION_ENDED
+  CONVERSATION_ABANDONED
+  TOOL_FAILURE
+  CRM_FIELD_CHANGE
+  FORM_SUBMITTED
+  SENTIMENT_THRESHOLD_CROSSED
+  NO_REPLY_TIMEOUT
+  HANDOFF_REQUESTED
+
+  @@schema("chat")
+}
+
+model WorkflowDefinition {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String              @map("tenant_id") @db.Uuid
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId         String?             @map("agent_id") @db.Uuid
+  agent           Agent?              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  name            String
+  version         Int                 @default(1)
+  enabled         Boolean             @default(true)
+  triggerType     WorkflowTriggerType @map("trigger_type")
+  triggerFilter   Json?               @map("trigger_filter")
+  actions         Json // WorkflowAction[] — see shared-types workflow.ts
+  createdByUserId String              @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  runs WorkflowRun[]
+
+  @@index([tenantId])
+  @@index([tenantId, triggerType, enabled])
+  @@map("workflow_definitions")
+  @@schema("chat")
+}
+
+enum WorkflowRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  FAILED_NOTIFIED
+
+  @@schema("chat")
+}
+
+model WorkflowRun {
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String             @map("tenant_id") @db.Uuid
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflowId     String             @map("workflow_id") @db.Uuid
+  workflow       WorkflowDefinition @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  status         WorkflowRunStatus  @default(PENDING)
+  triggerPayload Json               @map("trigger_payload")
+  actionLog      Json               @default("[]") @map("action_log")
+  startedAt      DateTime           @default(now()) @map("started_at")
+  completedAt    DateTime?          @map("completed_at")
+
+  @@index([tenantId])
+  @@index([workflowId])
+  @@map("workflow_runs")
+  @@schema("chat")
+}
+
+// ---------------------------------------------------------------------------
+// Usage & billing
+// ---------------------------------------------------------------------------
+
+enum AIProviderName {
+  anthropic
+  openai
+  gemini
+
+  @@schema("chat")
+}
+
+model UsageRecord {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String         @map("tenant_id") @db.Uuid
+  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId           String         @map("agent_id") @db.Uuid
+  conversationId    String?        @map("conversation_id") @db.Uuid
+  requestId         String         @map("request_id")
+  provider          AIProviderName
+  modelId           String         @map("model_id")
+  inputTokens       Int            @map("input_tokens")
+  outputTokens      Int            @map("output_tokens")
+  estimatedCostUsd  Decimal?       @map("estimated_cost_usd") @db.Decimal(12, 6)
+  timestamp         DateTime       @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, agentId, timestamp])
+  @@map("usage_records")
+  @@schema("chat")
+}
+
+enum BillingSkuType {
+  SUBSCRIPTION
+  AI_INFERENCE_OVERAGE
+  MANAGED_SETUP_ONE_TIME
+  MANAGED_SETUP_RECURRING_MAINTENANCE
+
+  @@schema("chat")
+}
+
+model BillingLineItem {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String         @map("tenant_id") @db.Uuid
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  skuType     BillingSkuType @map("sku_type")
+  description String
+  amountUsd   Decimal        @map("amount_usd") @db.Decimal(12, 2)
+  periodStart DateTime       @map("period_start")
+  periodEnd   DateTime       @map("period_end")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@map("billing_line_items")
+  @@schema("chat")
+}
+
+model UsageLimits {
+  tenantId                       String   @id @map("tenant_id") @db.Uuid
+  tenant                         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  includedConversationsPerMonth  Int      @map("included_conversations_per_month")
+  includedTokensPerMonth         Int      @map("included_tokens_per_month")
+  overageRatePerThousandTokensUsd Decimal @map("overage_rate_per_thousand_tokens_usd") @db.Decimal(10, 4)
+  hardCapTokensPerMonth          Int?     @map("hard_cap_tokens_per_month")
+
+  @@map("usage_limits")
+  @@schema("chat")
+}
+
+// ---------------------------------------------------------------------------
+// Audit log
+// ---------------------------------------------------------------------------
+
+model AuditLogEntry {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId               String   @map("tenant_id") @db.Uuid
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId                String?  @map("agent_id") @db.Uuid
+  actorUserId            String   @map("actor_user_id") @db.Uuid
+  actorIsStaff           Boolean  @map("actor_is_staff")
+  action                 String
+  contentSource          String?  @map("content_source")
+  metadata               Json     @default("{}")
+  impersonationSessionId String?  @map("impersonation_session_id") @db.Uuid
+  timestamp              DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, timestamp])
+  @@map("audit_log_entries")
+  @@schema("chat")
+}

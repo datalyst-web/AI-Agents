@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: theme("colors.surface.DEFAULT");
+  background-image: theme("backgroundImage.mesh-ambient");
+  background-attachment: fixed;
+  color: white;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: theme("colors.brand.500 / 35%");
+  color: white;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: theme("colors.surface.border");
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: theme("colors.brand.700");
+}
+
+@layer utilities {
+  .text-gradient {
+    background-image: theme("backgroundImage.brand-gradient");
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .glass {
+    background: rgba(15, 17, 25, 0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+}

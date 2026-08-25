@@ -1,0 +1,33 @@
+{
+  "name": "@chat-agent/workers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@chat-agent/shared-types": "workspace:*",
+    "@chat-agent/config": "workspace:*",
+    "@chat-agent/secrets": "workspace:*",
+    "@chat-agent/db": "workspace:*",
+    "@chat-agent/ai-provider": "workspace:*",
+    "@chat-agent/rag": "workspace:*",
+    "@chat-agent/workflow-engine": "workspace:*",
+    "@chat-agent/tool-sdk": "workspace:*",
+    "@chat-agent/queue": "workspace:*",
+    "@chat-agent/storage": "workspace:*",
+    "pino": "^9.5.0",
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "tsx": "^4.19.1",
+    "rimraf": "^6.0.1",
+    "@types/node": "^22.7.5"
+  }
+}

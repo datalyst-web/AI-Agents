@@ -1,0 +1,48 @@
+name: Deploy dashboard
+
+# Dashboard runs as its own ECS Fargate service on the shared cluster too
+# (see infra/README.md) — kept out of infra/terraform/ecs_api.tf's file
+# since it's a distinct app with its own task def/service, added the same
+# way any new product surface joins the platform: a new ECS service, no
+# new cluster.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/dashboard/**"
+      - "packages/ui/**"
+      - "packages/shared-types/**"
+      - ".github/workflows/deploy-dashboard.yml"
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  ECS_CLUSTER: agents-platform
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - name: Build and push chat-dashboard
+        run: |
+          repo="${{ steps.ecr.outputs.registry }}/chat-dashboard"
+          docker build -f apps/dashboard/Dockerfile \
+            --build-arg NEXT_PUBLIC_API_BASE_URL="${{ secrets.CHAT_API_PUBLIC_URL }}" \
+            -t "$repo:${GITHUB_SHA::12}" -t "$repo:latest" .
+          docker push "$repo:${GITHUB_SHA::12}"
+          docker push "$repo:latest"
+
+      - name: Force new deployment
+        run: |
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service chat-dashboard --force-new-deployment
+          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services chat-dashboard

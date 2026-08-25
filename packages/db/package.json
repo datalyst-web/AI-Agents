@@ -1,0 +1,37 @@
+{
+  "name": "@chat-agent/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "build": "prisma generate && tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "seed": "tsx src/seed.ts",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@chat-agent/shared-types": "workspace:*",
+    "@prisma/client": "^5.21.1",
+    "bcryptjs": "^2.4.3"
+  },
+  "devDependencies": {
+    "prisma": "^5.21.1",
+    "typescript": "^5.6.3",
+    "tsx": "^4.19.1",
+    "rimraf": "^6.0.1",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.7.5"
+  }
+}

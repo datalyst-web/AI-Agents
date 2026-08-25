@@ -1,0 +1,44 @@
+name: Deploy widget
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/widget/**"
+      - ".github/workflows/deploy-widget.yml"
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  WIDGET_BUCKET: agents-platform-chat-widget-assets
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @chat-agent/widget run build
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sync to S3
+        run: aws s3 cp apps/widget/dist/widget.js "s3://${{ env.WIDGET_BUCKET }}/widget.js" --cache-control "public, max-age=300"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ secrets.WIDGET_CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths "/widget.js"

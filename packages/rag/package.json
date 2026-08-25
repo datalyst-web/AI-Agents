@@ -1,0 +1,36 @@
+{
+  "name": "@chat-agent/rag",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@chat-agent/shared-types": "workspace:*",
+    "@chat-agent/db": "workspace:*",
+    "@chat-agent/ai-provider": "workspace:*",
+    "pdf-parse": "^1.1.1",
+    "mammoth": "^1.8.0",
+    "csv-parse": "^5.5.6",
+    "cheerio": "^1.0.0",
+    "p-limit": "^6.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "rimraf": "^6.0.1",
+    "@types/pdf-parse": "^1.1.4",
+    "@types/node": "^22.7.5"
+  }
+}
