@@ -16,6 +16,14 @@ export interface ModelRouteRequest extends Omit<GenerateOptions, "model"> {
   preferredProvider?: ProviderName;
   /** Optional explicit model id override — normally left unset so each provider's pinned model id is used. */
   model?: string;
+  /**
+   * Which Claude tier the tenant picked in the dashboard — only consulted
+   * when the provider actually used for this call is "anthropic" (never
+   * leaks into openai/gemini, same reasoning as embeddingModelIds below).
+   * Ignored if the provider ends up being anything other than anthropic,
+   * e.g. after a failover.
+   */
+  anthropicModelTier?: "haiku" | "sonnet" | "opus";
 }
 
 export interface RouterUsageEvent {
@@ -55,6 +63,7 @@ export class ModelRouter {
   private providers: Partial<Record<ProviderName, AIProvider>>;
   private modelIds: ProviderModelMap;
   private embeddingModelIds: EmbeddingModelMap;
+  private anthropicModelTierIds: Partial<Record<"haiku" | "sonnet" | "opus", string>>;
   private defaultChain: ProviderName[];
   private usageListeners: UsageListener[] = [];
   // Keyed "kind:provider" (e.g. "embed:gemini"), not just provider — an
@@ -71,11 +80,13 @@ export class ModelRouter {
     providers: Partial<Record<ProviderName, AIProvider>>;
     modelIds: ProviderModelMap;
     embeddingModelIds?: EmbeddingModelMap;
+    anthropicModelTierIds?: Partial<Record<"haiku" | "sonnet" | "opus", string>>;
     defaultChain?: ProviderName[];
   }) {
     this.providers = opts.providers;
     this.modelIds = opts.modelIds;
     this.embeddingModelIds = opts.embeddingModelIds ?? {};
+    this.anthropicModelTierIds = opts.anthropicModelTierIds ?? {};
     this.defaultChain = opts.defaultChain ?? ["anthropic", "openai", "gemini"];
   }
 
@@ -104,8 +115,12 @@ export class ModelRouter {
     this.unhealthyUntil[`${kind}:${name}`] = Date.now() + this.cooldownMs;
   }
 
-  private modelFor(name: ProviderName, override?: string): string {
-    const id = override ?? this.modelIds[name];
+  private modelFor(name: ProviderName, override?: string, anthropicModelTier?: "haiku" | "sonnet" | "opus"): string {
+    // Tier only applies when anthropic is the provider actually being
+    // called — after a failover to openai/gemini it's meaningless and must
+    // not leak in as a caller override (same class of bug as embeddings).
+    const tierId = name === "anthropic" ? anthropicModelTier && this.anthropicModelTierIds[anthropicModelTier] : undefined;
+    const id = tierId ?? override ?? this.modelIds[name];
     if (!id) throw new Error(`No pinned model id configured for provider "${name}"`);
     return id;
   }
@@ -137,7 +152,7 @@ export class ModelRouter {
       if (!provider) continue;
       attempted.push(name);
       try {
-        const result = await provider.generate({ ...req, model: this.modelFor(name, req.model) });
+        const result = await provider.generate({ ...req, model: this.modelFor(name, req.model, req.anthropicModelTier) });
         this.emitUsage({
           provider: name,
           model: result.model,
@@ -178,7 +193,7 @@ export class ModelRouter {
       const provider = this.providers[name];
       if (!provider) continue;
       try {
-        yield* provider.stream({ ...req, model: this.modelFor(name, req.model) });
+        yield* provider.stream({ ...req, model: this.modelFor(name, req.model, req.anthropicModelTier) });
         return;
       } catch (err) {
         lastError = err;

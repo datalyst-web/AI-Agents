@@ -15,6 +15,13 @@ export const EnvSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   GEMINI_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL_ID: z.string().default("claude-sonnet-5"),
+  // Per-tier Claude model ids a tenant picks between in the dashboard
+  // (Anthropic is the default provider, per CLAUDE.md model routing) — the
+  // plain ANTHROPIC_MODEL_ID above stays as the ultimate fallback if a
+  // tenant's chosen tier somehow has no id configured.
+  ANTHROPIC_MODEL_HAIKU_ID: z.string().default("claude-haiku-4-5-20251001"),
+  ANTHROPIC_MODEL_SONNET_ID: z.string().default("claude-sonnet-5"),
+  ANTHROPIC_MODEL_OPUS_ID: z.string().default("claude-opus-5"),
   OPENAI_MODEL_ID: z.string().default("gpt-5"),
   // gemini-2.5-flash was retired for new API keys ("no longer available to
   // new users") — gemini-3.5-flash-lite is the current pinned replacement,

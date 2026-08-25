@@ -238,6 +238,8 @@ export async function processCustomerMessage(
         const followUp = await deps.router.generate({
           messages: followUpMessages,
           failoverChain: modelRouting.failoverChain,
+          preferredProvider: modelRouting.preferredProvider,
+          anthropicModelTier: modelRouting.anthropicModelTier,
           maxOutputTokens: 300,
         });
         await recordUsage(tx, {
@@ -316,6 +318,8 @@ export async function processCustomerMessage(
           messages,
           tools: toolRegistry.listToolSpecs(),
           failoverChain: modelRouting.failoverChain,
+          preferredProvider: modelRouting.preferredProvider,
+          anthropicModelTier: modelRouting.anthropicModelTier,
           maxOutputTokens: 1024,
         });
 

@@ -19,6 +19,10 @@ export interface RouterFromEnvConfig {
   geminiModelId?: string;
   openaiEmbeddingModelId?: string;
   geminiEmbeddingModelId?: string;
+  /** Specific Claude tier model ids a tenant can pick between in the dashboard — see ModelRoutingPreference.anthropicModelTier. */
+  anthropicHaikuModelId?: string;
+  anthropicSonnetModelId?: string;
+  anthropicOpusModelId?: string;
   defaultChain?: ProviderName[];
 }
 
@@ -43,6 +47,11 @@ export function createModelRouterFromConfig(config: RouterFromEnvConfig): ModelR
     embeddingModelIds: {
       openai: config.openaiEmbeddingModelId,
       gemini: config.geminiEmbeddingModelId,
+    },
+    anthropicModelTierIds: {
+      haiku: config.anthropicHaikuModelId,
+      sonnet: config.anthropicSonnetModelId,
+      opus: config.anthropicOpusModelId,
     },
     defaultChain: config.defaultChain,
   });

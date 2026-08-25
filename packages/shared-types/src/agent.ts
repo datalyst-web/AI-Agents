@@ -31,8 +31,15 @@ export const AgentPersonalitySchema = z.object({
 });
 export type AgentPersonality = z.infer<typeof AgentPersonalitySchema>;
 
+/** Anthropic-specific tier — which the tenant may pick per their plan, per CLAUDE.md model routing. */
+export const AnthropicModelTierSchema = z.enum(["haiku", "sonnet", "opus"]);
+export type AnthropicModelTier = z.infer<typeof AnthropicModelTierSchema>;
+
 export const ModelRoutingPreferenceSchema = z.object({
-  preferredProvider: z.enum(["anthropic", "openai", "gemini"]).optional(),
+  /** The provider a client explicitly chose in the dashboard — Anthropic by default. */
+  preferredProvider: z.enum(["anthropic", "openai", "gemini"]).default("anthropic"),
+  /** Only meaningful when preferredProvider is "anthropic" — which Claude tier to use. */
+  anthropicModelTier: AnthropicModelTierSchema.default("sonnet"),
   failoverChain: z.array(z.enum(["anthropic", "openai", "gemini"])).default([
     "anthropic",
     "openai",

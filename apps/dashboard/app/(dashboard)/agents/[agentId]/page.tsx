@@ -12,7 +12,18 @@ interface AgentDetail {
   status: string;
   version: string;
   personality: { name: string; greeting: string; systemInstructions: string; tone: string };
+  modelRouting: {
+    preferredProvider: "anthropic" | "openai" | "gemini";
+    anthropicModelTier: "haiku" | "sonnet" | "opus";
+    reasoningEffort: "low" | "medium" | "high";
+  };
 }
+
+const ANTHROPIC_TIER_LABELS: Record<string, string> = {
+  haiku: "Haiku — fastest, most affordable",
+  sonnet: "Sonnet — balanced (recommended)",
+  opus: "Opus — most capable, highest cost",
+};
 interface KnowledgeSource {
   id: string;
   type: string;
@@ -168,6 +179,17 @@ export default function AgentDetailPage() {
     setError(null);
     try {
       await api.updateAgent(user.tenantId, agentId, { personality: { systemInstructions: agent.personality.systemInstructions } });
+      refreshAgent();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Save failed.");
+    }
+  }
+
+  async function saveModelRouting() {
+    if (!user || !agent) return;
+    setError(null);
+    try {
+      await api.updateAgent(user.tenantId, agentId, { modelRouting: agent.modelRouting });
       refreshAgent();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Save failed.");
@@ -373,20 +395,73 @@ export default function AgentDetailPage() {
       ) : null}
 
       {tab === "Configuration" ? (
-        <Card>
-          <CardHeader title="Instructions" subtitle="What this agent knows to do and how it should behave." />
-          <CardBody>
-            <form onSubmit={saveInstructions} className="space-y-3">
-              <textarea
-                value={agent.personality.systemInstructions}
-                onChange={(e) => setAgent({ ...agent, personality: { ...agent.personality, systemInstructions: e.target.value } })}
-                rows={8}
-                className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white outline-none focus:border-brand-500"
-              />
-              <Button type="submit">Save changes</Button>
-            </form>
-          </CardBody>
-        </Card>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader title="Instructions" subtitle="What this agent knows to do and how it should behave." />
+            <CardBody>
+              <form onSubmit={saveInstructions} className="space-y-3">
+                <textarea
+                  value={agent.personality.systemInstructions}
+                  onChange={(e) => setAgent({ ...agent, personality: { ...agent.personality, systemInstructions: e.target.value } })}
+                  rows={8}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white outline-none focus:border-brand-500"
+                />
+                <Button type="submit">Save changes</Button>
+              </form>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader title="AI Model" subtitle="Which model powers this agent's responses. Anthropic Claude is the default — the most reliable choice for accuracy and instruction-following." />
+            <CardBody className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-white/60">Provider</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["anthropic", "openai", "gemini"] as const).map((provider) => (
+                    <button
+                      key={provider}
+                      type="button"
+                      onClick={() => setAgent({ ...agent, modelRouting: { ...agent.modelRouting, preferredProvider: provider } })}
+                      className={`rounded-lg border px-3 py-2.5 text-sm font-medium capitalize transition-colors ${
+                        agent.modelRouting.preferredProvider === provider
+                          ? "border-brand-500/50 bg-brand-500/15 text-white"
+                          : "border-white/10 bg-white/5 text-white/60 hover:text-white/80"
+                      }`}
+                    >
+                      {provider}
+                      {provider === "anthropic" ? <span className="ml-1 text-[10px] text-brand-300">default</span> : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {agent.modelRouting.preferredProvider === "anthropic" ? (
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-white/60">Claude model</label>
+                  <select
+                    value={agent.modelRouting.anthropicModelTier}
+                    onChange={(e) =>
+                      setAgent({
+                        ...agent,
+                        modelRouting: { ...agent.modelRouting, anthropicModelTier: e.target.value as AgentDetail["modelRouting"]["anthropicModelTier"] },
+                      })
+                    }
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-brand-500"
+                  >
+                    {(["haiku", "sonnet", "opus"] as const).map((tier) => (
+                      <option key={tier} value={tier} className="bg-surface-raised">
+                        {ANTHROPIC_TIER_LABELS[tier]}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1.5 text-xs text-white/40">Which Claude tier depends on your plan — you can change this any time.</p>
+                </div>
+              ) : null}
+
+              <Button onClick={saveModelRouting}>Save model settings</Button>
+            </CardBody>
+          </Card>
+        </div>
       ) : null}
 
       {tab === "Knowledge" ? (

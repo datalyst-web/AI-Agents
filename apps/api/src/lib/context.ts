@@ -31,6 +31,9 @@ export function buildAppContext(): AppContext {
     geminiModelId: env.GEMINI_MODEL_ID,
     openaiEmbeddingModelId: env.OPENAI_EMBEDDING_MODEL_ID,
     geminiEmbeddingModelId: env.GEMINI_EMBEDDING_MODEL_ID,
+    anthropicHaikuModelId: env.ANTHROPIC_MODEL_HAIKU_ID,
+    anthropicSonnetModelId: env.ANTHROPIC_MODEL_SONNET_ID,
+    anthropicOpusModelId: env.ANTHROPIC_MODEL_OPUS_ID,
     defaultChain: env.AI_FAILOVER_CHAIN,
   });
   // Usage rows are written tenant-scoped inside engine/agentLoop.ts's RECORD
