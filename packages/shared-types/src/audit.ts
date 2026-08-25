@@ -11,6 +11,7 @@ export const AUDIT_ACTIONS = [
   "agent_instructions_edited",
   "agent_personality_edited",
   "agent_moved_to_testing",
+  "agent_deleted",
   "knowledge_base_published",
   "agent_published_to_live",
   "agent_rolled_back",

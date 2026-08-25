@@ -50,6 +50,43 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
   });
 
   /**
+   * Permanently removes an agent and everything scoped to it (knowledge,
+   * conversations, usage records — see schema.prisma's onDelete: Cascade on
+   * every Agent-scoped relation). Distinct from subscription-expiry
+   * handling elsewhere, which suspends rather than deletes — this is an
+   * explicit, client-initiated action on their own agent, not an
+   * expiry-driven one, so a real delete (not a status flag) is correct
+   * here. Never allowed on a LIVE agent — a client must consciously step
+   * it back to Draft/Testing first so an active customer-facing surface
+   * can never disappear out from under them by accident.
+   */
+  app.delete(
+    "/v1/tenants/:tenantId/agents/:agentId",
+    { preHandler: [...scoped, requirePermission("agent:write")] },
+    async (request, reply) => {
+      const { agentId } = request.params as { agentId: string };
+      const actorUserId = request.tenantCtx!.impersonation?.staffUserId ?? request.authUser!.sub;
+
+      await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
+        const agent = await tx.agent.findFirstOrThrow({ where: { id: agentId, tenantId: request.tenantCtx!.tenantId } });
+        if (agent.status === "LIVE") {
+          throw Object.assign(new Error("Cannot delete a LIVE agent — publish it back to a prior version or take it out of Live first."), {
+            statusCode: 409,
+          });
+        }
+        await writeAuditLog(tx, request.tenantCtx!, {
+          actorUserId,
+          agentId,
+          action: "agent_deleted",
+          metadata: { name: agent.name, status: agent.status },
+        });
+        await tx.agent.delete({ where: { id: agentId } });
+      });
+      reply.code(204).send();
+    },
+  );
+
+  /**
    * Authenticated in-dashboard test chat, distinct from the public
    * /v1/chat/:agentId/messages surface (widget-token auth, LIVE agents
    * only). This is what backs the "Test Agent" tab so a client can

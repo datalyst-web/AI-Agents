@@ -66,6 +66,8 @@ export const api = {
     apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}`, { method: "PATCH", body: JSON.stringify(body) }),
   startTesting: (tenantId: string, agentId: string) =>
     apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/start-testing`, { method: "POST" }),
+  deleteAgent: (tenantId: string, agentId: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}`, { method: "DELETE" }),
   approveAgent: (tenantId: string, agentId: string) =>
     apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/approve`, { method: "POST" }),
   publishAgent: (tenantId: string, agentId: string) =>

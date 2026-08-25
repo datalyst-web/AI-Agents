@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { useParams } from "next/navigation";
-import { Card, CardHeader, CardBody, Button, AgentStatusBadge, StatTile, ContentSourceTag, LineChart, BarBreakdown, CardRowSkeleton } from "@chat-agent/ui";
+import { useParams, useRouter } from "next/navigation";
+import { Card, CardHeader, CardBody, Button, AgentStatusBadge, StatTile, ContentSourceTag, LineChart, BarBreakdown, CardRowSkeleton, Modal } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
 import { api, ApiError } from "@/lib/api";
 
@@ -71,9 +71,14 @@ interface PendingConfirmation {
 
 export default function AgentDetailPage() {
   const { agentId } = useParams<{ agentId: string }>();
+  const router = useRouter();
   const { user } = useAuth();
   const [tab, setTab] = useState<(typeof TABS)[number]>("Test Agent");
   const [agent, setAgent] = useState<AgentDetail | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [knowledgeError, setKnowledgeError] = useState<string | null>(null);
+  const [deletingKnowledgeId, setDeletingKnowledgeId] = useState<string | null>(null);
   const [knowledge, setKnowledge] = useState<KnowledgeSource[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(false);
@@ -196,6 +201,20 @@ export default function AgentDetailPage() {
     }
   }
 
+  async function deleteAgent() {
+    if (!user) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.deleteAgent(user.tenantId, agentId);
+      router.push("/agents");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to delete agent.");
+      setDeleting(false);
+      setDeleteModalOpen(false);
+    }
+  }
+
   async function startTesting() {
     if (!user) return;
     setError(null);
@@ -232,18 +251,42 @@ export default function AgentDetailPage() {
   async function addFaq(e: FormEvent) {
     e.preventDefault();
     if (!user) return;
-    await api.addFaq(user.tenantId, agentId, [{ question: faqQ, answer: faqA }]);
-    setFaqQ("");
-    setFaqA("");
-    refreshKnowledge();
+    setKnowledgeError(null);
+    try {
+      await api.addFaq(user.tenantId, agentId, [{ question: faqQ, answer: faqA }]);
+      setFaqQ("");
+      setFaqA("");
+      refreshKnowledge();
+    } catch (err) {
+      setKnowledgeError(err instanceof ApiError ? err.message : "Failed to add FAQ.");
+    }
   }
 
   async function crawl(e: FormEvent) {
     e.preventDefault();
     if (!user) return;
-    await api.crawlWebsite(user.tenantId, agentId, [crawlUrl]);
-    setCrawlUrl("");
-    refreshKnowledge();
+    setKnowledgeError(null);
+    try {
+      await api.crawlWebsite(user.tenantId, agentId, [crawlUrl]);
+      setCrawlUrl("");
+      refreshKnowledge();
+    } catch (err) {
+      setKnowledgeError(err instanceof ApiError ? err.message : "Failed to start crawl.");
+    }
+  }
+
+  async function removeKnowledge(knowledgeSourceId: string) {
+    if (!user) return;
+    setKnowledgeError(null);
+    setDeletingKnowledgeId(knowledgeSourceId);
+    try {
+      await api.deleteKnowledge(user.tenantId, knowledgeSourceId);
+      refreshKnowledge();
+    } catch (err) {
+      setKnowledgeError(err instanceof ApiError ? err.message : "Failed to remove.");
+    } finally {
+      setDeletingKnowledgeId(null);
+    }
   }
 
   if (!agent) return <p className="text-sm text-white/40">Loading...</p>;
@@ -262,6 +305,11 @@ export default function AgentDetailPage() {
           ) : null}
           {agent.status === "TESTING" ? <Button variant="secondary" onClick={approve}>Approve for launch</Button> : null}
           {agent.status === "APPROVED" ? <Button onClick={publish}>Publish to Live</Button> : null}
+          {agent.status !== "LIVE" ? (
+            <Button variant="ghost" className="!text-danger hover:!bg-danger/10" onClick={() => setDeleteModalOpen(true)}>
+              Delete
+            </Button>
+          ) : null}
         </div>
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
@@ -270,6 +318,22 @@ export default function AgentDetailPage() {
           Save your instructions and add some knowledge below, then click <span className="text-white/70">Start Testing</span> to unlock the Test Agent tab.
         </p>
       ) : null}
+
+      <Modal
+        open={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        title={`Delete ${agent.name}?`}
+        subtitle="This permanently removes the agent, its knowledge base, and its conversation history. This cannot be undone."
+      >
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setDeleteModalOpen(false)} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={deleteAgent} disabled={deleting}>
+            {deleting ? "Deleting…" : "Delete permanently"}
+          </Button>
+        </div>
+      </Modal>
 
       <div className="flex gap-1 border-b border-surface-border">
         {TABS.map((t) => (
@@ -466,6 +530,7 @@ export default function AgentDetailPage() {
 
       {tab === "Knowledge" ? (
         <div className="space-y-4">
+          {knowledgeError ? <p className="text-xs text-danger">{knowledgeError}</p> : null}
           <Card>
             <CardHeader title="Add FAQ" />
             <CardBody>
@@ -516,7 +581,16 @@ export default function AgentDetailPage() {
                       <span className="text-white">{k.originalFilename ?? k.sourceUrl ?? k.type}</span>
                       <ContentSourceTag source={k.addedBySource} />
                     </div>
-                    <span className="text-xs text-white/40">{k.status}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-white/40">{k.status}</span>
+                      <button
+                        onClick={() => removeKnowledge(k.id)}
+                        disabled={deletingKnowledgeId === k.id}
+                        className="text-xs font-medium text-white/30 transition-colors hover:text-danger disabled:opacity-50"
+                      >
+                        {deletingKnowledgeId === k.id ? "Removing…" : "Remove"}
+                      </button>
+                    </div>
                   </div>
                 ))
               )}
