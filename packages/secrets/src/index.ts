@@ -84,6 +84,13 @@ export function createSecretsProvider(opts: {
   mode: "env" | "aws";
   region?: string;
   pathPrefix?: string;
+  /**
+   * Same escape hatch as packages/config's ALLOW_ENV_SECRETS_IN_PRODUCTION
+   * — must be threaded through explicitly by the caller (never inferred
+   * here) for a lean launch without AWS infra. Defaults to false so this
+   * guard stays a real guard for anyone who doesn't pass it.
+   */
+  allowEnvInProduction?: boolean;
 }): SecretsProvider {
   if (opts.mode === "aws") {
     if (!opts.region || !opts.pathPrefix) {
@@ -91,9 +98,10 @@ export function createSecretsProvider(opts: {
     }
     return new AwsSecretsProvider({ region: opts.region, pathPrefix: opts.pathPrefix });
   }
-  if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV === "production" && !opts.allowEnvInProduction) {
     throw new Error(
-      "SECRETS_PROVIDER=env is not allowed in production — set SECRETS_PROVIDER=aws.",
+      "SECRETS_PROVIDER=env is not allowed in production — set SECRETS_PROVIDER=aws, or pass " +
+        "allowEnvInProduction (ALLOW_ENV_SECRETS_IN_PRODUCTION=true) as a deliberate lean-launch choice.",
     );
   }
   return new EnvSecretsProvider();

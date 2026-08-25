@@ -68,6 +68,13 @@ export const EnvSchema = z.object({
 
   BILLING_PROVIDER_API_KEY: z.string().optional(),
   BILLING_WEBHOOK_SECRET: z.string().optional(),
+
+  // Explicit, documented escape hatch for a lean launch on a platform
+  // without AWS (Railway/Vercel/etc.) — CLAUDE.md's default expectation is
+  // AWS Secrets Manager in production, and this must stay opt-in (never
+  // silently allowed) so a careless deploy doesn't accidentally ship with
+  // secrets sitting in plain env vars. Revisit once real AWS infra exists.
+  ALLOW_ENV_SECRETS_IN_PRODUCTION: z.coerce.boolean().default(false),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -82,8 +89,12 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
   if (parsed.data.NODE_ENV === "production") {
-    if (parsed.data.SECRETS_PROVIDER !== "aws") {
-      throw new Error("SECRETS_PROVIDER must be 'aws' in production (CLAUDE.md Security Requirements).");
+    if (parsed.data.SECRETS_PROVIDER !== "aws" && !parsed.data.ALLOW_ENV_SECRETS_IN_PRODUCTION) {
+      throw new Error(
+        "SECRETS_PROVIDER must be 'aws' in production (CLAUDE.md Security Requirements), unless " +
+          "ALLOW_ENV_SECRETS_IN_PRODUCTION=true is set as a deliberate, temporary choice for a lean " +
+          "launch without AWS infra.",
+      );
     }
     if (parsed.data.JWT_SECRET === "dev-only-change-me") {
       throw new Error("JWT_SECRET is still the dev default — set a real secret before running in production.");

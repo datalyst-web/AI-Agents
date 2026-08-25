@@ -13,6 +13,12 @@
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["multiSchema", "postgresqlExtensions"]
+  // "native" covers local dev (Windows/Mac). The Docker build and runtime
+  // stages (apps/api|workers/Dockerfile) don't necessarily agree on which
+  // OpenSSL the base image has — generating both engine variants avoids a
+  // PrismaClientInitializationError at container start that only surfaces
+  // by actually running the built image, never by the build succeeding.
+  binaryTargets   = ["native", "debian-openssl-1.1.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {

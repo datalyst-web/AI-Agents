@@ -41,6 +41,7 @@ export function buildAppContext(): AppContext {
     mode: env.SECRETS_PROVIDER,
     region: env.AWS_REGION,
     pathPrefix: env.SECRETS_PATH_PREFIX,
+    allowEnvInProduction: env.ALLOW_ENV_SECRETS_IN_PRODUCTION,
   });
 
   const queue = createQueueClient({
