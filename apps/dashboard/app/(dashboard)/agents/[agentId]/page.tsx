@@ -174,6 +174,17 @@ export default function AgentDetailPage() {
     }
   }
 
+  async function startTesting() {
+    if (!user) return;
+    setError(null);
+    try {
+      await api.startTesting(user.tenantId, agentId);
+      refreshAgent();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to start testing.");
+    }
+  }
+
   async function publish() {
     if (!user) return;
     setError(null);
@@ -224,11 +235,19 @@ export default function AgentDetailPage() {
           <span className="text-xs text-white/30">{agent.version}</span>
         </div>
         <div className="flex gap-2">
+          {["DRAFT", "CONFIGURING", "KNOWLEDGE_PROCESSING"].includes(agent.status) ? (
+            <Button onClick={startTesting}>Start Testing</Button>
+          ) : null}
           {agent.status === "TESTING" ? <Button variant="secondary" onClick={approve}>Approve for launch</Button> : null}
           {agent.status === "APPROVED" ? <Button onClick={publish}>Publish to Live</Button> : null}
         </div>
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
+      {agent.status === "DRAFT" ? (
+        <p className="text-xs text-white/40">
+          Save your instructions and add some knowledge below, then click <span className="text-white/70">Start Testing</span> to unlock the Test Agent tab.
+        </p>
+      ) : null}
 
       <div className="flex gap-1 border-b border-surface-border">
         {TABS.map((t) => (

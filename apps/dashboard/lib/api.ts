@@ -64,6 +64,8 @@ export const api = {
     apiFetch(`/v1/tenants/${tenantId}/agents`, { method: "POST", body: JSON.stringify(body) }),
   updateAgent: (tenantId: string, agentId: string, body: unknown) =>
     apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}`, { method: "PATCH", body: JSON.stringify(body) }),
+  startTesting: (tenantId: string, agentId: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/start-testing`, { method: "POST" }),
   approveAgent: (tenantId: string, agentId: string) =>
     apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/approve`, { method: "POST" }),
   publishAgent: (tenantId: string, agentId: string) =>

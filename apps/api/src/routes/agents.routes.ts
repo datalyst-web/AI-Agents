@@ -172,6 +172,40 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
     },
   );
 
+  /**
+   * Advances a newly-created agent into TESTING so the Test Agent tab (and
+   * the eventual approve/publish steps) become reachable — CLAUDE.md's
+   * agent status pipeline is DRAFT -> CONFIGURING -> KNOWLEDGE_PROCESSING
+   * -> TESTING -> APPROVED -> LIVE, but nothing else in this codebase ever
+   * moves an agent out of DRAFT. Deliberately simple (no CONFIGURING/
+   * KNOWLEDGE_PROCESSING sub-gates) since nothing else in the app branches
+   * on those two states.
+   */
+  app.post(
+    "/v1/tenants/:tenantId/agents/:agentId/start-testing",
+    { preHandler: [...scoped, requirePermission("agent:write")] },
+    async (request, reply) => {
+      const { agentId } = request.params as { agentId: string };
+      const actorUserId = request.tenantCtx!.impersonation?.staffUserId ?? request.authUser!.sub;
+
+      const updated = await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
+        const agent = await tx.agent.findFirstOrThrow({ where: { id: agentId, tenantId: request.tenantCtx!.tenantId } });
+        if (!["DRAFT", "CONFIGURING", "KNOWLEDGE_PROCESSING"].includes(agent.status)) {
+          throw Object.assign(new Error(`Agent is already past the draft stage (status: ${agent.status}).`), { statusCode: 409 });
+        }
+        const result = await tx.agent.update({ where: { id: agentId }, data: { status: "TESTING" } });
+        await writeAuditLog(tx, request.tenantCtx!, {
+          actorUserId,
+          agentId,
+          action: "agent_moved_to_testing",
+          metadata: {},
+        });
+        return result;
+      });
+      reply.send(updated);
+    },
+  );
+
   /** Client explicitly approves a Testing-stage agent before it can go LIVE. */
   app.post(
     "/v1/tenants/:tenantId/agents/:agentId/approve",
