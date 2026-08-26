@@ -13,6 +13,43 @@ export function setToken(token: string | null) {
   else localStorage.removeItem("chat-agent:token");
 }
 
+export interface ImpersonationContext {
+  tenantId: string;
+  tenantName: string;
+  sessionId: string;
+  expiresAt: string;
+}
+
+/**
+ * Which tenant a setup_specialist is currently "acting as," kept client-side
+ * alongside the (impersonation-claim-bearing) JWT. Every other dashboard
+ * page already calls api.xxx(user.tenantId, ...) — AuthProvider overlays
+ * this onto `user.tenantId` so impersonation works through the exact same
+ * client-facing pages/components a tenant themselves would use (CLAUDE.md:
+ * staff must never get a separate path), with zero changes to those pages.
+ */
+export function getImpersonation(): ImpersonationContext | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem("chat-agent:impersonation");
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as ImpersonationContext;
+    if (new Date(parsed.expiresAt).getTime() < Date.now()) {
+      localStorage.removeItem("chat-agent:impersonation");
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function setImpersonation(ctx: ImpersonationContext | null) {
+  if (typeof window === "undefined") return;
+  if (ctx) localStorage.setItem("chat-agent:impersonation", JSON.stringify(ctx));
+  else localStorage.removeItem("chat-agent:impersonation");
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -57,6 +94,18 @@ export const api = {
       body: JSON.stringify({ tenantName, email, password }),
     }),
   me: () => apiFetch<{ id: string; email: string; role: string; tenantId: string; displayName: string }>("/v1/auth/me"),
+
+  listManagedSetupQueue: () =>
+    apiFetch<{ id: string; name: string; managedSetupTier: string; subscriptionState: string; updatedAt: string }[]>(
+      "/v1/managed-setup/queue",
+    ),
+  startImpersonation: (tenantId: string, reason: string, durationMinutes = 60) =>
+    apiFetch<{ token: string; sessionId: string; tenantId: string; expiresAt: string }>("/v1/managed-setup/impersonate/start", {
+      method: "POST",
+      body: JSON.stringify({ tenantId, reason, durationMinutes }),
+    }),
+  endImpersonation: (sessionId: string) =>
+    apiFetch(`/v1/managed-setup/impersonate/${sessionId}/end`, { method: "POST" }),
 
   listAgents: (tenantId: string) => apiFetch(`/v1/tenants/${tenantId}/agents`),
   getAgent: (tenantId: string, agentId: string) => apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}`),

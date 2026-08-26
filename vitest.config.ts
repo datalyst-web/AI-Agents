@@ -51,6 +51,17 @@ export default defineConfig({
     // genuinely hung test forever.
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    // Every test file that touches the DB opens its own PrismaClient
+    // connection pool. With the default threaded pool, vitest ran all
+    // 11 files concurrently — against a free-tier Neon compute that's
+    // enough simultaneous connections to intermittently exceed its
+    // limit, surfacing as "Can't reach database server" on whichever
+    // file's connection lost the race that run. Running files
+    // sequentially keeps peak concurrent connections to one file's
+    // worth at a time, which is what actually fixes it (switching the
+    // connection string to the -pooler endpoint did not, since it
+    // resolves to the same proxy IPs as the direct endpoint).
+    fileParallelism: false,
     // Loaded values only fill in keys not already present in the real
     // process.env, so CI/shell-provided overrides always win.
     env: loadDotEnvFile(resolve(rootDir, ".env.test")),

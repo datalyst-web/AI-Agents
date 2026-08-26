@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 
-const NAV = [
+const TENANT_NAV = [
   { href: "/", label: "Overview", icon: IconGrid },
   { href: "/agents", label: "Agents", icon: IconBot },
   { href: "/tools", label: "Tools & Integrations", icon: IconPlug },
@@ -14,15 +14,24 @@ const NAV = [
   { href: "/billing", label: "Billing & Usage", icon: IconCard },
   { href: "/audit-log", label: "Audit Log", icon: IconShield },
 ];
+const STAFF_NAV = [{ href: "/managed-setup", label: "Managed Setup", icon: IconStaff }];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, impersonation, endImpersonation } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const isStaff = user?.role === "setup_specialist" || user?.role === "platform_admin";
+  // A staff account with no active impersonation has no tenant to scope
+  // client-facing pages to — only the Managed Setup queue makes sense.
+  const nav = isStaff && !impersonation ? STAFF_NAV : impersonation ? [...STAFF_NAV, ...TENANT_NAV] : TENANT_NAV;
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
   }, [loading, user, router]);
+
+  useEffect(() => {
+    if (!loading && isStaff && !impersonation && pathname !== "/managed-setup") router.push("/managed-setup");
+  }, [loading, isStaff, impersonation, pathname, router]);
 
   if (loading || !user) {
     return (
@@ -50,7 +59,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 space-y-1 px-3">
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const active = pathname === item.href;
             const Icon = item.icon;
             return (
@@ -89,6 +98,23 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-h-screen flex-1 flex-col">
+        {impersonation ? (
+          <div className="sticky top-0 z-20 flex items-center justify-between gap-3 bg-warning/15 px-8 py-2 text-xs ring-1 ring-inset ring-warning/30">
+            <span className="flex items-center gap-2 font-medium text-warning">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M8 3l6.5 11H1.5L8 3Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+                <path d="M8 6.5v3M8 11.5v.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+              Managing <span className="text-white">{impersonation.tenantName}</span> on their behalf — every action here is logged to their audit trail.
+            </span>
+            <button
+              onClick={() => void endImpersonation()}
+              className="shrink-0 rounded-full bg-warning/20 px-3 py-1 font-medium text-warning transition-colors hover:bg-warning/30"
+            >
+              End session
+            </button>
+          </div>
+        ) : null}
         <header className="glass sticky top-0 z-10 flex h-16 items-center justify-between border-b border-surface-border px-8">
           <div className="flex items-center gap-2 text-xs text-white/40">
             <span className="rounded-full bg-success/10 px-2 py-1 font-medium text-success ring-1 ring-inset ring-success/25">
@@ -169,6 +195,15 @@ function IconShield({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 20 20" fill="none">
       <path d="M10 3l6 2v4.5c0 4-2.7 6.6-6 7.5-3.3-.9-6-3.5-6-7.5V5l6-2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
       <path d="M7.5 10l1.8 1.8L12.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function IconStaff({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none">
+      <circle cx="10" cy="6.5" r="3" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M14.5 4.5c1 .3 1.5 1.2 1.5 2s-.5 1.7-1.5 2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   );
 }
