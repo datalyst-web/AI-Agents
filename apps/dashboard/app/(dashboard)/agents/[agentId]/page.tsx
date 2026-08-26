@@ -48,6 +48,12 @@ interface DailyAnalytics {
   conversations: number;
   avgSentiment: number | null;
 }
+interface VersionSnapshot {
+  id: string;
+  version: string;
+  status: string;
+  publishedAt: string;
+}
 
 const OUTCOME_TONE = {
   RESOLVED: "success",
@@ -69,10 +75,36 @@ interface PendingConfirmation {
   confirmationPrompt: string;
 }
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+const WIDGET_SCRIPT_URL = process.env.NEXT_PUBLIC_WIDGET_SCRIPT_URL ?? "http://localhost:3000/widget.js";
+
+function CopyField({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex items-center gap-2">
+      <code className="flex-1 overflow-x-auto whitespace-nowrap rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-white/70">
+        {value}
+      </code>
+      <button
+        onClick={() => {
+          void navigator.clipboard.writeText(value);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+        className="shrink-0 rounded-lg bg-white/5 px-3 py-2.5 text-xs font-medium text-white/70 ring-1 ring-inset ring-white/10 transition-colors hover:bg-white/10 hover:text-white"
+      >
+        {copied ? "Copied ✓" : "Copy"}
+      </button>
+    </div>
+  );
+}
+
 export default function AgentDetailPage() {
   const { agentId } = useParams<{ agentId: string }>();
   const router = useRouter();
   const { user } = useAuth();
+  const [dashboardOrigin, setDashboardOrigin] = useState("");
+  useEffect(() => setDashboardOrigin(window.location.origin), []);
   const [tab, setTab] = useState<(typeof TABS)[number]>("Test Agent");
   const [agent, setAgent] = useState<AgentDetail | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -84,6 +116,8 @@ export default function AgentDetailPage() {
   const [conversationsLoading, setConversationsLoading] = useState(false);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [dailyAnalytics, setDailyAnalytics] = useState<DailyAnalytics[] | null>(null);
+  const [versions, setVersions] = useState<VersionSnapshot[]>([]);
+  const [rollingBackTo, setRollingBackTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [faqQ, setFaqQ] = useState("");
   const [faqA, setFaqA] = useState("");
@@ -165,6 +199,7 @@ export default function AgentDetailPage() {
   useEffect(() => {
     if (!user) return;
     if (tab === "Knowledge") refreshKnowledge();
+    if (tab === "Configuration") api.listAgentVersions(user.tenantId, agentId).then(setVersions);
     if (tab === "Conversations") {
       setConversationsLoading(true);
       api
@@ -198,6 +233,20 @@ export default function AgentDetailPage() {
       refreshAgent();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Save failed.");
+    }
+  }
+
+  async function rollback(toVersion: string) {
+    if (!user) return;
+    setError(null);
+    setRollingBackTo(toVersion);
+    try {
+      await api.rollbackAgent(user.tenantId, agentId, toVersion);
+      refreshAgent();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Rollback failed.");
+    } finally {
+      setRollingBackTo(null);
     }
   }
 
@@ -460,6 +509,24 @@ export default function AgentDetailPage() {
 
       {tab === "Configuration" ? (
         <div className="space-y-4">
+          {agent.status === "LIVE" ? (
+            <Card>
+              <CardHeader title="Deploy" subtitle="Your agent is live — add it to your site, or share its own page." />
+              <CardBody className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-white/60">Website embed</label>
+                  <CopyField
+                    value={`<script src="${WIDGET_SCRIPT_URL}" data-agent-id="${agent.id}" data-api-base="${API_BASE_URL}"></script>`}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-white/60">Standalone link</label>
+                  <CopyField value={`${dashboardOrigin}/client-agent/${agent.id}`} />
+                </div>
+              </CardBody>
+            </Card>
+          ) : null}
+
           <Card>
             <CardHeader title="Instructions" subtitle="What this agent knows to do and how it should behave." />
             <CardBody>
@@ -525,6 +592,29 @@ export default function AgentDetailPage() {
               <Button onClick={saveModelRouting}>Save model settings</Button>
             </CardBody>
           </Card>
+
+          {versions.length > 0 ? (
+            <Card>
+              <CardHeader title="Version history" subtitle="A snapshot is taken every time you publish to Live. Roll back if a change causes problems." />
+              <CardBody className="divide-y divide-surface-border p-0">
+                {versions.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between px-5 py-3 text-sm">
+                    <div>
+                      <span className="font-medium text-white">{v.version}</span>
+                      <span className="ml-2 text-xs text-white/40">{new Date(v.publishedAt).toLocaleString()}</span>
+                    </div>
+                    <button
+                      onClick={() => rollback(v.version)}
+                      disabled={rollingBackTo === v.version}
+                      className="text-xs font-medium text-brand-300 transition-colors hover:text-brand-200 disabled:opacity-50"
+                    >
+                      {rollingBackTo === v.version ? "Rolling back…" : "Roll back to this version"}
+                    </button>
+                  </div>
+                ))}
+              </CardBody>
+            </Card>
+          ) : null}
         </div>
       ) : null}
 

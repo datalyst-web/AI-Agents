@@ -18,6 +18,8 @@ export const AUDIT_ACTIONS = [
   "tool_configured",
   "workflow_created",
   "workflow_edited",
+  "workflow_deleted",
+  "tool_deleted",
   "impersonation_session_started",
   "impersonation_session_ended",
   "memory_forget_fulfilled",

@@ -28,6 +28,7 @@ export default function ToolsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [busyToolId, setBusyToolId] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -74,6 +75,28 @@ export default function ToolsPage() {
     }
   }
 
+  async function toggleEnabled(tool: Tool) {
+    if (!user) return;
+    setBusyToolId(tool.id);
+    try {
+      await api.updateTool(user.tenantId, tool.id, { enabled: !tool.enabled });
+      refresh();
+    } finally {
+      setBusyToolId(null);
+    }
+  }
+
+  async function removeTool(toolId: string) {
+    if (!user) return;
+    setBusyToolId(toolId);
+    try {
+      await api.deleteTool(user.tenantId, toolId);
+      refresh();
+    } finally {
+      setBusyToolId(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -101,7 +124,7 @@ export default function ToolsPage() {
               </div>
             ) : (
               tools.map((tool) => (
-                <div key={tool.id} className="flex items-center justify-between px-5 py-3.5 text-sm">
+                <div key={tool.id} className={`flex items-center justify-between px-5 py-3.5 text-sm ${tool.enabled ? "" : "opacity-50"}`}>
                   <div>
                     <div className="text-white">{tool.name}</div>
                     <div className="text-xs text-white/40">{tool.description}</div>
@@ -111,6 +134,20 @@ export default function ToolsPage() {
                     <Badge tone={TIER_TONE[tool.executionTier as keyof typeof TIER_TONE] ?? "neutral"}>
                       {tool.executionTier.replace(/_/g, " ")}
                     </Badge>
+                    <button
+                      onClick={() => toggleEnabled(tool)}
+                      disabled={busyToolId === tool.id}
+                      className="text-xs font-medium text-white/40 transition-colors hover:text-white/70 disabled:opacity-50"
+                    >
+                      {tool.enabled ? "Disable" : "Enable"}
+                    </button>
+                    <button
+                      onClick={() => removeTool(tool.id)}
+                      disabled={busyToolId === tool.id}
+                      className="text-xs font-medium text-white/30 transition-colors hover:text-danger disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
                   </div>
                 </div>
               ))

@@ -37,6 +37,7 @@ export default function WorkflowsPage() {
   const [triggerType, setTriggerType] = useState(TRIGGERS[0]);
   const [actionType, setActionType] = useState(ACTION_TYPES[1]);
   const [notifyTarget, setNotifyTarget] = useState<"tenant_owner" | "tenant_admin" | "staff_fallback">("tenant_owner");
+  const [busyWorkflowId, setBusyWorkflowId] = useState<string | null>(null);
 
   function refresh() {
     if (user) api.listWorkflows(user.tenantId).then((d) => setWorkflows(d as Workflow[]));
@@ -80,6 +81,28 @@ export default function WorkflowsPage() {
     }
   }
 
+  async function toggleEnabled(w: Workflow) {
+    if (!user) return;
+    setBusyWorkflowId(w.id);
+    try {
+      await api.updateWorkflow(user.tenantId, w.id, { enabled: !w.enabled });
+      refresh();
+    } finally {
+      setBusyWorkflowId(null);
+    }
+  }
+
+  async function removeWorkflow(workflowId: string) {
+    if (!user) return;
+    setBusyWorkflowId(workflowId);
+    try {
+      await api.deleteWorkflow(user.tenantId, workflowId);
+      refresh();
+    } finally {
+      setBusyWorkflowId(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -105,7 +128,7 @@ export default function WorkflowsPage() {
               </div>
             ) : (
               workflows.map((w) => (
-                <div key={w.id} className="flex items-center justify-between px-5 py-3.5 text-sm">
+                <div key={w.id} className={`flex items-center justify-between px-5 py-3.5 text-sm ${w.enabled ? "" : "opacity-50"}`}>
                   <div>
                     <div className="text-white">{w.name}</div>
                     <div className="text-xs text-white/40">v{w.version}</div>
@@ -113,6 +136,20 @@ export default function WorkflowsPage() {
                   <div className="flex items-center gap-2">
                     <Badge tone="brand">{w.triggerType.replace(/_/g, " ")}</Badge>
                     <Badge tone={w.enabled ? "success" : "neutral"}>{w.enabled ? "enabled" : "disabled"}</Badge>
+                    <button
+                      onClick={() => toggleEnabled(w)}
+                      disabled={busyWorkflowId === w.id}
+                      className="text-xs font-medium text-white/40 transition-colors hover:text-white/70 disabled:opacity-50"
+                    >
+                      {w.enabled ? "Disable" : "Enable"}
+                    </button>
+                    <button
+                      onClick={() => removeWorkflow(w.id)}
+                      disabled={busyWorkflowId === w.id}
+                      className="text-xs font-medium text-white/30 transition-colors hover:text-danger disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
                   </div>
                 </div>
               ))

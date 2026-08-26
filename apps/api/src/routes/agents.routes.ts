@@ -333,6 +333,17 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
     },
   );
 
+  app.get("/v1/tenants/:tenantId/agents/:agentId/versions", { preHandler: scoped }, async (request) => {
+    const { agentId } = request.params as { agentId: string };
+    return withTenant(ctx.prisma, request.tenantCtx!, (tx) =>
+      tx.agentVersionSnapshot.findMany({
+        where: { agentId, tenantId: request.tenantCtx!.tenantId },
+        orderBy: { publishedAt: "desc" },
+        select: { id: true, version: true, status: true, publishedAt: true },
+      }),
+    );
+  });
+
   app.post(
     "/v1/tenants/:tenantId/agents/:agentId/rollback",
     { preHandler: [...scoped, requirePermission("agent:rollback")] },

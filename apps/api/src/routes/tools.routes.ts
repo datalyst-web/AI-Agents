@@ -96,7 +96,16 @@ export async function registerToolRoutes(app: FastifyInstance, ctx: AppContext) 
     { preHandler: [...scoped, requirePermission("tool:configure")] },
     async (request, reply) => {
       const { toolId } = request.params as { toolId: string };
-      await withTenant(ctx.prisma, request.tenantCtx!, (tx) => tx.toolDefinition.delete({ where: { id: toolId } }));
+      await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
+        const existing = await tx.toolDefinition.findFirstOrThrow({ where: { id: toolId, tenantId: request.tenantCtx!.tenantId } });
+        await tx.toolDefinition.delete({ where: { id: toolId } });
+        await writeAuditLog(tx, request.tenantCtx!, {
+          actorUserId: request.tenantCtx!.impersonation?.staffUserId ?? request.authUser!.sub,
+          agentId: existing.agentId ?? undefined,
+          action: "tool_deleted",
+          metadata: { toolId, name: existing.name },
+        });
+      });
       reply.code(204).send();
     },
   );

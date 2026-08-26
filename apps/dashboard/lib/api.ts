@@ -72,6 +72,10 @@ export const api = {
     apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/approve`, { method: "POST" }),
   publishAgent: (tenantId: string, agentId: string) =>
     apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/publish`, { method: "POST" }),
+  listAgentVersions: (tenantId: string, agentId: string) =>
+    apiFetch<{ id: string; version: string; status: string; publishedAt: string }[]>(`/v1/tenants/${tenantId}/agents/${agentId}/versions`),
+  rollbackAgent: (tenantId: string, agentId: string, toVersion: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/rollback`, { method: "POST", body: JSON.stringify({ toVersion }) }),
   sendTestMessage: (
     tenantId: string,
     agentId: string,
@@ -102,8 +106,15 @@ export const api = {
 
   listTools: (tenantId: string) => apiFetch(`/v1/tenants/${tenantId}/tools`),
   createTool: (tenantId: string, body: unknown) => apiFetch(`/v1/tenants/${tenantId}/tools`, { method: "POST", body: JSON.stringify(body) }),
+  updateTool: (tenantId: string, toolId: string, body: unknown) =>
+    apiFetch(`/v1/tenants/${tenantId}/tools/${toolId}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteTool: (tenantId: string, toolId: string) => apiFetch(`/v1/tenants/${tenantId}/tools/${toolId}`, { method: "DELETE" }),
 
   listWorkflows: (tenantId: string) => apiFetch(`/v1/tenants/${tenantId}/workflows`),
+  updateWorkflow: (tenantId: string, workflowId: string, body: unknown) =>
+    apiFetch(`/v1/tenants/${tenantId}/workflows/${workflowId}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteWorkflow: (tenantId: string, workflowId: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/workflows/${workflowId}`, { method: "DELETE" }),
   createWorkflow: (tenantId: string, body: unknown) =>
     apiFetch(`/v1/tenants/${tenantId}/workflows`, { method: "POST", body: JSON.stringify(body) }),
 

@@ -108,6 +108,25 @@ export async function registerWorkflowRoutes(app: FastifyInstance, ctx: AppConte
     },
   );
 
+  app.delete(
+    "/v1/tenants/:tenantId/workflows/:workflowId",
+    { preHandler: [...scoped, requirePermission("workflow:write")] },
+    async (request, reply) => {
+      const { workflowId } = request.params as { workflowId: string };
+      await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
+        const existing = await tx.workflowDefinition.findFirstOrThrow({ where: { id: workflowId, tenantId: request.tenantCtx!.tenantId } });
+        await tx.workflowDefinition.delete({ where: { id: workflowId } });
+        await writeAuditLog(tx, request.tenantCtx!, {
+          actorUserId: request.tenantCtx!.impersonation?.staffUserId ?? request.authUser!.sub,
+          agentId: existing.agentId ?? undefined,
+          action: "workflow_deleted",
+          metadata: { workflowId, name: existing.name },
+        });
+      });
+      reply.code(204).send();
+    },
+  );
+
   app.get(
     "/v1/tenants/:tenantId/workflows/:workflowId/runs",
     { preHandler: [...scoped, requirePermission("workflow:read")] },
