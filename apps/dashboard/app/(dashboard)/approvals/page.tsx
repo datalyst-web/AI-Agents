@@ -21,7 +21,14 @@ export default function ApprovalsPage() {
   const [error, setError] = useState<string | null>(null);
 
   function refresh() {
-    if (user) api.listApprovals(user.tenantId).then(setApprovals);
+    if (!user) return;
+    api
+      .listApprovals(user.tenantId)
+      .then(setApprovals)
+      .catch((err) => {
+        setApprovals([]);
+        setError(err instanceof ApiError ? err.message : "Could not load approvals.");
+      });
   }
   useEffect(refresh, [user]);
 

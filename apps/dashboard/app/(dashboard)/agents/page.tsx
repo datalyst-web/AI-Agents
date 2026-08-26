@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Card, CardBody, CardHeader, Button, AgentStatusBadge, CardRowSkeleton } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 interface Agent {
   id: string;
@@ -16,11 +16,20 @@ export default function AgentsPage() {
   const { user } = useAuth();
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [creating, setCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [greeting, setGreeting] = useState("Hi! How can I help you today?");
 
   function refresh() {
-    if (user) api.listAgents(user.tenantId).then((data) => setAgents(data as Agent[]));
+    if (!user) return;
+    api
+      .listAgents(user.tenantId)
+      .then((data) => setAgents(data as Agent[]))
+      .catch((err) => {
+        setAgents([]);
+        setError(err instanceof ApiError ? err.message : "Could not load agents.");
+      });
   }
 
   useEffect(refresh, [user]);
@@ -28,20 +37,28 @@ export default function AgentsPage() {
   async function onCreate(e: FormEvent) {
     e.preventDefault();
     if (!user) return;
-    await api.createAgent(user.tenantId, {
-      name,
-      personality: {
-        tone: "friendly",
+    setSaving(true);
+    setError(null);
+    try {
+      await api.createAgent(user.tenantId, {
         name,
-        greeting,
-        languagePrimary: "en",
-        languagesSupported: ["en"],
-        systemInstructions: `You are ${name}, an AI assistant for this business. Answer only from the knowledge base and be honest when you don't know something.`,
-      },
-    });
-    setCreating(false);
-    setName("");
-    refresh();
+        personality: {
+          tone: "friendly",
+          name,
+          greeting,
+          languagePrimary: "en",
+          languagesSupported: ["en"],
+          systemInstructions: `You are ${name}, an AI assistant for this business. Answer only from the knowledge base and be honest when you don't know something.`,
+        },
+      });
+      setCreating(false);
+      setName("");
+      refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not create agent.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -53,6 +70,7 @@ export default function AgentsPage() {
         </div>
         <Button onClick={() => setCreating((v) => !v)}>{creating ? "Cancel" : "New agent"}</Button>
       </div>
+      {error ? <p className="text-xs text-danger">{error}</p> : null}
 
       {creating ? (
         <Card className="animate-fade-up">
@@ -76,7 +94,9 @@ export default function AgentsPage() {
                   className="w-full max-w-md rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
                 />
               </div>
-              <Button type="submit">Create agent</Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? "Creating..." : "Create agent"}
+              </Button>
             </form>
           </CardBody>
         </Card>

@@ -40,7 +40,14 @@ export default function WorkflowsPage() {
   const [busyWorkflowId, setBusyWorkflowId] = useState<string | null>(null);
 
   function refresh() {
-    if (user) api.listWorkflows(user.tenantId).then((d) => setWorkflows(d as Workflow[]));
+    if (!user) return;
+    api
+      .listWorkflows(user.tenantId)
+      .then((d) => setWorkflows(d as Workflow[]))
+      .catch((err) => {
+        setWorkflows([]);
+        setError(err instanceof ApiError ? err.message : "Could not load workflows.");
+      });
   }
   useEffect(refresh, [user]);
 
@@ -84,9 +91,12 @@ export default function WorkflowsPage() {
   async function toggleEnabled(w: Workflow) {
     if (!user) return;
     setBusyWorkflowId(w.id);
+    setError(null);
     try {
       await api.updateWorkflow(user.tenantId, w.id, { enabled: !w.enabled });
       refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not update this workflow.");
     } finally {
       setBusyWorkflowId(null);
     }
@@ -95,9 +105,12 @@ export default function WorkflowsPage() {
   async function removeWorkflow(workflowId: string) {
     if (!user) return;
     setBusyWorkflowId(workflowId);
+    setError(null);
     try {
       await api.deleteWorkflow(user.tenantId, workflowId);
       refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not remove this workflow.");
     } finally {
       setBusyWorkflowId(null);
     }
@@ -112,6 +125,7 @@ export default function WorkflowsPage() {
         </div>
         <Button onClick={() => setModalOpen(true)}>+ New workflow</Button>
       </div>
+      {error && !modalOpen ? <p className="text-xs text-danger">{error}</p> : null}
 
       <Card>
         <CardHeader title="Active workflows" subtitle={workflows ? `${workflows.length} configured` : undefined} />

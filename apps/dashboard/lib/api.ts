@@ -69,7 +69,13 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   const resp = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
-      "content-type": "application/json",
+      // Only set content-type when there's an actual body — Fastify's JSON
+      // body parser throws FST_ERR_CTP_EMPTY_JSON_BODY (400) on a request
+      // that declares application/json but sends nothing, which broke
+      // every bodyless call (deleteAgent, startTesting, publishAgent,
+      // approveAgent, endImpersonation, ...) even though they looked fine
+      // tested via curl (curl doesn't set this header without -d).
+      ...(init.body ? { "content-type": "application/json" } : {}),
       ...(token ? { authorization: `Bearer ${token}` } : {}),
       ...init.headers,
     },

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatTile, StatTileSkeleton, Card, CardHeader, CardBody, AgentStatusBadge, LineChart, CardRowSkeleton } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 interface Agent {
   id: string;
@@ -32,12 +32,30 @@ export default function OverviewPage() {
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [daily, setDaily] = useState<DailyUsage[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
-    api.listAgents(user.tenantId).then((data) => setAgents(data as Agent[]));
-    api.getUsageSummary(user.tenantId).then((data) => setUsage(data as UsageSummary));
-    api.getUsageDaily(user.tenantId, 14).then((data) => setDaily(data));
+    setError(null);
+    const onFail = (err: unknown) => setError(err instanceof ApiError ? err.message : "Could not load your dashboard.");
+    api
+      .listAgents(user.tenantId)
+      .then((data) => setAgents(data as Agent[]))
+      .catch((err) => {
+        setAgents([]);
+        onFail(err);
+      });
+    api
+      .getUsageSummary(user.tenantId)
+      .then((data) => setUsage(data as UsageSummary))
+      .catch((err) => {
+        setUsage({ totalTokens: 0, totalInputTokens: 0, totalOutputTokens: 0, estimatedOverageUsd: 0 });
+        onFail(err);
+      });
+    api
+      .getUsageDaily(user.tenantId, 14)
+      .then((data) => setDaily(data))
+      .catch(() => setDaily([]));
   }, [user]);
 
   const liveCount = agents ? agents.filter((a) => a.status === "LIVE").length : 0;
@@ -59,6 +77,7 @@ export default function OverviewPage() {
           + New agent
         </Link>
       </div>
+      {error ? <p className="text-xs text-danger">{error}</p> : null}
 
       {agents === null || usage === null ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

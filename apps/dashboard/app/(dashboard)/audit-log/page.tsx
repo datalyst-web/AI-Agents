@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardBody, CardHeader, Badge, CardRowSkeleton } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 interface AuditEntry {
   id: string;
@@ -16,9 +16,17 @@ interface AuditEntry {
 export default function AuditLogPage() {
   const { user } = useAuth();
   const [entries, setEntries] = useState<AuditEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) api.getAuditLog(user.tenantId).then((d) => setEntries(d as AuditEntry[]));
+    if (!user) return;
+    api
+      .getAuditLog(user.tenantId)
+      .then((d) => setEntries(d as AuditEntry[]))
+      .catch((err) => {
+        setEntries([]);
+        setError(err instanceof ApiError ? err.message : "Could not load the audit log.");
+      });
   }, [user]);
 
   return (
@@ -29,6 +37,7 @@ export default function AuditLogPage() {
           Every change to your agents and knowledge base — including everything our Setup Team does on your behalf under a Managed Setup plan.
         </p>
       </div>
+      {error ? <p className="text-xs text-danger">{error}</p> : null}
       <Card>
         <CardHeader title="Recent activity" subtitle={entries ? `${entries.length} entries` : undefined} />
         {entries === null ? (

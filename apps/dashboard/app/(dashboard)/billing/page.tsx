@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { StatTile, StatTileSkeleton, Card, CardHeader, CardBody, LineChart, BarBreakdown } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 
 interface UsageSummary {
   totalInputTokens: number;
@@ -24,11 +24,21 @@ export default function BillingPage() {
   const { user } = useAuth();
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [daily, setDaily] = useState<DailyUsage[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
-    api.getUsageSummary(user.tenantId).then((d) => setUsage(d as UsageSummary));
-    api.getUsageDaily(user.tenantId, 30).then((d) => setDaily(d));
+    api
+      .getUsageSummary(user.tenantId)
+      .then((d) => setUsage(d as UsageSummary))
+      .catch((err) => {
+        setUsage({ totalInputTokens: 0, totalOutputTokens: 0, totalTokens: 0, overageTokens: 0, estimatedOverageUsd: 0, byProvider: {} });
+        setError(err instanceof ApiError ? err.message : "Could not load usage.");
+      });
+    api
+      .getUsageDaily(user.tenantId, 30)
+      .then((d) => setDaily(d))
+      .catch(() => setDaily([]));
   }, [user]);
 
   return (
@@ -37,6 +47,7 @@ export default function BillingPage() {
         <h1 className="text-xl font-semibold text-white">Billing & Usage</h1>
         <p className="mt-1 text-sm text-white/50">Month-to-date usage against your plan's included limits.</p>
       </div>
+      {error ? <p className="text-xs text-danger">{error}</p> : null}
 
       {usage ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

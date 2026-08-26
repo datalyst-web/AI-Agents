@@ -37,7 +37,14 @@ export default function ToolsPage() {
   const [credentialValue, setCredentialValue] = useState("");
 
   function refresh() {
-    if (user) api.listTools(user.tenantId).then((d) => setTools(d as Tool[]));
+    if (!user) return;
+    api
+      .listTools(user.tenantId)
+      .then((d) => setTools(d as Tool[]))
+      .catch((err) => {
+        setTools([]);
+        setError(err instanceof ApiError ? err.message : "Could not load tools.");
+      });
   }
   useEffect(refresh, [user]);
 
@@ -78,9 +85,12 @@ export default function ToolsPage() {
   async function toggleEnabled(tool: Tool) {
     if (!user) return;
     setBusyToolId(tool.id);
+    setError(null);
     try {
       await api.updateTool(user.tenantId, tool.id, { enabled: !tool.enabled });
       refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not update this tool.");
     } finally {
       setBusyToolId(null);
     }
@@ -89,9 +99,12 @@ export default function ToolsPage() {
   async function removeTool(toolId: string) {
     if (!user) return;
     setBusyToolId(toolId);
+    setError(null);
     try {
       await api.deleteTool(user.tenantId, toolId);
       refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not remove this tool.");
     } finally {
       setBusyToolId(null);
     }
@@ -108,6 +121,7 @@ export default function ToolsPage() {
         </div>
         <Button onClick={() => setModalOpen(true)}>+ Add tool</Button>
       </div>
+      {error && !modalOpen ? <p className="text-xs text-danger">{error}</p> : null}
 
       <Card>
         <CardHeader title="Configured tools" subtitle={tools ? `${tools.length} tool${tools.length === 1 ? "" : "s"}` : undefined} />

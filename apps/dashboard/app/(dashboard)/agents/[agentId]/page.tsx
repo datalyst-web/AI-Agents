@@ -119,6 +119,7 @@ export default function AgentDetailPage() {
   const [versions, setVersions] = useState<VersionSnapshot[]>([]);
   const [rollingBackTo, setRollingBackTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [agentLoadError, setAgentLoadError] = useState<string | null>(null);
   const [faqQ, setFaqQ] = useState("");
   const [faqA, setFaqA] = useState("");
   const [crawlUrl, setCrawlUrl] = useState("");
@@ -189,27 +190,47 @@ export default function AgentDetailPage() {
   }
 
   function refreshAgent() {
-    if (user) api.getAgent(user.tenantId, agentId).then((data) => setAgent(data as AgentDetail));
+    if (!user) return;
+    setAgentLoadError(null);
+    api
+      .getAgent(user.tenantId, agentId)
+      .then((data) => setAgent(data as AgentDetail))
+      .catch((err) => setAgentLoadError(err instanceof ApiError ? err.message : "Could not load this agent."));
   }
   function refreshKnowledge() {
-    if (user) api.listKnowledge(user.tenantId, agentId).then((data) => setKnowledge(data as KnowledgeSource[]));
+    if (!user) return;
+    api
+      .listKnowledge(user.tenantId, agentId)
+      .then((data) => setKnowledge(data as KnowledgeSource[]))
+      .catch((err) => setKnowledgeError(err instanceof ApiError ? err.message : "Could not load knowledge sources."));
   }
 
   useEffect(refreshAgent, [user, agentId]);
   useEffect(() => {
     if (!user) return;
     if (tab === "Knowledge") refreshKnowledge();
-    if (tab === "Configuration") api.listAgentVersions(user.tenantId, agentId).then(setVersions);
+    if (tab === "Configuration")
+      api
+        .listAgentVersions(user.tenantId, agentId)
+        .then(setVersions)
+        .catch(() => setVersions([]));
     if (tab === "Conversations") {
       setConversationsLoading(true);
       api
         .listConversations(user.tenantId, agentId)
         .then((d) => setConversations(d as Conversation[]))
+        .catch(() => setConversations([]))
         .finally(() => setConversationsLoading(false));
     }
     if (tab === "Analytics") {
-      api.getAnalytics(user.tenantId, agentId).then((d) => setAnalytics(d as Analytics));
-      api.getAnalyticsDaily(user.tenantId, agentId, 14).then(setDailyAnalytics);
+      api
+        .getAnalytics(user.tenantId, agentId)
+        .then((d) => setAnalytics(d as Analytics))
+        .catch(() => setAnalytics(null));
+      api
+        .getAnalyticsDaily(user.tenantId, agentId, 14)
+        .then(setDailyAnalytics)
+        .catch(() => setDailyAnalytics([]));
     }
   }, [tab, user, agentId]);
 
@@ -338,6 +359,16 @@ export default function AgentDetailPage() {
     }
   }
 
+  if (!agent && agentLoadError) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <p className="text-sm text-danger">{agentLoadError}</p>
+        <Button variant="secondary" onClick={refreshAgent}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
   if (!agent) return <p className="text-sm text-white/40">Loading...</p>;
 
   return (
