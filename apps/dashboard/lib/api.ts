@@ -118,6 +118,15 @@ export const api = {
   createWorkflow: (tenantId: string, body: unknown) =>
     apiFetch(`/v1/tenants/${tenantId}/workflows`, { method: "POST", body: JSON.stringify(body) }),
 
+  listApprovals: (tenantId: string) =>
+    apiFetch<
+      { id: string; agentId: string; conversationId: string; toolName: string; input: unknown; requestedAt: string }[]
+    >(`/v1/tenants/${tenantId}/approvals`),
+  approveApproval: (tenantId: string, approvalId: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/approvals/${approvalId}/approve`, { method: "POST" }),
+  rejectApproval: (tenantId: string, approvalId: string, reason?: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/approvals/${approvalId}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+
   getUsageSummary: (tenantId: string) => apiFetch(`/v1/tenants/${tenantId}/usage/summary`),
   getUsageDaily: (tenantId: string, days = 14) =>
     apiFetch<{ date: string; inputTokens: number; outputTokens: number; totalTokens: number }[]>(

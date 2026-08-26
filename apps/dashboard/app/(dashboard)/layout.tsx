@@ -10,6 +10,7 @@ const NAV = [
   { href: "/agents", label: "Agents", icon: IconBot },
   { href: "/tools", label: "Tools & Integrations", icon: IconPlug },
   { href: "/workflows", label: "Workflows", icon: IconFlow },
+  { href: "/approvals", label: "Approvals", icon: IconCheck },
   { href: "/billing", label: "Billing & Usage", icon: IconCard },
   { href: "/audit-log", label: "Audit Log", icon: IconShield },
 ];
@@ -144,6 +145,14 @@ function IconFlow({ className }: { className?: string }) {
       <circle cx="15.5" cy="15" r="2" stroke="currentColor" strokeWidth="1.5" />
       <circle cx="15.5" cy="5" r="2" stroke="currentColor" strokeWidth="1.5" />
       <path d="M6.5 5h6.5M15.5 7v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconCheck({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none">
+      <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M6.5 10l2.3 2.3L14 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
