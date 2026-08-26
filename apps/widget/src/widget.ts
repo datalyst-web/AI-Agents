@@ -94,7 +94,7 @@ interface ChatResponse {
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
         </button>
       </form>
-      <div class="footer">Powered by <span class="footer-brand">AI Chat Agent</span></div>
+      <div class="footer">Powered by <span class="footer-brand">Datalyst Africa</span></div>
     </div>
   `;
 
