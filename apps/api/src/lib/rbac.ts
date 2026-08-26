@@ -46,6 +46,33 @@ export function requirePermission(permission: Permission) {
   };
 }
 
+/**
+ * Gate for POST /agents/:agentId/publish specifically. setup_specialist
+ * deliberately has no standing "agent:publish" permission (CLAUDE.md:
+ * staff must never unilaterally publish), but a tenant CAN delegate
+ * auto-publish authority via Tenant.delegatesAutoPublish — that check
+ * requires a DB read the route handler already does. A flat
+ * requirePermission("agent:publish") would reject setup_specialist here
+ * before the handler ever runs, making delegation permanently
+ * unreachable regardless of the tenant's settings. So staff are let
+ * through this gate and the handler itself enforces
+ * clientApproved || (isStaff && tenant.delegatesAutoPublish).
+ */
+export function requirePublishPermission() {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = request.authUser;
+    if (!user) {
+      reply.code(401).send({ error: "unauthorized" });
+      return;
+    }
+    if (user.role === "setup_specialist") return;
+    if (!roleHasPermission(user.role, "agent:publish")) {
+      reply.code(403).send({ error: "forbidden", missingPermission: "agent:publish" });
+      return;
+    }
+  };
+}
+
 export function requireTenantMatch() {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const routeTenantId = (request.params as { tenantId?: string }).tenantId;

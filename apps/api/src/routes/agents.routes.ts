@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { withTenant } from "@chat-agent/db";
 import { AgentPersonalitySchema, ModelRoutingPreferenceSchema } from "@chat-agent/shared-types";
 import type { AppContext } from "../lib/context.js";
-import { requireTenantMatch, requirePermission } from "../lib/rbac.js";
+import { requireTenantMatch, requirePermission, requirePublishPermission } from "../lib/rbac.js";
 import { verifyActiveImpersonation } from "../lib/impersonation.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { processCustomerMessage } from "../engine/agentLoop.js";
@@ -246,7 +246,7 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
   /** Client explicitly approves a Testing-stage agent before it can go LIVE. */
   app.post(
     "/v1/tenants/:tenantId/agents/:agentId/approve",
-    { preHandler: [...scoped, requirePermission("agent:publish")] },
+    { preHandler: [...scoped, requirePublishPermission()] },
     async (request, reply) => {
       const { agentId } = request.params as { agentId: string };
       if (request.tenantCtx!.impersonation) {
@@ -275,7 +275,7 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
    */
   app.post(
     "/v1/tenants/:tenantId/agents/:agentId/publish",
-    { preHandler: [...scoped, requirePermission("agent:publish")] },
+    { preHandler: [...scoped, requirePublishPermission()] },
     async (request, reply) => {
       const { agentId } = request.params as { agentId: string };
       const isStaff = Boolean(request.tenantCtx!.impersonation);

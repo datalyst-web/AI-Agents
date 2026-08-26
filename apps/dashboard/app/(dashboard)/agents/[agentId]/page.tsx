@@ -78,6 +78,18 @@ interface PendingConfirmation {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 const WIDGET_SCRIPT_URL = process.env.NEXT_PUBLIC_WIDGET_SCRIPT_URL ?? "http://localhost:3000/widget.js";
 
+const KNOWN_ERROR_MESSAGES: Record<string, string> = {
+  staff_cannot_approve_on_clients_behalf:
+    "Only the client can approve this stage — log in as the client's own account to approve, or delegate auto-publish authority in this tenant's account settings.",
+  no_active_impersonation_session: "Your Managed Setup session isn't active — start a new session from the Managed Setup queue.",
+  impersonation_session_not_active: "Your Managed Setup session has ended or expired — start a new session from the Managed Setup queue.",
+};
+
+function friendlyError(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) return KNOWN_ERROR_MESSAGES[err.message] ?? err.message;
+  return fallback;
+}
+
 function CopyField({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -102,7 +114,7 @@ function CopyField({ value }: { value: string }) {
 export default function AgentDetailPage() {
   const { agentId } = useParams<{ agentId: string }>();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, impersonation } = useAuth();
   const [dashboardOrigin, setDashboardOrigin] = useState("");
   useEffect(() => setDashboardOrigin(window.location.origin), []);
   const [tab, setTab] = useState<(typeof TABS)[number]>("Test Agent");
@@ -303,7 +315,7 @@ export default function AgentDetailPage() {
       await api.publishAgent(user.tenantId, agentId);
       refreshAgent();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Publish failed.");
+      setError(friendlyError(err, "Publish failed."));
     }
   }
 
@@ -314,7 +326,7 @@ export default function AgentDetailPage() {
       await api.approveAgent(user.tenantId, agentId);
       refreshAgent();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Approve failed.");
+      setError(friendlyError(err, "Approve failed."));
     }
   }
 
@@ -383,7 +395,16 @@ export default function AgentDetailPage() {
           {["DRAFT", "CONFIGURING", "KNOWLEDGE_PROCESSING"].includes(agent.status) ? (
             <Button onClick={startTesting}>Start Testing</Button>
           ) : null}
-          {agent.status === "TESTING" ? <Button variant="secondary" onClick={approve}>Approve for launch</Button> : null}
+          {agent.status === "TESTING" ? (
+            <Button
+              variant="secondary"
+              onClick={approve}
+              disabled={Boolean(impersonation)}
+              title={impersonation ? "Only the client can approve this stage — see the note below." : undefined}
+            >
+              Approve for launch
+            </Button>
+          ) : null}
           {agent.status === "APPROVED" ? <Button onClick={publish}>Publish to Live</Button> : null}
           {agent.status !== "LIVE" ? (
             <Button variant="ghost" className="!text-danger hover:!bg-danger/10" onClick={() => setDeleteModalOpen(true)}>
@@ -393,6 +414,12 @@ export default function AgentDetailPage() {
         </div>
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
+      {agent.status === "TESTING" && impersonation ? (
+        <p className="text-xs text-white/40">
+          Only <span className="text-white/70">{impersonation.tenantName}</span> can approve this stage — ask them to log in
+          and approve, or have them delegate auto-publish authority in their account settings if that's already agreed.
+        </p>
+      ) : null}
       {agent.status === "DRAFT" ? (
         <p className="text-xs text-white/40">
           Save your instructions and add some knowledge below, then click <span className="text-white/70">Start Testing</span> to unlock the Test Agent tab.
