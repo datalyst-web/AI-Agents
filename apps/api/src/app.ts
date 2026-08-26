@@ -72,9 +72,16 @@ export async function buildApp(ctx: AppContext = buildAppContext()) {
 
   app.setErrorHandler((err: FastifyError, request, reply) => {
     request.log.error(err);
-    const statusCode = err.statusCode ?? 500;
+    // Prisma's "record required but not found" (findFirstOrThrow, a
+    // delete/update targeting an id that's gone, etc.) has no .statusCode
+    // of its own, so it fell through to a raw 500 "internal_error" —
+    // scary and wrong for what's really just a 404, e.g. re-fetching an
+    // agent right after deleting it. Every findFirstOrThrow across the
+    // app benefits from this, not just one route.
+    const isPrismaNotFound = (err as { code?: string }).code === "P2025";
+    const statusCode = isPrismaNotFound ? 404 : (err.statusCode ?? 500);
     reply.code(statusCode).send({
-      error: statusCode >= 500 ? "internal_error" : err.message,
+      error: isPrismaNotFound ? "not_found" : statusCode >= 500 ? "internal_error" : err.message,
     });
   });
 
