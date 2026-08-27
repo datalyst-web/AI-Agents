@@ -19,6 +19,19 @@ export async function runKnowledgeIngestJob(ctx: WorkerContext, job: KnowledgeIn
 
   try {
     const documents = await extractDocuments(ctx, job);
+    // A source that extracted nothing is not "ready" — it just means
+    // nothing is searchable yet, which looks identical to success from
+    // the tenant's side unless this is flagged explicitly. Found live:
+    // a WEBSITE_CRAWL source sat at READY with zero documents/chunks in
+    // the DB, meaning the agent had been answering with no real
+    // knowledge behind it despite the dashboard showing it as ready.
+    if (documents.length === 0) {
+      throw new Error(
+        job.kind === "WEBSITE_CRAWL"
+          ? "The crawl completed but found no readable pages — the site may be blocking automated requests, or the URL may not resolve to a normal HTML page."
+          : "No content could be extracted from this source.",
+      );
+    }
 
     await withTenant(ctx.prisma, { tenantId: job.tenantId, agentId: job.agentId }, async (tx) => {
       await tx.knowledgeSource.update({ where: { id: job.knowledgeSourceId }, data: { status: "EMBEDDING" } });
