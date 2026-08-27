@@ -21,6 +21,7 @@
     "@chat-agent/tool-sdk": "workspace:*",
     "@chat-agent/queue": "workspace:*",
     "@chat-agent/storage": "workspace:*",
+    "@chat-agent/email": "workspace:*",
     "pino": "^9.5.0",
     "ioredis": "^5.4.1"
   },

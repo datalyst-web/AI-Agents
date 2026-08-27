@@ -4,6 +4,7 @@ import { createModelRouterFromConfig, type ModelRouter } from "@chat-agent/ai-pr
 import { createSecretsProvider, type SecretsProvider } from "@chat-agent/secrets";
 import { createQueueClient, type QueueClient } from "@chat-agent/queue";
 import { ObjectStore } from "@chat-agent/storage";
+import { createEmailProviderFromEnv, type EmailProvider } from "@chat-agent/email";
 import { env } from "./env.js";
 
 /** Mirrors apps/api/src/lib/context.ts — same construction logic, separate process. */
@@ -13,6 +14,7 @@ export interface WorkerContext {
   secrets: SecretsProvider;
   queue: QueueClient;
   objectStore: ObjectStore;
+  email: EmailProvider;
   /** Raw client for lib/lock.ts's cross-replica sweep lock — separate from the queue's internal Redis usage. */
   redis: Redis;
 }
@@ -47,6 +49,14 @@ export function buildWorkerContext(): WorkerContext {
   });
   const objectStore = new ObjectStore(env.S3_BUCKET, env.S3_KEY_PREFIX, env.AWS_REGION);
   const redis = new Redis(env.REDIS_URL);
+  const email = createEmailProviderFromEnv({
+    SMTP_HOST: env.SMTP_HOST,
+    SMTP_PORT: env.SMTP_PORT,
+    SMTP_SECURE: env.SMTP_SECURE,
+    SMTP_USER: env.SMTP_USER,
+    SMTP_PASSWORD: env.SMTP_PASSWORD,
+    SMTP_FROM_ADDRESS: env.SMTP_FROM_ADDRESS,
+  });
 
-  return { prisma, router, secrets, queue, objectStore, redis };
+  return { prisma, router, secrets, queue, objectStore, email, redis };
 }

@@ -24,7 +24,16 @@ const TRIGGERS = [
   "NO_REPLY_TIMEOUT",
   "HANDOFF_REQUESTED",
 ];
-const ACTION_TYPES = ["CREATE_CRM_RECORD", "SEND_EMAIL", "SEND_NOTIFICATION", "CALL_WEBHOOK", "CREATE_TICKET", "SCORE_LEAD", "WAIT", "TRIGGER_TOOL"];
+const ACTION_TYPES = ["SEND_NOTIFICATION", "CALL_WEBHOOK", "SCORE_LEAD", "WAIT", "SEND_EMAIL", "CREATE_CRM_RECORD", "CREATE_TICKET", "TRIGGER_TOOL"];
+// These need infrastructure this form doesn't collect yet — SEND_EMAIL and
+// CREATE_CRM_RECORD both call out to a tenant-owned endpoint (their own
+// transactional-email API, their own CRM's API), not something the
+// platform can send on their behalf (customer-facing mail should come
+// from the tenant's own identity, not ours). CREATE_TICKET/TRIGGER_TOOL
+// are documented as unsupported at the executor level. Shown, not
+// hidden, so a tenant knows the option exists and what it needs — just
+// disabled until that setup exists.
+const ACTIONS_NEEDING_SETUP = new Set(["SEND_EMAIL", "CREATE_CRM_RECORD", "CREATE_TICKET", "TRIGGER_TOOL"]);
 
 export default function WorkflowsPage() {
   const { user } = useAuth();
@@ -35,9 +44,19 @@ export default function WorkflowsPage() {
 
   const [name, setName] = useState("");
   const [triggerType, setTriggerType] = useState(TRIGGERS[0]);
-  const [actionType, setActionType] = useState(ACTION_TYPES[1]);
+  const [actionType, setActionType] = useState(ACTION_TYPES[0]!);
   const [notifyTarget, setNotifyTarget] = useState<"tenant_owner" | "tenant_admin" | "staff_fallback">("tenant_owner");
+  const [notifyChannel, setNotifyChannel] = useState<"email" | "dashboard">("email");
   const [busyWorkflowId, setBusyWorkflowId] = useState<string | null>(null);
+
+  // Per-action config — only the fields relevant to the selected action
+  // type get sent (see buildActionConfig below).
+  const [notificationTarget, setNotificationTarget] = useState<"tenant_owner" | "tenant_admin" | "staff_fallback">("tenant_owner");
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [scoreField, setScoreField] = useState("");
+  const [scoreWeight, setScoreWeight] = useState("10");
+  const [waitSeconds, setWaitSeconds] = useState("3600");
 
   function refresh() {
     if (!user) return;
@@ -54,9 +73,31 @@ export default function WorkflowsPage() {
   function resetForm() {
     setName("");
     setTriggerType(TRIGGERS[0]);
-    setActionType(ACTION_TYPES[1]);
+    setActionType(ACTION_TYPES[0]!);
     setNotifyTarget("tenant_owner");
+    setNotifyChannel("email");
+    setNotificationTarget("tenant_owner");
+    setNotificationMessage("");
+    setWebhookUrl("");
+    setScoreField("");
+    setScoreWeight("10");
+    setWaitSeconds("3600");
     setError(null);
+  }
+
+  function buildActionConfig(): Record<string, unknown> {
+    switch (actionType) {
+      case "SEND_NOTIFICATION":
+        return { target: notificationTarget, message: notificationMessage || undefined };
+      case "CALL_WEBHOOK":
+        return { url: webhookUrl };
+      case "SCORE_LEAD":
+        return scoreField ? { fieldWeights: { [scoreField]: Number(scoreWeight) || 0 } } : {};
+      case "WAIT":
+        return { seconds: Number(waitSeconds) || 0 };
+      default:
+        return {};
+    }
   }
 
   async function createWorkflow(e: FormEvent) {
@@ -72,9 +113,9 @@ export default function WorkflowsPage() {
           {
             id: "step-1",
             type: actionType,
-            config: {},
+            config: buildActionConfig(),
             retry: { maxAttempts: 3, backoffSeconds: 60 },
-            onFailureNotify: { target: notifyTarget, channel: "dashboard" },
+            onFailureNotify: { target: notifyTarget, channel: notifyChannel },
           },
         ],
       });
@@ -208,35 +249,128 @@ export default function WorkflowsPage() {
               {ACTION_TYPES.map((t) => (
                 <option key={t} value={t} className="bg-surface-overlay">
                   {t.replace(/_/g, " ")}
+                  {ACTIONS_NEEDING_SETUP.has(t) ? " (needs setup)" : ""}
                 </option>
               ))}
             </select>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-foreground/60">If this action fails, notify</label>
-            <select
-              value={notifyTarget}
-              onChange={(e) => setNotifyTarget(e.target.value as typeof notifyTarget)}
-              className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
-            >
-              <option value="tenant_owner" className="bg-surface-overlay">
-                Tenant owner
-              </option>
-              <option value="tenant_admin" className="bg-surface-overlay">
-                Tenant admin
-              </option>
-              <option value="staff_fallback" className="bg-surface-overlay">
-                Staff fallback
-              </option>
-            </select>
-            <p className="mt-1 text-[11px] text-foreground/35">A failed step is always logged and never fails silently — this is who gets notified.</p>
+
+          {ACTIONS_NEEDING_SETUP.has(actionType) ? (
+            <p className="rounded-lg border border-warning/25 bg-warning/10 px-3 py-2.5 text-xs text-warning">
+              {actionType === "SEND_EMAIL" || actionType === "CREATE_CRM_RECORD"
+                ? "This action sends from your own systems (your email service, your CRM), not ours — it isn't configurable from this form yet. Contact us to get it wired up."
+                : "This action isn't supported yet — use Trigger Tool with a configured tool instead."}
+            </p>
+          ) : null}
+
+          {actionType === "SEND_NOTIFICATION" ? (
+            <>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-foreground/60">Notify</label>
+                <select
+                  value={notificationTarget}
+                  onChange={(e) => setNotificationTarget(e.target.value as typeof notificationTarget)}
+                  className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
+                >
+                  <option value="tenant_owner" className="bg-surface-overlay">Tenant owner</option>
+                  <option value="tenant_admin" className="bg-surface-overlay">Tenant admin</option>
+                  <option value="staff_fallback" className="bg-surface-overlay">Staff fallback</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-foreground/60">Message (optional)</label>
+                <textarea
+                  rows={2}
+                  value={notificationMessage}
+                  onChange={(e) => setNotificationMessage(e.target.value)}
+                  placeholder="Defaults to a summary of the trigger if left blank"
+                  className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
+                />
+              </div>
+            </>
+          ) : null}
+
+          {actionType === "CALL_WEBHOOK" ? (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-foreground/60">Webhook URL</label>
+              <input
+                required
+                type="url"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://hooks.example.com/..."
+                className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
+              />
+            </div>
+          ) : null}
+
+          {actionType === "SCORE_LEAD" ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-foreground/60">Trigger field to weight</label>
+                <input
+                  value={scoreField}
+                  onChange={(e) => setScoreField(e.target.value)}
+                  placeholder="e.g. statedInfo"
+                  className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-foreground/60">Weight</label>
+                <input
+                  type="number"
+                  value={scoreWeight}
+                  onChange={(e) => setScoreWeight(e.target.value)}
+                  className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {actionType === "WAIT" ? (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-foreground/60">Wait (seconds)</label>
+              <input
+                type="number"
+                value={waitSeconds}
+                onChange={(e) => setWaitSeconds(e.target.value)}
+                className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
+              />
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-foreground/60">If this action fails, notify</label>
+              <select
+                value={notifyTarget}
+                onChange={(e) => setNotifyTarget(e.target.value as typeof notifyTarget)}
+                className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
+              >
+                <option value="tenant_owner" className="bg-surface-overlay">Tenant owner</option>
+                <option value="tenant_admin" className="bg-surface-overlay">Tenant admin</option>
+                <option value="staff_fallback" className="bg-surface-overlay">Staff fallback</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-foreground/60">Via</label>
+              <select
+                value={notifyChannel}
+                onChange={(e) => setNotifyChannel(e.target.value as typeof notifyChannel)}
+                className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
+              >
+                <option value="email" className="bg-surface-overlay">Email</option>
+                <option value="dashboard" className="bg-surface-overlay">Audit log only</option>
+              </select>
+            </div>
           </div>
+          <p className="text-[11px] text-foreground/35">A failed step is always logged and never fails silently — this is who gets notified, and how.</p>
           {error ? <p className="text-xs text-danger">{error}</p> : null}
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="ghost" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || ACTIONS_NEEDING_SETUP.has(actionType)}>
               {saving ? "Creating..." : "Create workflow"}
             </Button>
           </div>

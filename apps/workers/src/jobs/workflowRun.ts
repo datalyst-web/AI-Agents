@@ -3,16 +3,29 @@ import { WorkflowExecutor, waitActionExecutor, type NotifyFn } from "@chat-agent
 import type { WorkflowRunJob } from "@chat-agent/shared-types";
 import type { WorkerContext } from "../context.js";
 import { buildWorkflowActionExecutors } from "./workflowActions.js";
+import { resolveNotifyRecipientEmail } from "../lib/notifyRecipient.js";
 
 /**
  * A failed workflow action must never silently drop (CLAUDE.md Workflow
- * Engine). Real channel delivery (SES for email, a dashboard notification
- * row, SNS for SMS) is a follow-up integration point per channel; today
- * every notification is durably recorded via the audit log so nothing is
- * lost even before those channels are wired in.
+ * Engine). Every notification is durably recorded via the audit log
+ * regardless of channel, so nothing is ever lost even if delivery itself
+ * fails or a channel isn't wired up yet. "email" additionally delivers
+ * for real via the platform EmailProvider (packages/email) — "dashboard"
+ * is genuinely visible today via the Audit Log page, just not yet a
+ * dedicated notification inbox; "sms" has no provider wired and stays
+ * audit-log-only until one is.
  */
 function buildNotify(ctx: WorkerContext): NotifyFn {
   return async ({ tenantId, target, channel, message }) => {
+    let emailedTo: string | undefined;
+    if (channel === "email") {
+      const to = await resolveNotifyRecipientEmail(ctx.prisma, tenantId, target);
+      if (to) {
+        const result = await ctx.email.send({ to, subject: "Workflow notification", text: message });
+        if (result.sent) emailedTo = to;
+      }
+    }
+
     await withTenant(ctx.prisma, { tenantId }, (tx) =>
       tx.auditLogEntry.create({
         data: {
@@ -20,7 +33,7 @@ function buildNotify(ctx: WorkerContext): NotifyFn {
           actorUserId: "system:workflow-engine",
           actorIsStaff: false,
           action: "workflow_edited",
-          metadata: { notification: true, target, channel, message },
+          metadata: { notification: true, target, channel, message, emailedTo: emailedTo ?? null },
         },
       }),
     );

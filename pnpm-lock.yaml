@@ -184,6 +184,9 @@ importers:
       '@chat-agent/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@chat-agent/email':
+        specifier: workspace:*
+        version: link:../../packages/email
       '@chat-agent/queue':
         specifier: workspace:*
         version: link:../../packages/queue

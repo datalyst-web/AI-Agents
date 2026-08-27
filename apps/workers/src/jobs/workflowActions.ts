@@ -1,6 +1,7 @@
 import { createCrmCreateRecordTool, createEmailTool, createWebhookTool } from "@chat-agent/tool-sdk";
 import type { ActionExecutorMap } from "@chat-agent/workflow-engine";
 import type { WorkerContext } from "../context.js";
+import { resolveNotifyRecipientEmail } from "../lib/notifyRecipient.js";
 
 /**
  * Maps WorkflowActionType -> a concrete executor, reusing packages/tool-sdk
@@ -77,7 +78,26 @@ export function buildWorkflowActionExecutors(ctx: WorkerContext): ActionExecutor
     },
 
     CREATE_TICKET: async () => ({ succeeded: false, errorMessage: "CREATE_TICKET requires a tenant-configured ticketing tool credentialRef; wire via TRIGGER_TOOL instead." }),
-    SEND_NOTIFICATION: async () => ({ succeeded: true, output: { delivered: "logged" } }),
+
+    // An explicit "notify someone" workflow step (e.g. "New lead -> score
+    // -> if HOT -> SEND_NOTIFICATION to sales") — distinct from
+    // onFailureNotify, which is the executor's own safety net when ANY
+    // action (including this one) fails. Shares the same delivery path
+    // (resolveNotifyRecipientEmail + EmailProvider) so there's one real
+    // notification mechanism, not two.
+    SEND_NOTIFICATION: async (action, execCtx) => {
+      const config = action.config as {
+        target?: "tenant_owner" | "tenant_admin" | "staff_fallback";
+        message?: string;
+      };
+      const target = config.target ?? "tenant_owner";
+      const message = config.message ?? `Workflow notification for tenant ${execCtx.tenantId}: ${JSON.stringify(execCtx.triggerPayload)}`;
+      const to = await resolveNotifyRecipientEmail(ctx.prisma, execCtx.tenantId, target);
+      if (!to) return { succeeded: false, errorMessage: `No ${target} contact found to notify for this tenant.` };
+      const result = await ctx.email.send({ to, subject: "Notification from your AI agent", text: message });
+      if (!result.sent) return { succeeded: false, errorMessage: result.error ?? "Email delivery failed." };
+      return { succeeded: true, output: { deliveredTo: to } };
+    },
     TRIGGER_TOOL: async () => ({ succeeded: false, errorMessage: "TRIGGER_TOOL requires conversation context — not available outside an active conversation." }),
   };
 }
