@@ -188,17 +188,31 @@ export async function crawlPages(startUrls: string[], options: CrawlOptions = {}
         limit(async () => {
           if (visited.has(url)) return null;
           visited.add(url);
-          if (isDisallowed(new URL(url).pathname, disallowedPrefixes)) return null;
+          if (isDisallowed(new URL(url).pathname, disallowedPrefixes)) {
+            // eslint-disable-next-line no-console
+            console.warn(`[crawl] skipping ${url}: disallowed by robots.txt`);
+            return null;
+          }
           try {
             const resp = await fetchWithTimeout(url, requestTimeoutMs);
-            if (!resp.ok) return null;
+            if (!resp.ok) {
+              // eslint-disable-next-line no-console
+              console.warn(`[crawl] skipping ${url}: HTTP ${resp.status} ${resp.statusText}`);
+              return null;
+            }
             const contentType = resp.headers.get("content-type") ?? "";
-            if (!contentType.includes("text/html")) return null;
+            if (!contentType.includes("text/html")) {
+              // eslint-disable-next-line no-console
+              console.warn(`[crawl] skipping ${url}: content-type "${contentType}" is not text/html`);
+              return null;
+            }
             const html = await resp.text();
             const { title, text } = extractReadableText(html);
             const links = options.sameOriginOnly === false ? [] : extractLinks(html, url);
             return { page: { url, title, text } as CrawledPage, links };
-          } catch {
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.warn(`[crawl] skipping ${url}: ${err instanceof Error ? err.message : String(err)}`);
             return null;
           }
         }),
