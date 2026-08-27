@@ -7,9 +7,7 @@ import { useAuth, type DashboardTheme } from "@/lib/auth";
 
 const THEMES: { value: DashboardTheme; label: string; swatch: string }[] = [
   { value: "DARK", label: "Dark", swatch: "bg-[#08090f]" },
-  { value: "MIDNIGHT", label: "Midnight", swatch: "bg-[#05060d]" },
   { value: "LIGHT", label: "Light", swatch: "bg-[#f7f8fc]" },
-  { value: "PERIWINKLE", label: "Periwinkle", swatch: "bg-[#f1f5ff]" },
 ];
 
 const PLAN_LABEL: Record<"STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE", string> = {

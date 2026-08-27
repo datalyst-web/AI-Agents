@@ -110,11 +110,11 @@ export const api = {
       role: string;
       tenantId: string;
       displayName: string;
-      theme: "DARK" | "LIGHT" | "MIDNIGHT" | "PERIWINKLE";
+      theme: "DARK" | "LIGHT";
       subscriptionTier: "STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE" | null;
       subscriptionState: "ACTIVE" | "TRIAL" | "PAST_DUE" | "SUSPENDED" | "CANCELLED" | null;
     }>("/v1/auth/me"),
-  updateTenantTheme: (tenantId: string, theme: "DARK" | "LIGHT" | "MIDNIGHT" | "PERIWINKLE") =>
+  updateTenantTheme: (tenantId: string, theme: "DARK" | "LIGHT") =>
     apiFetch(`/v1/tenants/${tenantId}/theme`, { method: "PATCH", body: JSON.stringify({ theme }) }),
 
   listManagedSetupQueue: () =>

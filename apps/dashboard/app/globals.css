@@ -5,9 +5,9 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
 
 /**
- * Four dashboard themes (CLAUDE.md ask: "at least 4 themes"). Each block
- * is an RGB triplet per token so Tailwind's `rgb(var(--x) / <alpha-value>)`
- * pattern (see tailwind-preset.cjs) can still apply opacity modifiers —
+ * Two dashboard themes, dark and light. Each block is an RGB triplet per
+ * token so Tailwind's `rgb(var(--x) / <alpha-value>)` pattern (see
+ * tailwind-preset.cjs) can still apply opacity modifiers —
  * `bg-surface-overlay/60`, `text-foreground/70`, etc. all keep working
  * exactly as before, just resolving to whichever theme is active.
  * Defaults to `dark` (the original, only palette) when no [data-theme]
@@ -24,16 +24,6 @@
   --color-scheme: dark;
 }
 
-[data-theme="midnight"] {
-  --color-surface: 5 6 13;
-  --color-surface-raised: 10 12 24;
-  --color-surface-overlay: 16 19 31;
-  --color-surface-hover: 21 24 41;
-  --color-surface-border: 31 36 54;
-  --color-foreground: 238 240 255;
-  --color-scheme: dark;
-}
-
 [data-theme="light"] {
   --color-surface: 247 248 252;
   --color-surface-raised: 255 255 255;
@@ -41,16 +31,6 @@
   --color-surface-hover: 238 240 247;
   --color-surface-border: 225 228 238;
   --color-foreground: 15 19 48;
-  --color-scheme: light;
-}
-
-[data-theme="periwinkle"] {
-  --color-surface: 241 245 255;
-  --color-surface-raised: 255 255 255;
-  --color-surface-overlay: 255 255 255;
-  --color-surface-hover: 226 234 255;
-  --color-surface-border: 215 224 255;
-  --color-foreground: 31 37 104;
   --color-scheme: light;
 }
 

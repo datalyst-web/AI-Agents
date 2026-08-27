@@ -19,7 +19,7 @@ interface WidgetConfig {
   greeting: string;
   avatarUrl?: string;
   tone: string;
-  theme?: "DARK" | "LIGHT" | "MIDNIGHT" | "PERIWINKLE";
+  theme?: "DARK" | "LIGHT";
   widgetToken: string;
 }
 interface PendingConfirmation {

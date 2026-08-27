@@ -10,7 +10,7 @@
  * agent name/avatar/greeting.
  */
 
-type WidgetTheme = "DARK" | "LIGHT" | "MIDNIGHT" | "PERIWINKLE";
+type WidgetTheme = "DARK" | "LIGHT";
 
 interface WidgetConfig {
   agentId: string;
@@ -23,7 +23,7 @@ interface WidgetConfig {
 }
 
 /**
- * Same 4 themes as the dashboard's own chrome (apps/dashboard/app/globals.css)
+ * Same 2 themes as the dashboard's own chrome (apps/dashboard/app/globals.css)
  * — one tenant preference, two surfaces. `:host`'s defaults below are the
  * DARK values, so the widget looks exactly as it always has until
  * `applyTheme()` runs post-config-load; brand-1/2/3 (the gradient accent)
@@ -55,30 +55,6 @@ const WIDGET_THEMES: Record<WidgetTheme, Record<string, string>> = {
     "--panel-shadow": "0 24px 70px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.07) inset",
     "--header-glow": "rgba(114,136,255,0.25)",
   },
-  MIDNIGHT: {
-    "--panel-bg": "#05060d",
-    "--text-primary": "#eef0ff",
-    "--text-secondary": "rgba(238,240,255,0.45)",
-    "--text-muted": "rgba(238,240,255,0.28)",
-    "--header-border": "rgba(238,240,255,0.08)",
-    "--bubble-agent-bg": "rgba(238,240,255,0.06)",
-    "--bubble-agent-border": "rgba(238,240,255,0.06)",
-    "--bubble-agent-text": "#eef0ff",
-    "--input-bg": "rgba(238,240,255,0.06)",
-    "--input-border": "rgba(238,240,255,0.1)",
-    "--input-focus-bg": "rgba(238,240,255,0.09)",
-    "--input-text": "#eef0ff",
-    "--input-placeholder": "rgba(238,240,255,0.32)",
-    "--composer-border": "rgba(238,240,255,0.08)",
-    "--composer-bg": "rgba(238,240,255,0.02)",
-    "--close-icon": "rgba(238,240,255,0.4)",
-    "--close-hover-bg": "rgba(238,240,255,0.08)",
-    "--footer-text": "rgba(238,240,255,0.25)",
-    "--footer-brand-text": "rgba(238,240,255,0.4)",
-    "--scrollbar-thumb": "rgba(238,240,255,0.12)",
-    "--panel-shadow": "0 24px 70px rgba(0,0,0,0.6), 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(238,240,255,0.06) inset",
-    "--header-glow": "rgba(114,136,255,0.3)",
-  },
   LIGHT: {
     "--panel-bg": "#ffffff",
     "--text-primary": "#0f1330",
@@ -102,30 +78,6 @@ const WIDGET_THEMES: Record<WidgetTheme, Record<string, string>> = {
     "--scrollbar-thumb": "rgba(15,19,48,0.14)",
     "--panel-shadow": "0 24px 70px rgba(20,27,77,0.16), 0 4px 16px rgba(20,27,77,0.1), 0 0 0 1px rgba(15,19,48,0.06) inset",
     "--header-glow": "rgba(114,136,255,0.14)",
-  },
-  PERIWINKLE: {
-    "--panel-bg": "#f8f9ff",
-    "--text-primary": "#1f2568",
-    "--text-secondary": "rgba(31,37,104,0.55)",
-    "--text-muted": "rgba(31,37,104,0.4)",
-    "--header-border": "rgba(31,37,104,0.09)",
-    "--bubble-agent-bg": "rgba(31,37,104,0.05)",
-    "--bubble-agent-border": "rgba(31,37,104,0.08)",
-    "--bubble-agent-text": "#1f2568",
-    "--input-bg": "rgba(31,37,104,0.04)",
-    "--input-border": "rgba(31,37,104,0.14)",
-    "--input-focus-bg": "rgba(31,37,104,0.06)",
-    "--input-text": "#1f2568",
-    "--input-placeholder": "rgba(31,37,104,0.4)",
-    "--composer-border": "rgba(31,37,104,0.09)",
-    "--composer-bg": "rgba(31,37,104,0.02)",
-    "--close-icon": "rgba(31,37,104,0.48)",
-    "--close-hover-bg": "rgba(31,37,104,0.07)",
-    "--footer-text": "rgba(31,37,104,0.34)",
-    "--footer-brand-text": "rgba(31,37,104,0.52)",
-    "--scrollbar-thumb": "rgba(31,37,104,0.15)",
-    "--panel-shadow": "0 24px 70px rgba(31,37,104,0.18), 0 4px 16px rgba(31,37,104,0.12), 0 0 0 1px rgba(31,37,104,0.07) inset",
-    "--header-glow": "rgba(114,136,255,0.2)",
   },
 };
 

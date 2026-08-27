@@ -66,8 +66,6 @@ enum ManagedSetupTier {
 enum DashboardTheme {
   DARK
   LIGHT
-  MIDNIGHT
-  PERIWINKLE
 
   @@schema("chat")
 }

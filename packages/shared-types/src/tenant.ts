@@ -33,8 +33,6 @@ export type SubscriptionTier = z.infer<typeof SubscriptionTierSchema>;
 export const DashboardThemeSchema = z.enum([
   "DARK",
   "LIGHT",
-  "MIDNIGHT",
-  "PERIWINKLE",
 ]);
 export type DashboardTheme = z.infer<typeof DashboardThemeSchema>;
 

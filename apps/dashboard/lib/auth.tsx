@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { useRouter } from "next/navigation";
 import { api, setToken, getImpersonation, setImpersonation, type ImpersonationContext } from "./api";
 
-export type DashboardTheme = "DARK" | "LIGHT" | "MIDNIGHT" | "PERIWINKLE";
+export type DashboardTheme = "DARK" | "LIGHT";
 
 interface AuthUser {
   id: string;
