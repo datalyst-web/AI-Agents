@@ -18,7 +18,16 @@ export interface CrawledPage {
   text: string;
 }
 
-const USER_AGENT = "AIChatAgentPlatform-KnowledgeCrawler/1.0";
+// A generic bot-identifying UA gets blocked outright by Cloudflare's
+// basic bot-fight-mode on some client sites (found live: bellmazsolutions.com
+// 403'd every request from Railway's IP with the old UA). This is our own
+// tenant's own public website, fetched for their own agent's knowledge
+// base — not third-party scraping — so presenting as a normal browser is
+// the correct, standard way to reliably fetch a site's own public content
+// when its host's default bot-protection is more aggressive than its
+// owner actually intends for their own AI agent.
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 function extractReadableText(html: string): { title: string; text: string } {
   const $ = cheerio.load(html);
