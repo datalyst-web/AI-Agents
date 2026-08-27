@@ -2,6 +2,8 @@ export interface QueueMessage<T = unknown> {
   id: string;
   body: T;
   receiptHandle?: string; // present for SQS-backed messages, needed to delete/ack
+  /** 1-indexed attempt count — RedisQueueClient's own retry/backoff/dead-letter tracking (SQS has this natively via receive count + redrive policy). */
+  attempt?: number;
 }
 
 export interface QueueClient {
