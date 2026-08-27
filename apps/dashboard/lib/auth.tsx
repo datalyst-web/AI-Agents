@@ -15,6 +15,8 @@ interface AuthUser {
   displayName: string;
   /** Same value that drives this tenant's widgets (widgetConfig.routes.ts) — one setting, two surfaces. */
   theme: DashboardTheme;
+  subscriptionTier: "STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE" | null;
+  subscriptionState: "ACTIVE" | "TRIAL" | "PAST_DUE" | "SUSPENDED" | "CANCELLED" | null;
 }
 
 interface AuthContextValue {

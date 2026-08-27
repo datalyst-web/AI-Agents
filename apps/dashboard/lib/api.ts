@@ -104,9 +104,16 @@ export const api = {
       body: JSON.stringify({ tenantName, email, password }),
     }),
   me: () =>
-    apiFetch<{ id: string; email: string; role: string; tenantId: string; displayName: string; theme: "DARK" | "LIGHT" | "MIDNIGHT" | "PERIWINKLE" }>(
-      "/v1/auth/me",
-    ),
+    apiFetch<{
+      id: string;
+      email: string;
+      role: string;
+      tenantId: string;
+      displayName: string;
+      theme: "DARK" | "LIGHT" | "MIDNIGHT" | "PERIWINKLE";
+      subscriptionTier: "STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE" | null;
+      subscriptionState: "ACTIVE" | "TRIAL" | "PAST_DUE" | "SUSPENDED" | "CANCELLED" | null;
+    }>("/v1/auth/me"),
   updateTenantTheme: (tenantId: string, theme: "DARK" | "LIGHT" | "MIDNIGHT" | "PERIWINKLE") =>
     apiFetch(`/v1/tenants/${tenantId}/theme`, { method: "PATCH", body: JSON.stringify({ theme }) }),
 

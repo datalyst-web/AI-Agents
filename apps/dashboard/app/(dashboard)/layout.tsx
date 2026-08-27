@@ -12,6 +12,13 @@ const THEMES: { value: DashboardTheme; label: string; swatch: string }[] = [
   { value: "PERIWINKLE", label: "Periwinkle", swatch: "bg-[#f1f5ff]" },
 ];
 
+const PLAN_LABEL: Record<"STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE", string> = {
+  STARTER: "Starter Plan",
+  GROWTH: "Growth Plan",
+  SCALE: "Scale Plan",
+  ENTERPRISE: "Enterprise Plan",
+};
+
 const TENANT_NAV = [
   { href: "/", label: "Overview", icon: IconGrid },
   { href: "/agents", label: "Agents", icon: IconBot },
@@ -150,9 +157,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="hidden rounded-full bg-brand-500/10 px-3 py-1.5 text-xs font-medium text-brand-200 ring-1 ring-inset ring-brand-500/25 sm:inline-flex">
-              Free Demo Plan
-            </span>
+            {user.subscriptionTier ? (
+              <span className="hidden items-center gap-1.5 rounded-full bg-brand-500/10 px-3 py-1.5 text-xs font-medium text-brand-200 ring-1 ring-inset ring-brand-500/25 sm:inline-flex">
+                {PLAN_LABEL[user.subscriptionTier]}
+                {user.subscriptionState === "TRIAL" ? <span className="text-brand-300/70">· Trial</span> : null}
+                {user.subscriptionState === "PAST_DUE" ? <span className="text-warning">· Past due</span> : null}
+              </span>
+            ) : null}
           </div>
         </header>
         <main className="flex-1 overflow-y-auto px-8 py-8">

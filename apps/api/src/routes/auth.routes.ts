@@ -185,21 +185,33 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
     // Tenant-scoped users go through withTenant with the tenant the JWT
     // already vouches for; a platform_admin's token carries no tenantId
     // (they aren't scoped to one), so that case alone uses platform context.
-    const { user, theme } = authUser.tenantId
+    const { user, theme, subscriptionTier, subscriptionState } = authUser.tenantId
       ? await withTenant(ctx.prisma, { tenantId: authUser.tenantId }, async (tx) => {
           const [user, tenant] = await Promise.all([
             tx.user.findUniqueOrThrow({ where: { id: authUser.sub } }),
             tx.tenant.findUniqueOrThrow({ where: { id: authUser.tenantId! } }),
           ]);
-          return { user, theme: tenant.theme };
+          return { user, theme: tenant.theme, subscriptionTier: tenant.subscriptionTier, subscriptionState: tenant.subscriptionState };
         })
       : await withPlatformContext(ctx.prisma, async (tx) => ({
           user: await tx.user.findUniqueOrThrow({ where: { id: authUser.sub } }),
           // A staff account with no tenant in scope yet (pre-impersonation)
-          // has no tenant theme to inherit — the dashboard chrome just
-          // stays on the default until an impersonation session picks one.
+          // has no tenant theme/plan to inherit — the dashboard chrome
+          // just stays on the default until an impersonation session
+          // picks one.
           theme: "DARK" as const,
+          subscriptionTier: null,
+          subscriptionState: null,
         }));
-    reply.send({ id: user.id, email: user.email, role: user.role, tenantId: user.tenantId, displayName: user.displayName, theme });
+    reply.send({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId,
+      displayName: user.displayName,
+      theme,
+      subscriptionTier,
+      subscriptionState,
+    });
   });
 }
