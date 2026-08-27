@@ -75,6 +75,12 @@ export class OpenAIProvider implements AIProvider {
           tools: this.toTools(options.tools),
           max_completion_tokens: options.maxOutputTokens,
           temperature: options.temperature,
+          // Reasoning-capable models (gpt-5) draw hidden "thinking" tokens
+          // from the same max_completion_tokens budget as the visible
+          // reply — omitting this lets a model spend the entire budget
+          // reasoning and return empty content on an otherwise-successful
+          // call. Ignored by non-reasoning models.
+          ...(options.reasoningEffort ? { reasoning_effort: options.reasoningEffort } : {}),
         },
         // The OpenAI SDK checks `'timeout' in options`, not just its value —
         // passing `{ timeout: undefined }` still trips that key-presence
@@ -117,6 +123,7 @@ export class OpenAIProvider implements AIProvider {
         messages: toOpenAIMessages(options.messages),
         tools: this.toTools(options.tools),
         max_completion_tokens: options.maxOutputTokens,
+        ...(options.reasoningEffort ? { reasoning_effort: options.reasoningEffort } : {}),
         temperature: options.temperature,
         stream: true,
         stream_options: { include_usage: true },

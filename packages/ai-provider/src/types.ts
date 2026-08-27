@@ -51,6 +51,15 @@ export interface GenerateOptions {
   temperature?: number;
   /** Hard budget — providers must stop and return partial output rather than exceed this. */
   timeoutMs?: number;
+  /**
+   * Only meaningful for reasoning-capable models (e.g. OpenAI's gpt-5 —
+   * ignored by providers/models that don't support it). Reasoning tokens
+   * are drawn from the same maxOutputTokens budget as the visible reply,
+   * so leaving this unset let a model spend the whole budget "thinking"
+   * and return genuinely empty content on a normal 200 — found live,
+   * not hypothetical.
+   */
+  reasoningEffort?: "low" | "medium" | "high";
 }
 
 export interface GenerateResult {

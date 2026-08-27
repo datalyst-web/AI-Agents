@@ -240,7 +240,11 @@ export async function processCustomerMessage(
           failoverChain: modelRouting.failoverChain,
           preferredProvider: modelRouting.preferredProvider,
           anthropicModelTier: modelRouting.anthropicModelTier,
-          maxOutputTokens: 300,
+          reasoningEffort: modelRouting.reasoningEffort,
+          // Same reasoning-budget issue as the main call above — 300 was
+          // especially likely to be entirely consumed by reasoning tokens
+          // before any of the "one or two sentences" reply got written.
+          maxOutputTokens: 600,
         });
         await recordUsage(tx, {
           tenantId: input.tenantId,
@@ -320,7 +324,13 @@ export async function processCustomerMessage(
           failoverChain: modelRouting.failoverChain,
           preferredProvider: modelRouting.preferredProvider,
           anthropicModelTier: modelRouting.anthropicModelTier,
-          maxOutputTokens: 1024,
+          reasoningEffort: modelRouting.reasoningEffort,
+          // Reasoning models draw hidden "thinking" tokens from this same
+          // budget — 1024 was found live to sometimes be fully consumed by
+          // reasoning alone, returning empty content on a 200. Headroom
+          // here plus reasoningEffort actually being sent (see openai.ts)
+          // are the two halves of the real fix.
+          maxOutputTokens: 2048,
         });
 
         await recordUsage(tx, {
