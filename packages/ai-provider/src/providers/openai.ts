@@ -76,7 +76,12 @@ export class OpenAIProvider implements AIProvider {
           max_completion_tokens: options.maxOutputTokens,
           temperature: options.temperature,
         },
-        { timeout: options.timeoutMs },
+        // The OpenAI SDK checks `'timeout' in options`, not just its value —
+        // passing `{ timeout: undefined }` still trips that key-presence
+        // check and throws "timeout must be an integer" even though no
+        // caller in this codebase currently sets timeoutMs. Only include
+        // the key at all when there's a real value.
+        options.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {},
       );
 
       const choice = resp.choices[0];

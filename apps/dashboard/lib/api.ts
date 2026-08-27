@@ -82,7 +82,12 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   });
   if (!resp.ok) {
     const body = await resp.json().catch(() => ({ error: resp.statusText }));
-    throw new ApiError(resp.status, body.error ?? resp.statusText);
+    // Some routes (e.g. test-message) return both a stable `error` code
+    // and a human-readable `message` with the actual underlying reason —
+    // prefer the message when present rather than showing just the code,
+    // which is useless on its own (e.g. "test_message_failed" tells you
+    // nothing about *why*). Routes that only set `error` are unaffected.
+    throw new ApiError(resp.status, body.message ?? body.error ?? resp.statusText);
   }
   if (resp.status === 204) return undefined as T;
   return resp.json() as Promise<T>;

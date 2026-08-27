@@ -94,7 +94,11 @@ export class AnthropicProvider implements AIProvider {
           max_tokens: options.maxOutputTokens ?? 1024,
           temperature: options.temperature,
         },
-        { timeout: options.timeoutMs },
+        // Same key-presence pitfall as the OpenAI provider: the Anthropic
+        // SDK's request-options validator throws on an explicit
+        // `{ timeout: undefined }`, not just a bad value — only pass the
+        // key when there's a real timeout to enforce.
+        options.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {},
       );
 
       const textBlocks = resp.content.filter((b): b is Anthropic.TextBlock => b.type === "text");
