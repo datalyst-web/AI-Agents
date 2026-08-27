@@ -31,6 +31,7 @@ export const PermissionSchema = z.enum([
   "knowledge:delete",
   // Conversations
   "conversation:read",
+  "conversation:write",
   "conversation:export",
   // Tools & integrations
   "tool:configure",
@@ -76,6 +77,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "workflow:read",
     "workflow:write",
     "conversation:read",
+    "conversation:write",
     // publish/agent:publish is intentionally excluded by default — see
     // "managed_setup:publish_without_approval" which is granted per-tenant
     // only when delegatesAutoPublish is true.
@@ -89,6 +91,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "knowledge:write",
     "knowledge:delete",
     "conversation:read",
+    "conversation:write",
     "conversation:export",
     "tool:configure",
     "tool:execute_high_risk",
@@ -108,6 +111,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "knowledge:write",
     "knowledge:delete",
     "conversation:read",
+    "conversation:write",
     "conversation:export",
     "tool:configure",
     "workflow:read",
@@ -122,6 +126,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "knowledge:read",
     "knowledge:write",
     "conversation:read",
+    "conversation:write",
     "workflow:read",
     "workflow:write",
     "analytics:read",

@@ -126,6 +126,7 @@ export default function AgentDetailPage() {
   const [knowledge, setKnowledge] = useState<KnowledgeSource[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [resolvingConversationId, setResolvingConversationId] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [dailyAnalytics, setDailyAnalytics] = useState<DailyAnalytics[] | null>(null);
   const [versions, setVersions] = useState<VersionSnapshot[]>([]);
@@ -217,6 +218,30 @@ export default function AgentDetailPage() {
       .catch((err) => setKnowledgeError(err instanceof ApiError ? err.message : "Could not load knowledge sources."));
   }
 
+  function refreshConversations() {
+    if (!user) return;
+    setConversationsLoading(true);
+    api
+      .listConversations(user.tenantId, agentId)
+      .then((d) => setConversations(d as Conversation[]))
+      .catch(() => setConversations([]))
+      .finally(() => setConversationsLoading(false));
+  }
+
+  async function resolveConversation(conversationId: string) {
+    if (!user) return;
+    setResolvingConversationId(conversationId);
+    try {
+      await api.resolveConversation(user.tenantId, conversationId);
+      refreshConversations();
+    } catch {
+      // Non-fatal — the row just keeps its current outcome; the button
+      // reappears on retry rather than needing a dedicated error banner.
+    } finally {
+      setResolvingConversationId(null);
+    }
+  }
+
   useEffect(refreshAgent, [user, agentId]);
   useEffect(() => {
     if (!user) return;
@@ -226,14 +251,7 @@ export default function AgentDetailPage() {
         .listAgentVersions(user.tenantId, agentId)
         .then(setVersions)
         .catch(() => setVersions([]));
-    if (tab === "Conversations") {
-      setConversationsLoading(true);
-      api
-        .listConversations(user.tenantId, agentId)
-        .then((d) => setConversations(d as Conversation[]))
-        .catch(() => setConversations([]))
-        .finally(() => setConversationsLoading(false));
-    }
+    if (tab === "Conversations") refreshConversations();
     if (tab === "Analytics") {
       api
         .getAnalytics(user.tenantId, agentId)
@@ -760,19 +778,30 @@ export default function AgentDetailPage() {
                 conversations.map((c) => (
                   <div key={c.id} className="flex items-center justify-between px-5 py-3 text-sm">
                     <span className="text-white/70">{new Date(c.startedAt).toLocaleString()}</span>
-                    <span
-                      className={`text-xs font-medium ${
-                        c.outcome === "RESOLVED"
-                          ? "text-success"
-                          : c.outcome === "ESCALATED_TO_HUMAN"
-                            ? "text-warning"
-                            : c.outcome === "ABANDONED"
-                              ? "text-danger"
-                              : "text-white/40"
-                      }`}
-                    >
-                      {c.outcome.replace(/_/g, " ")}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`text-xs font-medium ${
+                          c.outcome === "RESOLVED"
+                            ? "text-success"
+                            : c.outcome === "ESCALATED_TO_HUMAN"
+                              ? "text-warning"
+                              : c.outcome === "ABANDONED"
+                                ? "text-danger"
+                                : "text-white/40"
+                        }`}
+                      >
+                        {c.outcome.replace(/_/g, " ")}
+                      </span>
+                      {c.outcome === "IN_PROGRESS" ? (
+                        <button
+                          onClick={() => resolveConversation(c.id)}
+                          disabled={resolvingConversationId === c.id}
+                          className="text-xs font-medium text-brand-300 transition-colors hover:text-brand-200 disabled:opacity-50"
+                        >
+                          {resolvingConversationId === c.id ? "Resolving…" : "Mark resolved"}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 ))
               )}

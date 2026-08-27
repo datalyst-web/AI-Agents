@@ -1,5 +1,5 @@
 import { zodToJsonSchema } from "zod-to-json-schema";
-import type { ToolExecutionContext, ToolExecutionResult } from "@chat-agent/shared-types";
+import type { ToolCategory, ToolExecutionContext, ToolExecutionResult } from "@chat-agent/shared-types";
 import type { SecretsProvider } from "@chat-agent/secrets";
 import type { ToolHandler, PendingConfirmation } from "./types.js";
 import { ToolExecutionDenied } from "./types.js";
@@ -42,6 +42,11 @@ export class ToolRegistry {
 
   private findByName(name: string): RegisteredToolInstance | undefined {
     return [...this.instances.values()].find((i) => i.handler.name === name);
+  }
+
+  /** Category of a registered tool by name — used by engine/agentLoop.ts to decide which workflow triggers a successful call qualifies for (e.g. CRM_FIELD_CHANGE, FORM_SUBMITTED). */
+  getCategory(toolName: string): ToolCategory | undefined {
+    return this.findByName(toolName)?.handler.category;
   }
 
   /**

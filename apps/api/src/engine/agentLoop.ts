@@ -492,6 +492,33 @@ export async function processCustomerMessage(
         queueTarget: env.SQS_WORKFLOW_RUN_QUEUE_URL,
       });
     }
+    // CRM_FIELD_CHANGE / FORM_SUBMITTED: there's no per-field before/after
+    // diff to inspect — a tenant's CRM or webhook/api tool is an opaque
+    // integration to us — so "the write actually succeeded" is the
+    // honest, correct-altitude signal for both. A tenant that needs
+    // finer-grained field-level logic reads it out of the payload's tool
+    // output inside the workflow's own condition step.
+    for (const invocation of toolInvocations) {
+      if (!invocation.succeeded) continue;
+      const category = toolRegistry.getCategory(invocation.toolName);
+      if (category === "crm") {
+        await fireWorkflowTrigger(tx, deps.queue, {
+          tenantId: input.tenantId,
+          agentId: input.agentId,
+          triggerType: "CRM_FIELD_CHANGE",
+          payload: { conversationId: conversation.id, toolName: invocation.toolName, output: invocation.output },
+          queueTarget: env.SQS_WORKFLOW_RUN_QUEUE_URL,
+        });
+      } else if (category === "webhook" || category === "api") {
+        await fireWorkflowTrigger(tx, deps.queue, {
+          tenantId: input.tenantId,
+          agentId: input.agentId,
+          triggerType: "FORM_SUBMITTED",
+          payload: { conversationId: conversation.id, toolName: invocation.toolName, output: invocation.output },
+          queueTarget: env.SQS_WORKFLOW_RUN_QUEUE_URL,
+        });
+      }
+    }
 
     // ---- RESPOND / RECORD ---------------------------------------------------
     await tx.message.create({
@@ -558,6 +585,22 @@ export async function processCustomerMessage(
     // conservative (a real implementation would use a small classification
     // pass; wiring that in doesn't change this call site).
     if (customerIdentityId && /\bmy (name|email|phone) is\b/i.test(input.customerMessage)) {
+      // priorFacts was fetched at the top of this turn, before this write —
+      // zero prior facts means this is the first time we've ever captured
+      // real contact info for this identity, i.e. the moment it becomes a
+      // lead worth someone following up on. Gated on priorFacts rather than
+      // "customerIdentityId is new" so a returning customer who already
+      // gave contact info in an earlier conversation doesn't re-fire this
+      // every time they restate it.
+      if (priorFacts.length === 0) {
+        await fireWorkflowTrigger(tx, deps.queue, {
+          tenantId: input.tenantId,
+          agentId: input.agentId,
+          triggerType: "NEW_LEAD",
+          payload: { conversationId: conversation.id, customerIdentityId, statedInfo: input.customerMessage },
+          queueTarget: env.SQS_WORKFLOW_RUN_QUEUE_URL,
+        });
+      }
       const fact = await writeCrossConversationFact(tx, {
         tenantId: input.tenantId,
         agentId: input.agentId,

@@ -1,8 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { withTenant } from "@chat-agent/db";
+import { fireWorkflowTrigger } from "@chat-agent/workflow-engine";
 import type { AppContext } from "../lib/context.js";
 import { requireTenantMatch, requirePermission } from "../lib/rbac.js";
 import { verifyActiveImpersonation } from "../lib/impersonation.js";
+import { writeAuditLog } from "../lib/audit.js";
+import { env } from "../env.js";
 
 export async function registerConversationRoutes(app: FastifyInstance, ctx: AppContext) {
   const scoped = [app.authenticate, requireTenantMatch(), verifyActiveImpersonation(ctx.prisma), requirePermission("conversation:read")];
@@ -33,6 +36,49 @@ export async function registerConversationRoutes(app: FastifyInstance, ctx: AppC
       return { conversation, messages };
     });
   });
+
+  /**
+   * Staff-facing "this conversation is done" call — the only code path
+   * that ever sets outcome=RESOLVED (the agent loop itself never
+   * self-declares resolution; CLAUDE.md's anti-hallucination principle
+   * applies here too — resolution is a human judgment call, not an
+   * inference). Also the only thing that fires CONVERSATION_ENDED, since
+   * nothing else in the system currently produces that trigger.
+   */
+  app.post(
+    "/v1/tenants/:tenantId/conversations/:conversationId/resolve",
+    { preHandler: [...scoped, requirePermission("conversation:write")] },
+    async (request, reply) => {
+      const { conversationId } = request.params as { conversationId: string };
+      const updated = await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
+        const conversation = await tx.conversation.findFirstOrThrow({
+          where: { id: conversationId, tenantId: request.tenantCtx!.tenantId },
+        });
+        if (conversation.outcome !== "IN_PROGRESS") {
+          throw Object.assign(new Error("Only an in-progress conversation can be marked resolved."), { statusCode: 409 });
+        }
+        const result = await tx.conversation.update({
+          where: { id: conversationId },
+          data: { outcome: "RESOLVED", endedAt: new Date() },
+        });
+        await writeAuditLog(tx, request.tenantCtx!, {
+          actorUserId: request.authUser!.sub,
+          agentId: conversation.agentId,
+          action: "conversation_marked_resolved",
+          metadata: { conversationId },
+        });
+        await fireWorkflowTrigger(tx, ctx.queue, {
+          tenantId: request.tenantCtx!.tenantId,
+          agentId: conversation.agentId,
+          triggerType: "CONVERSATION_ENDED",
+          payload: { conversationId, customerIdentityId: conversation.customerIdentityId },
+          queueTarget: env.SQS_WORKFLOW_RUN_QUEUE_URL,
+        });
+        return result;
+      });
+      reply.send(updated);
+    },
+  );
 
   app.get(
     "/v1/tenants/:tenantId/conversations/:conversationId/export",

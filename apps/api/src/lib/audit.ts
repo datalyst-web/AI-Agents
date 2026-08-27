@@ -14,7 +14,9 @@ type ExtendedAuditAction =
   | AuditAction
   | "human_approval_approved"
   | "human_approval_rejected"
-  | "memory:cross_conversation_write";
+  | "memory:cross_conversation_write"
+  | "conversation_marked_resolved"
+  | "tenant_theme_updated";
 
 /**
  * The only sanctioned way to write an AuditLogEntry. Every staff action on

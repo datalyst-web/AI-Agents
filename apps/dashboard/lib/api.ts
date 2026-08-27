@@ -153,6 +153,8 @@ export const api = {
 
   listConversations: (tenantId: string, agentId: string) => apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/conversations`),
   getConversation: (tenantId: string, conversationId: string) => apiFetch(`/v1/tenants/${tenantId}/conversations/${conversationId}`),
+  resolveConversation: (tenantId: string, conversationId: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/conversations/${conversationId}/resolve`, { method: "POST" }),
   getAnalytics: (tenantId: string, agentId: string) => apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/analytics`),
   getAnalyticsDaily: (tenantId: string, agentId: string, days = 14) =>
     apiFetch<{ date: string; conversations: number; avgSentiment: number | null }[]>(

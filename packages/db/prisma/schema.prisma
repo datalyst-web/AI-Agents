@@ -60,6 +60,18 @@ enum ManagedSetupTier {
   @@schema("chat")
 }
 
+/// Drives both the dashboard's own chrome and every one of the tenant's
+/// widgets — one setting, two surfaces (see widgetConfig.routes.ts and
+/// apps/widget/src/widget.ts).
+enum DashboardTheme {
+  DARK
+  LIGHT
+  MIDNIGHT
+  PERIWINKLE
+
+  @@schema("chat")
+}
+
 model Tenant {
   id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                 String
@@ -69,6 +81,7 @@ model Tenant {
   managedSetupTier     ManagedSetupTier  @default(SELF_SERVE)
   delegatesAutoPublish Boolean           @default(false)
   dataRetentionDays    Int               @default(365)
+  theme                DashboardTheme    @default(DARK)
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
@@ -366,6 +379,10 @@ model Conversation {
   pendingToolCall    Json?                @map("pending_tool_call")
   startedAt          DateTime             @default(now()) @map("started_at")
   endedAt            DateTime?            @map("ended_at")
+  /// Set once NO_REPLY_TIMEOUT has fired for this conversation, so the
+  /// periodic sweep never re-fires it on every pass while the conversation
+  /// sits silent between the no-reply and abandoned thresholds.
+  noReplyNotifiedAt  DateTime?            @map("no_reply_notified_at")
 
   messages Message[]
 
