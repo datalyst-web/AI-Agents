@@ -16,7 +16,9 @@ type ExtendedAuditAction =
   | "human_approval_rejected"
   | "memory:cross_conversation_write"
   | "conversation_marked_resolved"
-  | "tenant_theme_updated";
+  | "tenant_theme_updated"
+  | "password_reset_requested"
+  | "password_reset_completed";
 
 /**
  * The only sanctioned way to write an AuditLogEntry. Every staff action on

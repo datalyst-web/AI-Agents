@@ -131,6 +131,12 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  /// SHA-256 of the reset token, never the raw token — the raw value only
+  /// ever exists in the email sent to the user and the request that
+  /// redeems it, same reasoning as never storing a plaintext password.
+  passwordResetTokenHash String?   @map("password_reset_token_hash")
+  passwordResetExpiresAt DateTime? @map("password_reset_expires_at")
+
   impersonationSessionsAsStaff StaffImpersonationSession[] @relation("StaffUser")
 
   @@index([tenantId])

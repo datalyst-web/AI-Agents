@@ -1,9 +1,11 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes, createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { withPlatformContext, withTenant } from "@chat-agent/db";
 import type { AppContext } from "../lib/context.js";
+import { writeAuditLog } from "../lib/audit.js";
+import { env } from "../env.js";
 
 const LoginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
 const SignupSchema = z.object({
@@ -11,6 +13,13 @@ const SignupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
 });
+const ForgotPasswordSchema = z.object({ email: z.string().email() });
+const ResetPasswordSchema = z.object({ token: z.string().min(1), newPassword: z.string().min(8) });
+
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+function hashResetToken(rawToken: string): string {
+  return createHash("sha256").update(rawToken).digest("hex");
+}
 
 /**
  * Self-serve entry point (CLAUDE.md Client Lifecycle: "the client
@@ -88,6 +97,87 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       role: user.role,
     });
     reply.send({ token, user: { id: user.id, email: user.email, role: user.role, tenantId: user.tenantId } });
+  });
+
+  /**
+   * Always returns the same generic response whether or not the email is
+   * registered — an "email not found" response would let an attacker
+   * enumerate real accounts. The one exception is when SMTP genuinely
+   * isn't configured at all (a system-level fact, not account-specific),
+   * where we say so plainly rather than silently pretending an email went
+   * out that never will — CLAUDE.md's anti-hallucination principle
+   * applies to our own product just as much as the AI agent's answers.
+   */
+  app.post("/v1/auth/forgot-password", async (request, reply) => {
+    const body = ForgotPasswordSchema.parse(request.body);
+    const genericResponse = { message: "If that email is registered, a reset link is on its way." };
+
+    const user = await withPlatformContext(ctx.prisma, (tx) => tx.user.findUnique({ where: { email: body.email } }));
+    if (!user || !user.isActive) {
+      reply.send(genericResponse);
+      return;
+    }
+
+    const rawToken = randomBytes(32).toString("hex");
+    await withPlatformContext(ctx.prisma, (tx) =>
+      tx.user.update({
+        where: { id: user.id },
+        data: { passwordResetTokenHash: hashResetToken(rawToken), passwordResetExpiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS) },
+      }),
+    );
+
+    const resetUrl = `${env.DASHBOARD_BASE_URL}/reset-password?token=${rawToken}`;
+    const result = await ctx.email.send({
+      to: user.email,
+      subject: "Reset your password",
+      text: `We received a request to reset your password. Reset it here (expires in 1 hour): ${resetUrl}\n\nIf you didn't request this, you can safely ignore this email.`,
+      html: `<p>We received a request to reset your password.</p><p><a href="${resetUrl}">Reset your password</a> (expires in 1 hour).</p><p>If you didn't request this, you can safely ignore this email.</p>`,
+    });
+
+    if (user.tenantId) {
+      await withTenant(ctx.prisma, { tenantId: user.tenantId }, (tx) =>
+        writeAuditLog(tx, { tenantId: user.tenantId! }, {
+          actorUserId: user.id,
+          action: "password_reset_requested",
+          metadata: { emailSent: result.sent },
+        }),
+      );
+    }
+
+    if (!result.sent && result.error === "smtp_not_configured") {
+      reply.send({ message: "Password reset isn't fully set up yet on this platform — contact support directly for now." });
+      return;
+    }
+    reply.send(genericResponse);
+  });
+
+  app.post("/v1/auth/reset-password", async (request, reply) => {
+    const body = ResetPasswordSchema.parse(request.body);
+    const tokenHash = hashResetToken(body.token);
+
+    const user = await withPlatformContext(ctx.prisma, (tx) =>
+      tx.user.findFirst({ where: { passwordResetTokenHash: tokenHash } }),
+    );
+    if (!user || !user.passwordResetExpiresAt || user.passwordResetExpiresAt < new Date()) {
+      reply.code(400).send({ error: "invalid_or_expired_token" });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(body.newPassword, 12);
+    await withPlatformContext(ctx.prisma, (tx) =>
+      tx.user.update({
+        where: { id: user.id },
+        data: { passwordHash, passwordResetTokenHash: null, passwordResetExpiresAt: null },
+      }),
+    );
+
+    if (user.tenantId) {
+      await withTenant(ctx.prisma, { tenantId: user.tenantId }, (tx) =>
+        writeAuditLog(tx, { tenantId: user.tenantId! }, { actorUserId: user.id, action: "password_reset_completed" }),
+      );
+    }
+
+    reply.send({ message: "Password updated — you can now log in with your new password." });
   });
 
   app.get("/v1/auth/me", { preHandler: app.authenticate }, async (request, reply) => {

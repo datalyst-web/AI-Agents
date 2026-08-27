@@ -94,6 +94,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
+  forgotPassword: (email: string) =>
+    apiFetch<{ message: string }>("/v1/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
+  resetPassword: (token: string, newPassword: string) =>
+    apiFetch<{ message: string }>("/v1/auth/reset-password", { method: "POST", body: JSON.stringify({ token, newPassword }) }),
   signup: (tenantName: string, email: string, password: string) =>
     apiFetch<{ token: string; tenant: { id: string; slug: string; name: string } }>("/v1/auth/signup", {
       method: "POST",

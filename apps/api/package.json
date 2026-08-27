@@ -23,6 +23,7 @@
     "@chat-agent/workflow-engine": "workspace:*",
     "@chat-agent/queue": "workspace:*",
     "@chat-agent/storage": "workspace:*",
+    "@chat-agent/email": "workspace:*",
     "fastify": "^5.0.0",
     "fastify-plugin": "^5.0.1",
     "@fastify/cors": "^10.0.1",

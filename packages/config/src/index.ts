@@ -61,6 +61,17 @@ export const EnvSchema = z.object({
   JWT_EXPIRY: z.string().default("15m"),
   JWT_REFRESH_EXPIRY: z.string().default("30d"),
 
+  // Platform transactional email (password reset, etc.) — see
+  // packages/email. Left unset in dev/test, where the Noop provider logs
+  // instead of sending; production needs all four for real delivery.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().optional(),
+  SMTP_SECURE: z.string().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  SMTP_FROM_ADDRESS: z.string().optional(),
+  DASHBOARD_BASE_URL: z.string().default("http://localhost:3000"),
+
   API_PORT: z.coerce.number().default(4000),
   API_CORS_ORIGINS: z
     .string()
