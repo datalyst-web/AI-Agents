@@ -63,8 +63,8 @@ export default function ApprovalsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-white">Approvals</h1>
-        <p className="mt-1 text-sm text-white/50">
+        <h1 className="text-xl font-semibold text-foreground">Approvals</h1>
+        <p className="mt-1 text-sm text-foreground/50">
           Actions your agents flagged as high-risk — configured to require your team's sign-off before they run. Nothing here executes until you approve it.
         </p>
       </div>
@@ -83,15 +83,15 @@ export default function ApprovalsPage() {
                     <path d="M3 8.5l3 3 7-7" stroke="#2fbf71" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
-                <p className="text-sm text-white/50">Nothing waiting for approval right now.</p>
+                <p className="text-sm text-foreground/50">Nothing waiting for approval right now.</p>
               </div>
             ) : (
               approvals.map((a) => (
                 <div key={a.id} className="flex items-start justify-between gap-4 px-5 py-4 text-sm">
                   <div className="min-w-0 flex-1">
-                    <div className="font-medium text-white">{a.toolName.replace(/_/g, " ")}</div>
-                    <div className="mt-1 max-w-xl truncate text-xs text-white/40">{JSON.stringify(a.input)}</div>
-                    <div className="mt-1 text-[11px] text-white/30">Requested {new Date(a.requestedAt).toLocaleString()}</div>
+                    <div className="font-medium text-foreground">{a.toolName.replace(/_/g, " ")}</div>
+                    <div className="mt-1 max-w-xl truncate text-xs text-foreground/40">{JSON.stringify(a.input)}</div>
+                    <div className="mt-1 text-[11px] text-foreground/30">Requested {new Date(a.requestedAt).toLocaleString()}</div>
                   </div>
                   <div className="flex shrink-0 gap-2">
                     <Button variant="secondary" className="!bg-danger/15 !text-danger hover:!bg-danger/25" disabled={busyId === a.id} onClick={() => reject(a.id)}>

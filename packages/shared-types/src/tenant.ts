@@ -29,6 +29,15 @@ export const SubscriptionTierSchema = z.enum([
 ]);
 export type SubscriptionTier = z.infer<typeof SubscriptionTierSchema>;
 
+/** Drives both the dashboard's own chrome and every one of the tenant's widgets — see widgetConfig.routes.ts and apps/widget/src/widget.ts. */
+export const DashboardThemeSchema = z.enum([
+  "DARK",
+  "LIGHT",
+  "MIDNIGHT",
+  "PERIWINKLE",
+]);
+export type DashboardTheme = z.infer<typeof DashboardThemeSchema>;
+
 export interface Tenant {
   id: string;
   name: string;
@@ -39,6 +48,7 @@ export interface Tenant {
   /** Whether this tenant has contractually delegated staff auto-publish authority. */
   delegatesAutoPublish: boolean;
   dataRetentionDays: number;
+  theme: DashboardTheme;
   createdAt: string;
   updatedAt: string;
 }

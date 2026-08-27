@@ -99,7 +99,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ tenantName, email, password }),
     }),
-  me: () => apiFetch<{ id: string; email: string; role: string; tenantId: string; displayName: string }>("/v1/auth/me"),
+  me: () =>
+    apiFetch<{ id: string; email: string; role: string; tenantId: string; displayName: string; theme: "DARK" | "LIGHT" | "MIDNIGHT" | "PERIWINKLE" }>(
+      "/v1/auth/me",
+    ),
+  updateTenantTheme: (tenantId: string, theme: "DARK" | "LIGHT" | "MIDNIGHT" | "PERIWINKLE") =>
+    apiFetch(`/v1/tenants/${tenantId}/theme`, { method: "PATCH", body: JSON.stringify({ theme }) }),
 
   listManagedSetupQueue: () =>
     apiFetch<{ id: string; name: string; managedSetupTier: string; subscriptionState: string; updatedAt: string }[]>(

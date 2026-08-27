@@ -4,7 +4,19 @@
  * principle 6), so the dashboard chrome should read as premium SaaS
  * tooling, not compete visually with a tenant's own branding once we add
  * per-tenant theming.
+ *
+ * `surface.*` and `foreground` resolve through CSS custom properties
+ * (see apps/dashboard/app/globals.css's `[data-theme]` blocks) rather
+ * than literal hex, so every existing `bg-surface-overlay`,
+ * `text-foreground/70`, etc. usage across the dashboard repaints for
+ * free when the tenant's theme changes — no per-page rewrite needed.
+ * brand/accent/status colors stay constant across themes; only the
+ * neutral background/foreground scale shifts.
  */
+function themeVar(name) {
+  return `rgb(var(${name}) / <alpha-value>)`;
+}
+
 module.exports = {
   theme: {
     extend: {
@@ -29,12 +41,13 @@ module.exports = {
           600: "#a21caf",
         },
         surface: {
-          DEFAULT: "#08090f",
-          raised: "#0f1119",
-          overlay: "#171a26",
-          hover: "#1c2030",
-          border: "#232837",
+          DEFAULT: themeVar("--color-surface"),
+          raised: themeVar("--color-surface-raised"),
+          overlay: themeVar("--color-surface-overlay"),
+          hover: themeVar("--color-surface-hover"),
+          border: themeVar("--color-surface-border"),
         },
+        foreground: themeVar("--color-foreground"),
         success: "#2fbf71",
         warning: "#e8a53d",
         danger: "#e5484d",

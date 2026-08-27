@@ -120,8 +120,8 @@ export default function WorkflowsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-white">Workflows</h1>
-          <p className="mt-1 text-sm text-white/50">Trigger → condition → action → notification automations that run alongside your agents.</p>
+          <h1 className="text-xl font-semibold text-foreground">Workflows</h1>
+          <p className="mt-1 text-sm text-foreground/50">Trigger → condition → action → notification automations that run alongside your agents.</p>
         </div>
         <Button onClick={() => setModalOpen(true)}>+ New workflow</Button>
       </div>
@@ -135,7 +135,7 @@ export default function WorkflowsPage() {
           <CardBody className="divide-y divide-surface-border p-0">
             {workflows.length === 0 ? (
               <div className="flex flex-col items-center gap-3 px-5 py-12 text-center">
-                <p className="text-sm text-white/50">No workflows yet. Automate a follow-up, escalation, or notification.</p>
+                <p className="text-sm text-foreground/50">No workflows yet. Automate a follow-up, escalation, or notification.</p>
                 <button onClick={() => setModalOpen(true)} className="text-xs font-medium text-brand-300 hover:underline">
                   Create your first workflow →
                 </button>
@@ -144,8 +144,8 @@ export default function WorkflowsPage() {
               workflows.map((w) => (
                 <div key={w.id} className={`flex items-center justify-between px-5 py-3.5 text-sm ${w.enabled ? "" : "opacity-50"}`}>
                   <div>
-                    <div className="text-white">{w.name}</div>
-                    <div className="text-xs text-white/40">v{w.version}</div>
+                    <div className="text-foreground">{w.name}</div>
+                    <div className="text-xs text-foreground/40">v{w.version}</div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge tone="brand">{w.triggerType.replace(/_/g, " ")}</Badge>
@@ -153,14 +153,14 @@ export default function WorkflowsPage() {
                     <button
                       onClick={() => toggleEnabled(w)}
                       disabled={busyWorkflowId === w.id}
-                      className="text-xs font-medium text-white/40 transition-colors hover:text-white/70 disabled:opacity-50"
+                      className="text-xs font-medium text-foreground/40 transition-colors hover:text-foreground/70 disabled:opacity-50"
                     >
                       {w.enabled ? "Disable" : "Enable"}
                     </button>
                     <button
                       onClick={() => removeWorkflow(w.id)}
                       disabled={busyWorkflowId === w.id}
-                      className="text-xs font-medium text-white/30 transition-colors hover:text-danger disabled:opacity-50"
+                      className="text-xs font-medium text-foreground/30 transition-colors hover:text-danger disabled:opacity-50"
                     >
                       Remove
                     </button>
@@ -175,21 +175,21 @@ export default function WorkflowsPage() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="New workflow" subtitle="Trigger → action → notification, versioned like your agent config.">
         <form onSubmit={createWorkflow} className="space-y-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-white/60">Name</label>
+            <label className="mb-1 block text-xs font-medium text-foreground/60">Name</label>
             <input
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Notify sales on hot lead"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+              className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-white/60">Trigger</label>
+            <label className="mb-1 block text-xs font-medium text-foreground/60">Trigger</label>
             <select
               value={triggerType}
               onChange={(e) => setTriggerType(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-brand-400"
+              className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
             >
               {TRIGGERS.map((t) => (
                 <option key={t} value={t} className="bg-surface-overlay">
@@ -199,11 +199,11 @@ export default function WorkflowsPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-white/60">Then, action</label>
+            <label className="mb-1 block text-xs font-medium text-foreground/60">Then, action</label>
             <select
               value={actionType}
               onChange={(e) => setActionType(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-brand-400"
+              className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
             >
               {ACTION_TYPES.map((t) => (
                 <option key={t} value={t} className="bg-surface-overlay">
@@ -213,11 +213,11 @@ export default function WorkflowsPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-white/60">If this action fails, notify</label>
+            <label className="mb-1 block text-xs font-medium text-foreground/60">If this action fails, notify</label>
             <select
               value={notifyTarget}
               onChange={(e) => setNotifyTarget(e.target.value as typeof notifyTarget)}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-brand-400"
+              className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
             >
               <option value="tenant_owner" className="bg-surface-overlay">
                 Tenant owner
@@ -229,7 +229,7 @@ export default function WorkflowsPage() {
                 Staff fallback
               </option>
             </select>
-            <p className="mt-1 text-[11px] text-white/35">A failed step is always logged and never fails silently — this is who gets notified.</p>
+            <p className="mt-1 text-[11px] text-foreground/35">A failed step is always logged and never fails silently — this is who gets notified.</p>
           </div>
           {error ? <p className="text-xs text-danger">{error}</p> : null}
           <div className="flex justify-end gap-2 pt-1">

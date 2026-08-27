@@ -19,6 +19,7 @@ interface WidgetConfig {
   greeting: string;
   avatarUrl?: string;
   tone: string;
+  theme?: "DARK" | "LIGHT" | "MIDNIGHT" | "PERIWINKLE";
   widgetToken: string;
 }
 interface PendingConfirmation {
@@ -102,13 +103,16 @@ export default function ClientAgentPage() {
   if (loadError) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4">
-        <p className="text-sm text-white/50">{loadError}</p>
+        <p className="text-sm text-foreground/50">{loadError}</p>
       </div>
     );
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-hidden">
+    <div
+      data-theme={(config?.theme ?? "DARK").toLowerCase()}
+      className="relative flex min-h-screen flex-col overflow-hidden bg-surface text-foreground"
+    >
       <div className="pointer-events-none absolute -top-40 left-1/2 h-96 w-[48rem] -translate-x-1/2 rounded-full bg-brand-gradient opacity-[0.12] blur-3xl" />
 
       <header className="relative flex items-center gap-3 border-b border-surface-border px-5 py-4 sm:px-8">
@@ -124,8 +128,8 @@ export default function ClientAgentPage() {
           )}
         </div>
         <div>
-          <div className="text-sm font-semibold text-white">{config?.name ?? "Loading…"}</div>
-          <div className="flex items-center gap-1.5 text-xs text-white/40">
+          <div className="text-sm font-semibold text-foreground">{config?.name ?? "Loading…"}</div>
+          <div className="flex items-center gap-1.5 text-xs text-foreground/40">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
             Online now
           </div>
@@ -138,8 +142,8 @@ export default function ClientAgentPage() {
             <span
               className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                 m.role === "customer"
-                  ? "rounded-br-md bg-brand-gradient text-white shadow-glow"
-                  : "rounded-bl-md bg-white/[0.06] text-white/90 ring-1 ring-inset ring-white/10"
+                  ? "rounded-br-md bg-brand-gradient text-foreground shadow-glow"
+                  : "rounded-bl-md bg-foreground/[0.06] text-foreground/90 ring-1 ring-inset ring-foreground/10"
               }`}
             >
               {m.text}
@@ -148,19 +152,19 @@ export default function ClientAgentPage() {
         ))}
         {sending ? (
           <div className="flex justify-start">
-            <span className="flex items-center gap-1 rounded-2xl rounded-bl-md bg-white/[0.06] px-4 py-3 ring-1 ring-inset ring-white/10">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/50" />
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/50 [animation-delay:0.15s]" />
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/50 [animation-delay:0.3s]" />
+            <span className="flex items-center gap-1 rounded-2xl rounded-bl-md bg-foreground/[0.06] px-4 py-3 ring-1 ring-inset ring-foreground/10">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground/50" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground/50 [animation-delay:0.15s]" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground/50 [animation-delay:0.3s]" />
             </span>
           </div>
         ) : null}
-        {!config && !loadError ? <p className="text-center text-sm text-white/30">Connecting…</p> : null}
+        {!config && !loadError ? <p className="text-center text-sm text-foreground/30">Connecting…</p> : null}
       </main>
 
       {pendingConfirmation ? (
         <div className="relative mx-auto w-full max-w-2xl border-t border-warning/25 bg-warning/[0.06] px-5 py-3 sm:px-8">
-          <p className="mb-2 text-xs text-white/80">{pendingConfirmation.confirmationPrompt}</p>
+          <p className="mb-2 text-xs text-foreground/80">{pendingConfirmation.confirmationPrompt}</p>
           <div className="flex gap-2">
             <button
               onClick={() => void sendMessage("", pendingConfirmation.toolCallId)}
@@ -173,7 +177,7 @@ export default function ClientAgentPage() {
                 setPendingConfirmation(null);
                 setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "agent", text: "No problem, I won't go ahead with that." }]);
               }}
-              className="rounded-lg px-3.5 py-2 text-sm font-medium text-white/60 transition-colors hover:bg-white/5 hover:text-white"
+              className="rounded-lg px-3.5 py-2 text-sm font-medium text-foreground/60 transition-colors hover:bg-foreground/5 hover:text-foreground"
             >
               Cancel
             </button>
@@ -188,12 +192,12 @@ export default function ClientAgentPage() {
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type a message…"
           disabled={!config || sending}
-          className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+          className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
         />
         <button
           type="submit"
           disabled={!config || sending || !input.trim()}
-          className="inline-flex items-center justify-center rounded-lg bg-brand-gradient px-5 text-sm font-medium text-white shadow-glow transition-all duration-300 hover:shadow-glow-lg disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center justify-center rounded-lg bg-brand-gradient px-5 text-sm font-medium text-foreground shadow-glow transition-all duration-300 hover:shadow-glow-lg disabled:cursor-not-allowed disabled:opacity-50"
         >
           Send
         </button>

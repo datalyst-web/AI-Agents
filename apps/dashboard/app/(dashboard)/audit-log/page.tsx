@@ -32,8 +32,8 @@ export default function AuditLogPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-white">Audit Log</h1>
-        <p className="mt-1 text-sm text-white/50">
+        <h1 className="text-xl font-semibold text-foreground">Audit Log</h1>
+        <p className="mt-1 text-sm text-foreground/50">
           Every change to your agents and knowledge base — including everything our Setup Team does on your behalf under a Managed Setup plan.
         </p>
       </div>
@@ -45,16 +45,16 @@ export default function AuditLogPage() {
         ) : (
           <CardBody className="divide-y divide-surface-border p-0">
             {entries.length === 0 ? (
-              <p className="px-5 py-6 text-sm text-white/40">No activity yet.</p>
+              <p className="px-5 py-6 text-sm text-foreground/40">No activity yet.</p>
             ) : (
               entries.map((entry) => (
                 <div key={entry.id} className="flex items-center justify-between px-5 py-3 text-sm">
                   <div className="flex items-center gap-2">
-                    <span className="text-white">{entry.action.replace(/_/g, " ")}</span>
+                    <span className="text-foreground">{entry.action.replace(/_/g, " ")}</span>
                     {entry.actorIsStaff ? <Badge tone="brand">AI Setup Team</Badge> : null}
-                    {entry.contentSource ? <span className="text-xs text-white/30">({entry.contentSource})</span> : null}
+                    {entry.contentSource ? <span className="text-xs text-foreground/30">({entry.contentSource})</span> : null}
                   </div>
-                  <span className="text-xs text-white/40">{new Date(entry.timestamp).toLocaleString()}</span>
+                  <span className="text-xs text-foreground/40">{new Date(entry.timestamp).toLocaleString()}</span>
                 </div>
               ))
             )}

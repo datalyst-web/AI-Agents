@@ -43,6 +43,10 @@ export async function registerWidgetConfigRoutes(app: FastifyInstance, ctx: AppC
       greeting: personality.greeting,
       avatarUrl: personality.avatarUrl,
       tone: personality.tone,
+      // Same value the dashboard's own chrome uses for this tenant — one
+      // setting, two surfaces (CLAUDE.md: white-label-safe, no infra
+      // leaked, purely a client-facing cosmetic choice).
+      theme: tenant.theme,
       widgetToken: token,
     });
   });

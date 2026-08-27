@@ -33,12 +33,12 @@ export function Modal({
         <div className="rounded-[calc(1.75rem-1px)] bg-surface-raised/98 p-6 backdrop-blur">
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-base font-semibold tracking-tight text-white">{title}</h3>
-              {subtitle ? <p className="mt-1 text-xs text-white/50">{subtitle}</p> : null}
+              <h3 className="text-base font-semibold tracking-tight text-foreground">{title}</h3>
+              {subtitle ? <p className="mt-1 text-xs text-foreground/50">{subtitle}</p> : null}
             </div>
             <button
               onClick={onClose}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white/40 transition-colors hover:bg-white/5 hover:text-white"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-foreground/40 transition-colors hover:bg-foreground/5 hover:text-foreground"
               aria-label="Close"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">

@@ -65,14 +65,14 @@ export default function OverviewPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             Welcome back<span className="text-gradient">.</span>
           </h1>
-          <p className="mt-1 text-sm text-white/50">Here&apos;s how your AI employees are performing.</p>
+          <p className="mt-1 text-sm text-foreground/50">Here&apos;s how your AI employees are performing.</p>
         </div>
         <Link
           href="/agents"
-          className="inline-flex items-center gap-2 rounded-lg bg-brand-gradient bg-[length:160%_auto] bg-left px-4 py-2.5 text-sm font-medium text-white shadow-glow transition-all duration-300 hover:bg-right hover:shadow-glow-lg"
+          className="inline-flex items-center gap-2 rounded-lg bg-brand-gradient bg-[length:160%_auto] bg-left px-4 py-2.5 text-sm font-medium text-foreground shadow-glow transition-all duration-300 hover:bg-right hover:shadow-glow-lg"
         >
           + New agent
         </Link>
@@ -113,12 +113,12 @@ export default function OverviewPage() {
             daily.some((d) => d.totalTokens > 0) ? (
               <LineChart data={daily.map((d) => ({ label: dayLabel(d.date), value: d.totalTokens }))} tone="brand" />
             ) : (
-              <p className="py-6 text-center text-sm text-white/40">
+              <p className="py-6 text-center text-sm text-foreground/40">
                 No usage yet — send a test message from an agent to see activity here.
               </p>
             )
           ) : (
-            <div className="h-[180px] animate-pulse rounded-lg bg-white/[0.03]" />
+            <div className="h-[180px] animate-pulse rounded-lg bg-foreground/[0.03]" />
           )}
         </CardBody>
       </Card>
@@ -142,7 +142,7 @@ export default function OverviewPage() {
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-500/10 ring-1 ring-inset ring-brand-500/25">
                   <DotIcon />
                 </div>
-                <p className="text-sm text-white/50">No agents yet. Create your first AI employee to get started.</p>
+                <p className="text-sm text-foreground/50">No agents yet. Create your first AI employee to get started.</p>
                 <Link href="/agents" className="text-xs font-medium text-brand-300 hover:underline">
                   Create an agent →
                 </Link>
@@ -152,13 +152,13 @@ export default function OverviewPage() {
                 <Link
                   key={agent.id}
                   href={`/agents/${agent.id}`}
-                  className="flex items-center justify-between px-5 py-3.5 text-sm transition-colors hover:bg-white/[0.03]"
+                  className="flex items-center justify-between px-5 py-3.5 text-sm transition-colors hover:bg-foreground/[0.03]"
                 >
                   <span className="flex items-center gap-3">
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-gradient-soft text-xs font-semibold text-brand-200 ring-1 ring-inset ring-brand-500/20">
                       {agent.name.slice(0, 1).toUpperCase()}
                     </span>
-                    <span className="text-white">{agent.name}</span>
+                    <span className="text-foreground">{agent.name}</span>
                   </span>
                   <AgentStatusBadge status={agent.status} />
                 </Link>

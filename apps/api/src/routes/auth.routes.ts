@@ -95,9 +95,21 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
     // Tenant-scoped users go through withTenant with the tenant the JWT
     // already vouches for; a platform_admin's token carries no tenantId
     // (they aren't scoped to one), so that case alone uses platform context.
-    const user = authUser.tenantId
-      ? await withTenant(ctx.prisma, { tenantId: authUser.tenantId }, (tx) => tx.user.findUniqueOrThrow({ where: { id: authUser.sub } }))
-      : await withPlatformContext(ctx.prisma, (tx) => tx.user.findUniqueOrThrow({ where: { id: authUser.sub } }));
-    reply.send({ id: user.id, email: user.email, role: user.role, tenantId: user.tenantId, displayName: user.displayName });
+    const { user, theme } = authUser.tenantId
+      ? await withTenant(ctx.prisma, { tenantId: authUser.tenantId }, async (tx) => {
+          const [user, tenant] = await Promise.all([
+            tx.user.findUniqueOrThrow({ where: { id: authUser.sub } }),
+            tx.tenant.findUniqueOrThrow({ where: { id: authUser.tenantId! } }),
+          ]);
+          return { user, theme: tenant.theme };
+        })
+      : await withPlatformContext(ctx.prisma, async (tx) => ({
+          user: await tx.user.findUniqueOrThrow({ where: { id: authUser.sub } }),
+          // A staff account with no tenant in scope yet (pre-impersonation)
+          // has no tenant theme to inherit — the dashboard chrome just
+          // stays on the default until an impersonation session picks one.
+          theme: "DARK" as const,
+        }));
+    reply.send({ id: user.id, email: user.email, role: user.role, tenantId: user.tenantId, displayName: user.displayName, theme });
   });
 }

@@ -44,8 +44,8 @@ export default function BillingPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-white">Billing & Usage</h1>
-        <p className="mt-1 text-sm text-white/50">Month-to-date usage against your plan's included limits.</p>
+        <h1 className="text-xl font-semibold text-foreground">Billing & Usage</h1>
+        <p className="mt-1 text-sm text-foreground/50">Month-to-date usage against your plan's included limits.</p>
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
 
@@ -72,10 +72,10 @@ export default function BillingPage() {
             daily.some((d) => d.totalTokens > 0) ? (
               <LineChart data={daily.map((d) => ({ label: new Date(d.date).getDate().toString(), value: d.totalTokens }))} tone="brand" />
             ) : (
-              <p className="py-6 text-center text-sm text-white/40">No usage recorded yet.</p>
+              <p className="py-6 text-center text-sm text-foreground/40">No usage recorded yet.</p>
             )
           ) : (
-            <div className="h-[180px] animate-pulse rounded-lg bg-white/[0.03]" />
+            <div className="h-[180px] animate-pulse rounded-lg bg-foreground/[0.03]" />
           )}
         </CardBody>
       </Card>
@@ -85,7 +85,7 @@ export default function BillingPage() {
           <CardHeader title="By provider" subtitle="Provider identity is never shown to your customers — this view is for your own cost visibility." />
           <CardBody>
             {Object.keys(usage.byProvider).length === 0 ? (
-              <p className="py-4 text-center text-sm text-white/40">No requests yet this month.</p>
+              <p className="py-4 text-center text-sm text-foreground/40">No requests yet this month.</p>
             ) : (
               <BarBreakdown
                 items={Object.entries(usage.byProvider).map(([provider, stats]) => ({

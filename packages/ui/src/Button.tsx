@@ -4,10 +4,10 @@ type Variant = "primary" | "secondary" | "ghost" | "danger";
 
 const variantClasses: Record<Variant, string> = {
   primary:
-    "bg-brand-gradient bg-[length:160%_auto] bg-left text-white shadow-glow hover:bg-right hover:shadow-glow-lg",
-  secondary: "bg-white/5 text-white hover:bg-white/10 ring-1 ring-inset ring-white/10",
-  ghost: "text-white/70 hover:text-white hover:bg-white/5",
-  danger: "bg-danger/90 text-white hover:bg-danger",
+    "bg-brand-gradient bg-[length:160%_auto] bg-left text-foreground shadow-glow hover:bg-right hover:shadow-glow-lg",
+  secondary: "bg-foreground/5 text-foreground hover:bg-foreground/10 ring-1 ring-inset ring-foreground/10",
+  ghost: "text-foreground/70 hover:text-foreground hover:bg-foreground/5",
+  danger: "bg-danger/90 text-foreground hover:bg-danger",
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

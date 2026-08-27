@@ -24,10 +24,10 @@ export function BarBreakdown({ items }: { items: BarBreakdownItem[] }) {
         return (
           <div key={item.label}>
             <div className="mb-1 flex items-center justify-between text-xs">
-              <span className="font-medium text-white/70">{item.label}</span>
-              <span className="tabular-nums text-white/50">{item.value.toLocaleString()}</span>
+              <span className="font-medium text-foreground/70">{item.label}</span>
+              <span className="tabular-nums text-foreground/50">{item.value.toLocaleString()}</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-white/5">
+            <div className="h-2 overflow-hidden rounded-full bg-foreground/5">
               <div
                 className="h-full rounded-full transition-[width] duration-500 ease-out"
                 style={{ width: `${pct}%`, backgroundColor: color }}

@@ -10,14 +10,124 @@
  * agent name/avatar/greeting.
  */
 
+type WidgetTheme = "DARK" | "LIGHT" | "MIDNIGHT" | "PERIWINKLE";
+
 interface WidgetConfig {
   agentId: string;
   name: string;
   greeting: string;
   avatarUrl?: string;
   tone: string;
+  theme?: WidgetTheme;
   widgetToken: string;
 }
+
+/**
+ * Same 4 themes as the dashboard's own chrome (apps/dashboard/app/globals.css)
+ * — one tenant preference, two surfaces. `:host`'s defaults below are the
+ * DARK values, so the widget looks exactly as it always has until
+ * `applyTheme()` runs post-config-load; brand-1/2/3 (the gradient accent)
+ * stay constant across themes on purpose, same as the dashboard's brand
+ * palette.
+ */
+const WIDGET_THEMES: Record<WidgetTheme, Record<string, string>> = {
+  DARK: {
+    "--panel-bg": "#0c0d13",
+    "--text-primary": "#ffffff",
+    "--text-secondary": "rgba(255,255,255,0.45)",
+    "--text-muted": "rgba(255,255,255,0.28)",
+    "--header-border": "rgba(255,255,255,0.07)",
+    "--bubble-agent-bg": "rgba(255,255,255,0.06)",
+    "--bubble-agent-border": "rgba(255,255,255,0.06)",
+    "--bubble-agent-text": "#f2f3f7",
+    "--input-bg": "rgba(255,255,255,0.06)",
+    "--input-border": "rgba(255,255,255,0.1)",
+    "--input-focus-bg": "rgba(255,255,255,0.08)",
+    "--input-text": "#ffffff",
+    "--input-placeholder": "rgba(255,255,255,0.32)",
+    "--composer-border": "rgba(255,255,255,0.07)",
+    "--composer-bg": "rgba(255,255,255,0.02)",
+    "--close-icon": "rgba(255,255,255,0.4)",
+    "--close-hover-bg": "rgba(255,255,255,0.08)",
+    "--footer-text": "rgba(255,255,255,0.25)",
+    "--footer-brand-text": "rgba(255,255,255,0.4)",
+    "--scrollbar-thumb": "rgba(255,255,255,0.12)",
+    "--panel-shadow": "0 24px 70px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.07) inset",
+    "--header-glow": "rgba(114,136,255,0.25)",
+  },
+  MIDNIGHT: {
+    "--panel-bg": "#05060d",
+    "--text-primary": "#eef0ff",
+    "--text-secondary": "rgba(238,240,255,0.45)",
+    "--text-muted": "rgba(238,240,255,0.28)",
+    "--header-border": "rgba(238,240,255,0.08)",
+    "--bubble-agent-bg": "rgba(238,240,255,0.06)",
+    "--bubble-agent-border": "rgba(238,240,255,0.06)",
+    "--bubble-agent-text": "#eef0ff",
+    "--input-bg": "rgba(238,240,255,0.06)",
+    "--input-border": "rgba(238,240,255,0.1)",
+    "--input-focus-bg": "rgba(238,240,255,0.09)",
+    "--input-text": "#eef0ff",
+    "--input-placeholder": "rgba(238,240,255,0.32)",
+    "--composer-border": "rgba(238,240,255,0.08)",
+    "--composer-bg": "rgba(238,240,255,0.02)",
+    "--close-icon": "rgba(238,240,255,0.4)",
+    "--close-hover-bg": "rgba(238,240,255,0.08)",
+    "--footer-text": "rgba(238,240,255,0.25)",
+    "--footer-brand-text": "rgba(238,240,255,0.4)",
+    "--scrollbar-thumb": "rgba(238,240,255,0.12)",
+    "--panel-shadow": "0 24px 70px rgba(0,0,0,0.6), 0 4px 16px rgba(0,0,0,0.4), 0 0 0 1px rgba(238,240,255,0.06) inset",
+    "--header-glow": "rgba(114,136,255,0.3)",
+  },
+  LIGHT: {
+    "--panel-bg": "#ffffff",
+    "--text-primary": "#0f1330",
+    "--text-secondary": "rgba(15,19,48,0.55)",
+    "--text-muted": "rgba(15,19,48,0.4)",
+    "--header-border": "rgba(15,19,48,0.08)",
+    "--bubble-agent-bg": "rgba(15,19,48,0.045)",
+    "--bubble-agent-border": "rgba(15,19,48,0.07)",
+    "--bubble-agent-text": "#0f1330",
+    "--input-bg": "rgba(15,19,48,0.035)",
+    "--input-border": "rgba(15,19,48,0.12)",
+    "--input-focus-bg": "rgba(15,19,48,0.05)",
+    "--input-text": "#0f1330",
+    "--input-placeholder": "rgba(15,19,48,0.38)",
+    "--composer-border": "rgba(15,19,48,0.08)",
+    "--composer-bg": "rgba(15,19,48,0.015)",
+    "--close-icon": "rgba(15,19,48,0.45)",
+    "--close-hover-bg": "rgba(15,19,48,0.06)",
+    "--footer-text": "rgba(15,19,48,0.32)",
+    "--footer-brand-text": "rgba(15,19,48,0.5)",
+    "--scrollbar-thumb": "rgba(15,19,48,0.14)",
+    "--panel-shadow": "0 24px 70px rgba(20,27,77,0.16), 0 4px 16px rgba(20,27,77,0.1), 0 0 0 1px rgba(15,19,48,0.06) inset",
+    "--header-glow": "rgba(114,136,255,0.14)",
+  },
+  PERIWINKLE: {
+    "--panel-bg": "#f8f9ff",
+    "--text-primary": "#1f2568",
+    "--text-secondary": "rgba(31,37,104,0.55)",
+    "--text-muted": "rgba(31,37,104,0.4)",
+    "--header-border": "rgba(31,37,104,0.09)",
+    "--bubble-agent-bg": "rgba(31,37,104,0.05)",
+    "--bubble-agent-border": "rgba(31,37,104,0.08)",
+    "--bubble-agent-text": "#1f2568",
+    "--input-bg": "rgba(31,37,104,0.04)",
+    "--input-border": "rgba(31,37,104,0.14)",
+    "--input-focus-bg": "rgba(31,37,104,0.06)",
+    "--input-text": "#1f2568",
+    "--input-placeholder": "rgba(31,37,104,0.4)",
+    "--composer-border": "rgba(31,37,104,0.09)",
+    "--composer-bg": "rgba(31,37,104,0.02)",
+    "--close-icon": "rgba(31,37,104,0.48)",
+    "--close-hover-bg": "rgba(31,37,104,0.07)",
+    "--footer-text": "rgba(31,37,104,0.34)",
+    "--footer-brand-text": "rgba(31,37,104,0.52)",
+    "--scrollbar-thumb": "rgba(31,37,104,0.15)",
+    "--panel-shadow": "0 24px 70px rgba(31,37,104,0.18), 0 4px 16px rgba(31,37,104,0.12), 0 0 0 1px rgba(31,37,104,0.07) inset",
+    "--header-glow": "rgba(114,136,255,0.2)",
+  },
+};
 
 interface PendingConfirmation {
   toolCallId: string;
@@ -117,10 +227,16 @@ interface ChatResponse {
   let config: WidgetConfig | undefined;
   let opened = false;
 
+  function applyTheme(theme: WidgetTheme | undefined) {
+    const tokens = WIDGET_THEMES[theme ?? "DARK"];
+    for (const [name, value] of Object.entries(tokens)) host.style.setProperty(name, value);
+  }
+
   async function loadConfig() {
     const resp = await fetch(`${apiBase}/v1/widget-config/${agentId}`);
     if (!resp.ok) throw new Error(`widget-config fetch failed: ${resp.status}`);
     config = (await resp.json()) as WidgetConfig;
+    applyTheme(config.theme);
     nameEl.textContent = config.name;
     if (config.avatarUrl) {
       avatarEl.src = config.avatarUrl;
@@ -244,7 +360,12 @@ interface ChatResponse {
   function styles(): string {
     return `
       :host, * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
-      :host { --brand-1: #7288ff; --brand-2: #4a5ef5; --brand-3: #a21caf; }
+      :host {
+        --brand-1: #7288ff; --brand-2: #4a5ef5; --brand-3: #a21caf;
+        ${Object.entries(WIDGET_THEMES.DARK)
+          .map(([name, value]) => `${name}: ${value};`)
+          .join(" ")}
+      }
 
       @keyframes fadeInUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
       @keyframes panelIn { from { opacity: 0; transform: translateY(16px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -268,62 +389,62 @@ interface ChatResponse {
 
       .panel {
         position: fixed; bottom: 96px; right: 24px; width: 372px; max-width: calc(100vw - 32px); height: 580px;
-        max-height: calc(100vh - 120px); background: #0c0d13; border-radius: 20px;
-        box-shadow: 0 24px 70px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.07) inset;
+        max-height: calc(100vh - 120px); background: var(--panel-bg); border-radius: 20px;
+        box-shadow: var(--panel-shadow);
         display: flex; flex-direction: column; overflow: hidden; z-index: 999999;
         opacity: 0; transform: translateY(16px) scale(0.97); transform-origin: bottom right;
-        transition: opacity 0.22s cubic-bezier(0.16,1,0.3,1), transform 0.22s cubic-bezier(0.16,1,0.3,1);
+        transition: opacity 0.22s cubic-bezier(0.16,1,0.3,1), transform 0.22s cubic-bezier(0.16,1,0.3,1), background 0.2s ease;
       }
       .panel.open { opacity: 1; transform: translateY(0) scale(1); }
 
       .header { position: relative; display: flex; align-items: center; gap: 11px; padding: 16px; overflow: hidden;
-        background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0) 100%); border-bottom: 1px solid rgba(255,255,255,0.07); }
+        background: linear-gradient(180deg, rgba(128,128,128,0.06), rgba(128,128,128,0) 100%); border-bottom: 1px solid var(--header-border); }
       .header-glow { position: absolute; top: -40px; left: -20px; width: 140px; height: 140px; border-radius: 50%;
-        background: radial-gradient(circle, rgba(114,136,255,0.25), transparent 70%); pointer-events: none; }
+        background: radial-gradient(circle, var(--header-glow), transparent 70%); pointer-events: none; }
       .avatar-wrap { position: relative; width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
         background: linear-gradient(135deg, var(--brand-1), var(--brand-3)); display: flex; align-items: center; justify-content: center;
-        box-shadow: 0 0 0 2px rgba(255,255,255,0.08); }
+        box-shadow: 0 0 0 2px rgba(128,128,128,0.15); }
       .avatar { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
       .avatar-fallback { color: rgba(255,255,255,0.9); }
       .header-text { flex: 1; min-width: 0; position: relative; }
-      .name { color: #fff; font-weight: 600; font-size: 14.5px; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .status { display: flex; align-items: center; gap: 5px; color: rgba(255,255,255,0.45); font-size: 11.5px; margin-top: 1px; }
+      .name { color: var(--text-primary); font-weight: 600; font-size: 14.5px; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .status { display: flex; align-items: center; gap: 5px; color: var(--text-secondary); font-size: 11.5px; margin-top: 1px; }
       .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #2fbf71; box-shadow: 0 0 6px #2fbf71; animation: pulseDot 2s ease-in-out infinite; }
-      .close { position: relative; background: none; border: none; color: rgba(255,255,255,0.4); cursor: pointer; line-height: 1;
+      .close { position: relative; background: none; border: none; color: var(--close-icon); cursor: pointer; line-height: 1;
         display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; transition: background 0.15s, color 0.15s; }
-      .close:hover { background: rgba(255,255,255,0.08); color: #fff; }
+      .close:hover { background: var(--close-hover-bg); color: var(--text-primary); }
 
-      .messages { flex: 1; overflow-y: auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 4px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent; }
+      .messages { flex: 1; overflow-y: auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 4px; scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
       .messages::-webkit-scrollbar { width: 6px; }
-      .messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 999px; }
+      .messages::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 999px; }
 
       .row { display: flex; flex-direction: column; margin-bottom: 10px; animation: fadeInUp 0.25s ease both; max-width: 84%; }
       .row.agent { align-self: flex-start; align-items: flex-start; }
       .row.customer { align-self: flex-end; align-items: flex-end; }
       .bubble { padding: 10px 13px; border-radius: 15px; font-size: 13.5px; line-height: 1.48; white-space: pre-wrap; word-break: break-word; }
-      .bubble.agent { background: rgba(255,255,255,0.06); color: #f2f3f7; border: 1px solid rgba(255,255,255,0.06); border-bottom-left-radius: 4px; }
+      .bubble.agent { background: var(--bubble-agent-bg); color: var(--bubble-agent-text); border: 1px solid var(--bubble-agent-border); border-bottom-left-radius: 4px; }
       .bubble.customer { background: linear-gradient(135deg, var(--brand-1), var(--brand-2)); color: white; border-bottom-right-radius: 4px; box-shadow: 0 2px 10px rgba(74,94,245,0.25); }
-      .timestamp { font-size: 10px; color: rgba(255,255,255,0.28); margin-top: 4px; padding: 0 3px; }
+      .timestamp { font-size: 10px; color: var(--text-muted); margin-top: 4px; padding: 0 3px; }
 
       .bubble.typing { display: flex; align-items: center; gap: 4px; padding: 12px 14px; }
-      .bubble.typing span { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.55); animation: typingBounce 1.2s ease-in-out infinite; }
+      .bubble.typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-secondary); animation: typingBounce 1.2s ease-in-out infinite; }
       .bubble.typing span:nth-child(2) { animation-delay: 0.15s; }
       .bubble.typing span:nth-child(3) { animation-delay: 0.3s; }
 
       .confirmation { padding: 12px 16px; background: rgba(232,165,61,0.08); border-top: 1px solid rgba(232,165,61,0.25); animation: fadeInUp 0.2s ease both; }
-      .confirmation-text { color: #f2f3f7; font-size: 12.5px; margin-bottom: 9px; line-height: 1.4; }
+      .confirmation-text { color: var(--bubble-agent-text); font-size: 12.5px; margin-bottom: 9px; line-height: 1.4; }
       .confirmation-actions { display: flex; gap: 8px; }
       .confirmation-actions button { flex: 1; padding: 8px; border-radius: 9px; border: none; font-size: 12.5px; cursor: pointer; font-weight: 600; transition: filter 0.15s, transform 0.15s; }
       .confirmation-actions button:hover { filter: brightness(1.1); }
       .confirmation-actions button:active { transform: scale(0.97); }
       .confirmation-actions .confirm { background: #2fbf71; color: white; }
-      .confirmation-actions .cancel { background: rgba(255,255,255,0.08); color: #f2f3f7; }
+      .confirmation-actions .cancel { background: var(--input-bg); color: var(--bubble-agent-text); }
 
-      .composer { display: flex; gap: 8px; padding: 13px; border-top: 1px solid rgba(255,255,255,0.07); background: rgba(255,255,255,0.02); }
-      .composer input { flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 11px;
-        padding: 10px 13px; color: #fff; font-size: 13.5px; outline: none; transition: border-color 0.15s, background 0.15s; }
-      .composer input:focus { border-color: rgba(114,136,255,0.55); background: rgba(255,255,255,0.08); }
-      .composer input::placeholder { color: rgba(255,255,255,0.32); }
+      .composer { display: flex; gap: 8px; padding: 13px; border-top: 1px solid var(--composer-border); background: var(--composer-bg); }
+      .composer input { flex: 1; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 11px;
+        padding: 10px 13px; color: var(--input-text); font-size: 13.5px; outline: none; transition: border-color 0.15s, background 0.15s; }
+      .composer input:focus { border-color: rgba(114,136,255,0.55); background: var(--input-focus-bg); }
+      .composer input::placeholder { color: var(--input-placeholder); }
       .composer button {
         background: linear-gradient(135deg, var(--brand-1), var(--brand-2)); border: none; color: white; border-radius: 11px;
         width: 42px; cursor: pointer; display: flex; align-items: center; justify-content: center;
@@ -333,8 +454,8 @@ interface ChatResponse {
       .composer button:active:not(:disabled) { transform: scale(0.94); }
       .composer button:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
 
-      .footer { text-align: center; font-size: 10.5px; color: rgba(255,255,255,0.25); padding: 7px 0 11px; letter-spacing: 0.01em; }
-      .footer-brand { color: rgba(255,255,255,0.4); font-weight: 600; }
+      .footer { text-align: center; font-size: 10.5px; color: var(--footer-text); padding: 7px 0 11px; letter-spacing: 0.01em; }
+      .footer-brand { color: var(--footer-brand-text); font-weight: 600; }
 
       @media (max-width: 480px) {
         .panel { bottom: 0; right: 0; left: 0; width: 100%; max-width: 100%; height: 100%; max-height: 100%; border-radius: 0; }

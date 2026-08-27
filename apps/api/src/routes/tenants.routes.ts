@@ -1,9 +1,11 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { withPlatformContext, withTenant } from "@chat-agent/db";
-import { SubscriptionStateSchema, SubscriptionTierSchema, ManagedSetupTierSchema } from "@chat-agent/shared-types";
+import { SubscriptionStateSchema, SubscriptionTierSchema, ManagedSetupTierSchema, DashboardThemeSchema } from "@chat-agent/shared-types";
 import type { AppContext } from "../lib/context.js";
-import { requirePermission, resolveTenantContext } from "../lib/rbac.js";
+import { requirePermission, resolveTenantContext, requireTenantMatch } from "../lib/rbac.js";
+import { verifyActiveImpersonation } from "../lib/impersonation.js";
+import { writeAuditLog } from "../lib/audit.js";
 
 const UpdateTenantSchema = z.object({
   subscriptionState: SubscriptionStateSchema.optional(),
@@ -53,4 +55,29 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
     );
     reply.send(tenant);
   });
+
+  /**
+   * Client-facing theme preference — deliberately separate from the
+   * platform_admin-only PATCH above (billing/tier fields vs. a cosmetic
+   * choice any tenant with agent:write can make for themselves). Drives
+   * both the dashboard's own chrome and every one of this tenant's
+   * widgets in one shot (see widgetConfig.routes.ts).
+   */
+  app.patch(
+    "/v1/tenants/:tenantId/theme",
+    { preHandler: [app.authenticate, requireTenantMatch(), verifyActiveImpersonation(ctx.prisma), requirePermission("agent:write")] },
+    async (request, reply) => {
+      const { theme } = z.object({ theme: DashboardThemeSchema }).parse(request.body);
+      const updated = await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
+        const tenant = await tx.tenant.update({ where: { id: request.tenantCtx!.tenantId }, data: { theme } });
+        await writeAuditLog(tx, request.tenantCtx!, {
+          actorUserId: request.authUser!.sub,
+          action: "tenant_theme_updated",
+          metadata: { theme },
+        });
+        return tenant;
+      });
+      reply.send(updated);
+    },
+  );
 }

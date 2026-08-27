@@ -3,7 +3,14 @@
 import { useEffect, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { useAuth } from "@/lib/auth";
+import { useAuth, type DashboardTheme } from "@/lib/auth";
+
+const THEMES: { value: DashboardTheme; label: string; swatch: string }[] = [
+  { value: "DARK", label: "Dark", swatch: "bg-[#08090f]" },
+  { value: "MIDNIGHT", label: "Midnight", swatch: "bg-[#05060d]" },
+  { value: "LIGHT", label: "Light", swatch: "bg-[#f7f8fc]" },
+  { value: "PERIWINKLE", label: "Periwinkle", swatch: "bg-[#f1f5ff]" },
+];
 
 const TENANT_NAV = [
   { href: "/", label: "Overview", icon: IconGrid },
@@ -17,7 +24,7 @@ const TENANT_NAV = [
 const STAFF_NAV = [{ href: "/managed-setup", label: "Managed Setup", icon: IconStaff }];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  const { user, loading, logout, impersonation, endImpersonation } = useAuth();
+  const { user, loading, logout, impersonation, endImpersonation, setTheme } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const isStaff = user?.role === "setup_specialist" || user?.role === "platform_admin";
@@ -35,7 +42,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   if (loading || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-white/40">
+      <div className="flex min-h-screen items-center justify-center text-sm text-foreground/40">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" />
         <span className="ml-2">Loading...</span>
       </div>
@@ -53,8 +60,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </svg>
           </div>
           <div>
-            <span className="block text-sm font-semibold tracking-tight text-white">Chat Agent</span>
-            <span className="block text-[10px] font-medium uppercase tracking-wider text-white/35">Client Console</span>
+            <span className="block text-sm font-semibold tracking-tight text-foreground">Chat Agent</span>
+            <span className="block text-[10px] font-medium uppercase tracking-wider text-foreground/35">Client Console</span>
           </div>
         </div>
 
@@ -68,14 +75,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 href={item.href}
                 className={`group relative flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm transition-all duration-200 ${
                   active
-                    ? "bg-brand-500/15 text-white shadow-[inset_0_0_0_1px_rgba(114,136,255,0.35)]"
-                    : "text-white/55 hover:bg-white/5 hover:text-white"
+                    ? "bg-brand-500/15 text-foreground shadow-[inset_0_0_0_1px_rgba(114,136,255,0.35)]"
+                    : "text-foreground/55 hover:bg-foreground/5 hover:text-foreground"
                 }`}
               >
                 {active ? (
                   <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-brand-gradient" />
                 ) : null}
-                <Icon className={`h-4 w-4 shrink-0 ${active ? "text-brand-300" : "text-white/40 group-hover:text-white/70"}`} />
+                <Icon className={`h-4 w-4 shrink-0 ${active ? "text-brand-300" : "text-foreground/40 group-hover:text-foreground/70"}`} />
                 <span className="truncate">{item.label}</span>
               </Link>
             );
@@ -83,13 +90,34 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="border-t border-surface-border p-3">
+          {!(isStaff && !impersonation) ? (
+            <div className="mb-2 px-2 py-1.5">
+              <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-foreground/35">
+                Theme <span className="normal-case text-foreground/25">— also sets your widget</span>
+              </div>
+              <div className="flex gap-1.5">
+                {THEMES.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    title={t.label}
+                    aria-label={`${t.label} theme`}
+                    onClick={() => void setTheme(t.value)}
+                    className={`h-6 w-6 rounded-full ${t.swatch} ring-1 ring-inset ring-black/10 transition-all ${
+                      user.theme === t.value ? "ring-2 ring-brand-400 ring-offset-2 ring-offset-surface-raised" : "hover:scale-110"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div className="flex items-center gap-2.5 rounded-lg px-2 py-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-gradient text-xs font-semibold text-white">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-gradient text-xs font-semibold text-foreground">
               {user.email.slice(0, 1).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-medium text-white/85">{user.email}</div>
-              <button onClick={logout} className="text-[11px] text-white/40 hover:text-white/70">
+              <div className="truncate text-xs font-medium text-foreground/85">{user.email}</div>
+              <button onClick={logout} className="text-[11px] text-foreground/40 hover:text-foreground/70">
                 Sign out
               </button>
             </div>
@@ -105,7 +133,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 <path d="M8 3l6.5 11H1.5L8 3Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
                 <path d="M8 6.5v3M8 11.5v.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
-              Managing <span className="text-white">{impersonation.tenantName}</span> on their behalf — every action here is logged to their audit trail.
+              Managing <span className="text-foreground">{impersonation.tenantName}</span> on their behalf — every action here is logged to their audit trail.
             </span>
             <button
               onClick={() => void endImpersonation()}
@@ -116,7 +144,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           </div>
         ) : null}
         <header className="glass sticky top-0 z-10 flex h-16 items-center justify-between border-b border-surface-border px-8">
-          <div className="flex items-center gap-2 text-xs text-white/40">
+          <div className="flex items-center gap-2 text-xs text-foreground/40">
             <span className="rounded-full bg-success/10 px-2 py-1 font-medium text-success ring-1 ring-inset ring-success/25">
               ● All systems live
             </span>

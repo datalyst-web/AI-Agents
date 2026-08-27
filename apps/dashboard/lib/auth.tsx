@@ -4,6 +4,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { useRouter } from "next/navigation";
 import { api, setToken, getImpersonation, setImpersonation, type ImpersonationContext } from "./api";
 
+export type DashboardTheme = "DARK" | "LIGHT" | "MIDNIGHT" | "PERIWINKLE";
+
 interface AuthUser {
   id: string;
   email: string;
@@ -11,6 +13,8 @@ interface AuthUser {
   /** The tenant currently in scope — overridden to the impersonated tenant while a Managed Setup session is active. */
   tenantId: string;
   displayName: string;
+  /** Same value that drives this tenant's widgets (widgetConfig.routes.ts) — one setting, two surfaces. */
+  theme: DashboardTheme;
 }
 
 interface AuthContextValue {
@@ -21,6 +25,7 @@ interface AuthContextValue {
   logout: () => void;
   startImpersonation: (tenantId: string, tenantName: string, reason: string, durationMinutes?: number) => Promise<void>;
   endImpersonation: () => Promise<void>;
+  setTheme: (theme: DashboardTheme) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -57,6 +62,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The one place that actually paints the theme — every dashboard page
+  // just uses `bg-surface-*` / `text-foreground` classes, which resolve
+  // through the CSS custom properties this attribute selects (see
+  // globals.css). Runs before paint's worth of delay is fine here: theme
+  // only changes on login/impersonation-switch, not per-navigation.
+  useEffect(() => {
+    document.documentElement.dataset.theme = (user?.theme ?? "DARK").toLowerCase();
+  }, [user?.theme]);
+
   async function login(email: string, password: string) {
     const { token } = await api.login(email, password);
     setToken(token);
@@ -91,8 +105,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push("/managed-setup");
   }
 
+  async function setTheme(theme: DashboardTheme) {
+    if (!user) return;
+    setUser({ ...user, theme }); // optimistic — the tenant's own dashboard should feel instant
+    try {
+      await api.updateTenantTheme(user.tenantId, theme);
+    } catch {
+      setUser((prev) => (prev ? { ...prev, theme: user.theme } : prev)); // revert on failure
+    }
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, impersonation, login, logout, startImpersonation, endImpersonation }}>
+    <AuthContext.Provider value={{ user, loading, impersonation, login, logout, startImpersonation, endImpersonation, setTheme }}>
       {children}
     </AuthContext.Provider>
   );

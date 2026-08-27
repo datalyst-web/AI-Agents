@@ -135,11 +135,11 @@ export function LineChart({
 
       {hovered ? (
         <div
-          className="pointer-events-none absolute top-0 -translate-x-1/2 -translate-y-full rounded-lg border border-white/10 bg-surface-overlay px-2.5 py-1.5 text-xs shadow-card"
+          className="pointer-events-none absolute top-0 -translate-x-1/2 -translate-y-full rounded-lg border border-foreground/10 bg-surface-overlay px-2.5 py-1.5 text-xs shadow-card"
           style={{ left: `${(hovered.x / width) * 100}%` }}
         >
-          <div className="font-medium text-white">{valueFormatter(hovered.value)}</div>
-          <div className="text-[10px] text-white/40">{hovered.label}</div>
+          <div className="font-medium text-foreground">{valueFormatter(hovered.value)}</div>
+          <div className="text-[10px] text-foreground/40">{hovered.label}</div>
         </div>
       ) : null}
     </div>

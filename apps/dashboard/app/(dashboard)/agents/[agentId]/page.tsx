@@ -94,7 +94,7 @@ function CopyField({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="flex items-center gap-2">
-      <code className="flex-1 overflow-x-auto whitespace-nowrap rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-xs text-white/70">
+      <code className="flex-1 overflow-x-auto whitespace-nowrap rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-xs text-foreground/70">
         {value}
       </code>
       <button
@@ -103,7 +103,7 @@ function CopyField({ value }: { value: string }) {
           setCopied(true);
           setTimeout(() => setCopied(false), 1500);
         }}
-        className="shrink-0 rounded-lg bg-white/5 px-3 py-2.5 text-xs font-medium text-white/70 ring-1 ring-inset ring-white/10 transition-colors hover:bg-white/10 hover:text-white"
+        className="shrink-0 rounded-lg bg-foreground/5 px-3 py-2.5 text-xs font-medium text-foreground/70 ring-1 ring-inset ring-foreground/10 transition-colors hover:bg-foreground/10 hover:text-foreground"
       >
         {copied ? "Copied ✓" : "Copy"}
       </button>
@@ -399,15 +399,15 @@ export default function AgentDetailPage() {
       </div>
     );
   }
-  if (!agent) return <p className="text-sm text-white/40">Loading...</p>;
+  if (!agent) return <p className="text-sm text-foreground/40">Loading...</p>;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-semibold text-white">{agent.name}</h1>
+          <h1 className="text-xl font-semibold text-foreground">{agent.name}</h1>
           <AgentStatusBadge status={agent.status} />
-          <span className="text-xs text-white/30">{agent.version}</span>
+          <span className="text-xs text-foreground/30">{agent.version}</span>
         </div>
         <div className="flex gap-2">
           {["DRAFT", "CONFIGURING", "KNOWLEDGE_PROCESSING"].includes(agent.status) ? (
@@ -433,14 +433,14 @@ export default function AgentDetailPage() {
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
       {agent.status === "TESTING" && impersonation ? (
-        <p className="text-xs text-white/40">
-          Only <span className="text-white/70">{impersonation.tenantName}</span> can approve this stage — ask them to log in
+        <p className="text-xs text-foreground/40">
+          Only <span className="text-foreground/70">{impersonation.tenantName}</span> can approve this stage — ask them to log in
           and approve, or have them delegate auto-publish authority in their account settings if that's already agreed.
         </p>
       ) : null}
       {agent.status === "DRAFT" ? (
-        <p className="text-xs text-white/40">
-          Save your instructions and add some knowledge below, then click <span className="text-white/70">Start Testing</span> to unlock the Test Agent tab.
+        <p className="text-xs text-foreground/40">
+          Save your instructions and add some knowledge below, then click <span className="text-foreground/70">Start Testing</span> to unlock the Test Agent tab.
         </p>
       ) : null}
 
@@ -465,7 +465,7 @@ export default function AgentDetailPage() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium ${tab === t ? "border-b-2 border-brand-500 text-white" : "text-white/40 hover:text-white/70"}`}
+            className={`px-4 py-2 text-sm font-medium ${tab === t ? "border-b-2 border-brand-500 text-foreground" : "text-foreground/40 hover:text-foreground/70"}`}
           >
             {t}
           </button>
@@ -483,7 +483,7 @@ export default function AgentDetailPage() {
             }
             action={
               testMessages.length > 0 ? (
-                <button onClick={resetTestConversation} className="text-xs font-medium text-white/40 hover:text-white/70">
+                <button onClick={resetTestConversation} className="text-xs font-medium text-foreground/40 hover:text-foreground/70">
                   Reset conversation
                 </button>
               ) : null
@@ -499,8 +499,8 @@ export default function AgentDetailPage() {
                       <circle cx="12" cy="12" r="1.4" fill="white" />
                     </svg>
                   </div>
-                  <p className="max-w-xs text-sm text-white/45">
-                    Say hello to <span className="text-white/80">{agent.name}</span> below to try it out — this uses your
+                  <p className="max-w-xs text-sm text-foreground/45">
+                    Say hello to <span className="text-foreground/80">{agent.name}</span> below to try it out — this uses your
                     real knowledge base, tools, and guardrails.
                   </p>
                 </div>
@@ -518,8 +518,8 @@ export default function AgentDetailPage() {
                       <span
                         className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
                           m.role === "customer"
-                            ? "rounded-br-md bg-brand-gradient text-white"
-                            : "rounded-bl-md bg-white/[0.06] text-white/90 ring-1 ring-inset ring-white/10"
+                            ? "rounded-br-md bg-brand-gradient text-foreground"
+                            : "rounded-bl-md bg-foreground/[0.06] text-foreground/90 ring-1 ring-inset ring-foreground/10"
                         }`}
                       >
                         {m.text}
@@ -530,10 +530,10 @@ export default function AgentDetailPage() {
               )}
               {testSending ? (
                 <div className="flex justify-start">
-                  <span className="flex items-center gap-1 rounded-2xl rounded-bl-md bg-white/[0.06] px-3.5 py-3 ring-1 ring-inset ring-white/10">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/50" />
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/50 [animation-delay:0.15s]" />
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/50 [animation-delay:0.3s]" />
+                  <span className="flex items-center gap-1 rounded-2xl rounded-bl-md bg-foreground/[0.06] px-3.5 py-3 ring-1 ring-inset ring-foreground/10">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground/50" />
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground/50 [animation-delay:0.15s]" />
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground/50 [animation-delay:0.3s]" />
                   </span>
                 </div>
               ) : null}
@@ -541,7 +541,7 @@ export default function AgentDetailPage() {
 
             {pendingConfirmation ? (
               <div className="border-t border-warning/25 bg-warning/[0.06] px-5 py-3">
-                <p className="mb-2 text-xs text-white/80">{pendingConfirmation.confirmationPrompt}</p>
+                <p className="mb-2 text-xs text-foreground/80">{pendingConfirmation.confirmationPrompt}</p>
                 <div className="flex gap-2">
                   <Button
                     variant="secondary"
@@ -573,7 +573,7 @@ export default function AgentDetailPage() {
                 onChange={(e) => setTestInput(e.target.value)}
                 placeholder="Type a message to test the agent..."
                 disabled={testSending}
-                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+                className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
               />
               <Button type="submit" disabled={testSending || !testInput.trim()}>
                 Send
@@ -590,13 +590,13 @@ export default function AgentDetailPage() {
               <CardHeader title="Deploy" subtitle="Your agent is live — add it to your site, or share its own page." />
               <CardBody className="space-y-3">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-white/60">Website embed</label>
+                  <label className="mb-1 block text-xs font-medium text-foreground/60">Website embed</label>
                   <CopyField
                     value={`<script src="${WIDGET_SCRIPT_URL}" data-agent-id="${agent.id}" data-api-base="${API_BASE_URL}"></script>`}
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-white/60">Standalone link</label>
+                  <label className="mb-1 block text-xs font-medium text-foreground/60">Standalone link</label>
                   <CopyField value={`${dashboardOrigin}/client-agent/${agent.id}`} />
                 </div>
               </CardBody>
@@ -611,7 +611,7 @@ export default function AgentDetailPage() {
                   value={agent.personality.systemInstructions}
                   onChange={(e) => setAgent({ ...agent, personality: { ...agent.personality, systemInstructions: e.target.value } })}
                   rows={8}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-white outline-none focus:border-brand-500"
+                  className="w-full rounded-lg border border-foreground/10 bg-foreground/5 p-3 text-sm text-foreground outline-none focus:border-brand-500"
                 />
                 <Button type="submit">Save changes</Button>
               </form>
@@ -622,7 +622,7 @@ export default function AgentDetailPage() {
             <CardHeader title="AI Model" subtitle="Which model powers this agent's responses. Anthropic Claude is the default — the most reliable choice for accuracy and instruction-following." />
             <CardBody className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-white/60">Provider</label>
+                <label className="mb-1.5 block text-xs font-medium text-foreground/60">Provider</label>
                 <div className="grid grid-cols-3 gap-2">
                   {(["anthropic", "openai", "gemini"] as const).map((provider) => (
                     <button
@@ -631,8 +631,8 @@ export default function AgentDetailPage() {
                       onClick={() => setAgent({ ...agent, modelRouting: { ...agent.modelRouting, preferredProvider: provider } })}
                       className={`rounded-lg border px-3 py-2.5 text-sm font-medium capitalize transition-colors ${
                         agent.modelRouting.preferredProvider === provider
-                          ? "border-brand-500/50 bg-brand-500/15 text-white"
-                          : "border-white/10 bg-white/5 text-white/60 hover:text-white/80"
+                          ? "border-brand-500/50 bg-brand-500/15 text-foreground"
+                          : "border-foreground/10 bg-foreground/5 text-foreground/60 hover:text-foreground/80"
                       }`}
                     >
                       {provider}
@@ -644,7 +644,7 @@ export default function AgentDetailPage() {
 
               {agent.modelRouting.preferredProvider === "anthropic" ? (
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-white/60">Claude model</label>
+                  <label className="mb-1.5 block text-xs font-medium text-foreground/60">Claude model</label>
                   <select
                     value={agent.modelRouting.anthropicModelTier}
                     onChange={(e) =>
@@ -653,7 +653,7 @@ export default function AgentDetailPage() {
                         modelRouting: { ...agent.modelRouting, anthropicModelTier: e.target.value as AgentDetail["modelRouting"]["anthropicModelTier"] },
                       })
                     }
-                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-brand-500"
+                    className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-500"
                   >
                     {(["haiku", "sonnet", "opus"] as const).map((tier) => (
                       <option key={tier} value={tier} className="bg-surface-raised">
@@ -661,7 +661,7 @@ export default function AgentDetailPage() {
                       </option>
                     ))}
                   </select>
-                  <p className="mt-1.5 text-xs text-white/40">Which Claude tier depends on your plan — you can change this any time.</p>
+                  <p className="mt-1.5 text-xs text-foreground/40">Which Claude tier depends on your plan — you can change this any time.</p>
                 </div>
               ) : null}
 
@@ -676,8 +676,8 @@ export default function AgentDetailPage() {
                 {versions.map((v) => (
                   <div key={v.id} className="flex items-center justify-between px-5 py-3 text-sm">
                     <div>
-                      <span className="font-medium text-white">{v.version}</span>
-                      <span className="ml-2 text-xs text-white/40">{new Date(v.publishedAt).toLocaleString()}</span>
+                      <span className="font-medium text-foreground">{v.version}</span>
+                      <span className="ml-2 text-xs text-foreground/40">{new Date(v.publishedAt).toLocaleString()}</span>
                     </div>
                     <button
                       onClick={() => rollback(v.version)}
@@ -706,14 +706,14 @@ export default function AgentDetailPage() {
                   placeholder="Question"
                   value={faqQ}
                   onChange={(e) => setFaqQ(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
+                  className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2 text-sm text-foreground outline-none focus:border-brand-500"
                 />
                 <input
                   required
                   placeholder="Answer"
                   value={faqA}
                   onChange={(e) => setFaqA(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
+                  className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2 text-sm text-foreground outline-none focus:border-brand-500"
                 />
                 <Button type="submit" variant="secondary">Add FAQ</Button>
               </form>
@@ -729,7 +729,7 @@ export default function AgentDetailPage() {
                   placeholder="https://example.com/faq"
                   value={crawlUrl}
                   onChange={(e) => setCrawlUrl(e.target.value)}
-                  className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
+                  className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2 text-sm text-foreground outline-none focus:border-brand-500"
                 />
                 <Button type="submit" variant="secondary">Crawl</Button>
               </form>
@@ -739,20 +739,20 @@ export default function AgentDetailPage() {
             <CardHeader title="Knowledge sources" />
             <CardBody className="divide-y divide-surface-border p-0">
               {knowledge.length === 0 ? (
-                <p className="px-5 py-6 text-sm text-white/40">No knowledge sources yet.</p>
+                <p className="px-5 py-6 text-sm text-foreground/40">No knowledge sources yet.</p>
               ) : (
                 knowledge.map((k) => (
                   <div key={k.id} className="flex items-center justify-between px-5 py-3 text-sm">
                     <div className="flex items-center gap-2">
-                      <span className="text-white">{k.originalFilename ?? k.sourceUrl ?? k.type}</span>
+                      <span className="text-foreground">{k.originalFilename ?? k.sourceUrl ?? k.type}</span>
                       <ContentSourceTag source={k.addedBySource} />
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-xs text-white/40">{k.status}</span>
+                      <span className="text-xs text-foreground/40">{k.status}</span>
                       <button
                         onClick={() => removeKnowledge(k.id)}
                         disabled={deletingKnowledgeId === k.id}
-                        className="text-xs font-medium text-white/30 transition-colors hover:text-danger disabled:opacity-50"
+                        className="text-xs font-medium text-foreground/30 transition-colors hover:text-danger disabled:opacity-50"
                       >
                         {deletingKnowledgeId === k.id ? "Removing…" : "Remove"}
                       </button>
@@ -773,11 +773,11 @@ export default function AgentDetailPage() {
           ) : (
             <CardBody className="divide-y divide-surface-border p-0">
               {conversations.length === 0 ? (
-                <p className="px-5 py-6 text-sm text-white/40">No conversations yet.</p>
+                <p className="px-5 py-6 text-sm text-foreground/40">No conversations yet.</p>
               ) : (
                 conversations.map((c) => (
                   <div key={c.id} className="flex items-center justify-between px-5 py-3 text-sm">
-                    <span className="text-white/70">{new Date(c.startedAt).toLocaleString()}</span>
+                    <span className="text-foreground/70">{new Date(c.startedAt).toLocaleString()}</span>
                     <div className="flex items-center gap-3">
                       <span
                         className={`text-xs font-medium ${
@@ -787,7 +787,7 @@ export default function AgentDetailPage() {
                               ? "text-warning"
                               : c.outcome === "ABANDONED"
                                 ? "text-danger"
-                                : "text-white/40"
+                                : "text-foreground/40"
                         }`}
                       >
                         {c.outcome.replace(/_/g, " ")}
@@ -835,10 +835,10 @@ export default function AgentDetailPage() {
                       valueFormatter={(v) => v.toFixed(2)}
                     />
                   ) : (
-                    <p className="py-6 text-center text-sm text-white/40">Not enough conversation data yet.</p>
+                    <p className="py-6 text-center text-sm text-foreground/40">Not enough conversation data yet.</p>
                   )
                 ) : (
-                  <div className="h-[180px] animate-pulse rounded-lg bg-white/[0.03]" />
+                  <div className="h-[180px] animate-pulse rounded-lg bg-foreground/[0.03]" />
                 )}
               </CardBody>
             </Card>
@@ -848,7 +848,7 @@ export default function AgentDetailPage() {
                 <CardHeader title="Outcome breakdown" />
                 <CardBody>
                   {Object.keys(analytics.byOutcome).length === 0 ? (
-                    <p className="py-4 text-center text-sm text-white/40">No conversations yet.</p>
+                    <p className="py-4 text-center text-sm text-foreground/40">No conversations yet.</p>
                   ) : (
                     <BarBreakdown
                       items={Object.entries(analytics.byOutcome).map(([outcome, count]) => ({
@@ -864,7 +864,7 @@ export default function AgentDetailPage() {
                 <CardHeader title="Drop-off point" subtitle="Where customers disengage." />
                 <CardBody>
                   {Object.keys(analytics.byDropOff ?? {}).length === 0 ? (
-                    <p className="py-4 text-center text-sm text-white/40">No drop-offs recorded.</p>
+                    <p className="py-4 text-center text-sm text-foreground/40">No drop-offs recorded.</p>
                   ) : (
                     <BarBreakdown
                       items={Object.entries(analytics.byDropOff).map(([point, count]) => ({

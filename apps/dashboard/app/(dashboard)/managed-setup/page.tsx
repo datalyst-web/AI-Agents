@@ -47,8 +47,8 @@ export default function ManagedSetupPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-white">Managed Setup</h1>
-        <p className="mt-1 text-sm text-white/50">
+        <h1 className="text-xl font-semibold text-foreground">Managed Setup</h1>
+        <p className="mt-1 text-sm text-foreground/50">
           Clients on an Assisted or Fully Managed plan. Starting a session gives you time-boxed, fully audited access to their tenant — through the exact same tools they'd use themselves.
         </p>
       </div>
@@ -61,12 +61,12 @@ export default function ManagedSetupPage() {
         ) : (
           <CardBody className="divide-y divide-surface-border p-0">
             {queue.length === 0 ? (
-              <p className="px-5 py-12 text-center text-sm text-white/40">No clients waiting on Assisted or Fully Managed setup right now.</p>
+              <p className="px-5 py-12 text-center text-sm text-foreground/40">No clients waiting on Assisted or Fully Managed setup right now.</p>
             ) : (
               queue.map((t) => (
                 <div key={t.id} className="flex items-center justify-between px-5 py-3.5 text-sm">
                   <div>
-                    <div className="text-white">{t.name}</div>
+                    <div className="text-foreground">{t.name}</div>
                     <div className="mt-0.5 flex items-center gap-2">
                       <Badge tone="brand">{TIER_LABEL[t.managedSetupTier] ?? t.managedSetupTier}</Badge>
                       <Badge tone={t.subscriptionState === "ACTIVE" ? "success" : "neutral"}>{t.subscriptionState.toLowerCase()}</Badge>
@@ -90,13 +90,13 @@ export default function ManagedSetupPage() {
       <Modal open={target !== null} onClose={() => setTarget(null)} title={`Manage ${target?.name ?? ""}`} subtitle="This starts a time-boxed session (1 hour). Say why — it's written to their audit trail.">
         <form onSubmit={begin} className="space-y-3">
           <div>
-            <label className="mb-1 block text-xs font-medium text-white/60">Reason</label>
+            <label className="mb-1 block text-xs font-medium text-foreground/60">Reason</label>
             <input
               required
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g. Initial onboarding — building knowledge base from client call"
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+              className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
             />
           </div>
           <div className="flex justify-end gap-2 pt-1">
