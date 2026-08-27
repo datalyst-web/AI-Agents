@@ -85,7 +85,10 @@ export function LineChart({
           </linearGradient>
         </defs>
 
-        {/* recessive gridlines */}
+        {/* recessive gridlines — rgb(var(--color-foreground) / a) so these
+            stay visible against either theme's surface instead of the
+            fixed white-on-dark values silently vanishing on a light
+            (near-white) card background. */}
         {[0, 0.5, 1].map((t) => (
           <line
             key={t}
@@ -93,12 +96,12 @@ export function LineChart({
             x2={width - padX}
             y1={padTop + t * (height - padTop - padBottom)}
             y2={padTop + t * (height - padTop - padBottom)}
-            stroke="rgba(255,255,255,0.06)"
+            stroke="rgb(var(--color-foreground) / 0.08)"
             strokeWidth={1}
           />
         ))}
         {zeroLine && min < 0 ? (
-          <line x1={padX} x2={width - padX} y1={zeroY} y2={zeroY} stroke="rgba(255,255,255,0.14)" strokeDasharray="3 3" strokeWidth={1} />
+          <line x1={padX} x2={width - padX} y1={zeroY} y2={zeroY} stroke="rgb(var(--color-foreground) / 0.16)" strokeDasharray="3 3" strokeWidth={1} />
         ) : null}
 
         <path d={areaPath} fill={`url(#${fillId})`} />
@@ -107,7 +110,7 @@ export function LineChart({
         {/* x-axis labels, selective */}
         {points.map((p, i) =>
           i % labelEvery === 0 || i === points.length - 1 ? (
-            <text key={i} x={p.x} y={height - 6} textAnchor="middle" fontSize={10} fill="rgba(255,255,255,0.35)">
+            <text key={i} x={p.x} y={height - 6} textAnchor="middle" fontSize={10} fill="rgb(var(--color-foreground) / 0.4)">
               {p.label}
             </text>
           ) : null,
@@ -115,8 +118,8 @@ export function LineChart({
 
         {hovered ? (
           <>
-            <line x1={hovered.x} x2={hovered.x} y1={padTop} y2={height - padBottom} stroke="rgba(255,255,255,0.18)" strokeWidth={1} />
-            <circle cx={hovered.x} cy={hovered.y} r={4} fill={stroke} stroke="#08090f" strokeWidth={2} />
+            <line x1={hovered.x} x2={hovered.x} y1={padTop} y2={height - padBottom} stroke="rgb(var(--color-foreground) / 0.2)" strokeWidth={1} />
+            <circle cx={hovered.x} cy={hovered.y} r={4} fill={stroke} stroke="rgb(var(--color-surface))" strokeWidth={2} />
           </>
         ) : (
           <circle cx={lastPoint.x} cy={lastPoint.y} r={3} fill={stroke} />

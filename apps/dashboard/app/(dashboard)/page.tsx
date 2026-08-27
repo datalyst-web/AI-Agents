@@ -72,7 +72,7 @@ export default function OverviewPage() {
         </div>
         <Link
           href="/agents"
-          className="inline-flex items-center gap-2 rounded-lg bg-brand-gradient bg-[length:160%_auto] bg-left px-4 py-2.5 text-sm font-medium text-foreground shadow-glow transition-all duration-300 hover:bg-right hover:shadow-glow-lg"
+          className="inline-flex items-center gap-2 rounded-lg bg-brand-gradient bg-[length:160%_auto] bg-left px-4 py-2.5 text-sm font-medium text-white shadow-glow transition-all duration-300 hover:bg-right hover:shadow-glow-lg"
         >
           + New agent
         </Link>

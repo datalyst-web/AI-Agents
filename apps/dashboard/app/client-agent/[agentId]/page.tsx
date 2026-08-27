@@ -142,7 +142,7 @@ export default function ClientAgentPage() {
             <span
               className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                 m.role === "customer"
-                  ? "rounded-br-md bg-brand-gradient text-foreground shadow-glow"
+                  ? "rounded-br-md bg-brand-gradient text-white shadow-glow"
                   : "rounded-bl-md bg-foreground/[0.06] text-foreground/90 ring-1 ring-inset ring-foreground/10"
               }`}
             >
@@ -197,7 +197,7 @@ export default function ClientAgentPage() {
         <button
           type="submit"
           disabled={!config || sending || !input.trim()}
-          className="inline-flex items-center justify-center rounded-lg bg-brand-gradient px-5 text-sm font-medium text-foreground shadow-glow transition-all duration-300 hover:shadow-glow-lg disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center justify-center rounded-lg bg-brand-gradient px-5 text-sm font-medium text-white shadow-glow transition-all duration-300 hover:shadow-glow-lg disabled:cursor-not-allowed disabled:opacity-50"
         >
           Send
         </button>

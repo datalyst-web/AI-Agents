@@ -10,7 +10,10 @@ const TONE_COLOR: Record<NonNullable<BarBreakdownItem["tone"]>, string> = {
   warning: "#e8a53d",
   danger: "#e5484d",
   info: "#4a9eff",
-  neutral: "rgba(255,255,255,0.3)",
+  // Ties to the theme token (not a fixed white) so a neutral bar stays
+  // visible against its track in light mode too — a literal white-based
+  // rgba here nearly vanished on a light (near-white) track.
+  neutral: "rgb(var(--color-foreground) / 0.3)",
 };
 
 /** Horizontal magnitude comparison across a fixed, small set of categories — always direct-labeled, never color-alone. */

@@ -518,7 +518,7 @@ export default function AgentDetailPage() {
                       <span
                         className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
                           m.role === "customer"
-                            ? "rounded-br-md bg-brand-gradient text-foreground"
+                            ? "rounded-br-md bg-brand-gradient text-white"
                             : "rounded-bl-md bg-foreground/[0.06] text-foreground/90 ring-1 ring-inset ring-foreground/10"
                         }`}
                       >
