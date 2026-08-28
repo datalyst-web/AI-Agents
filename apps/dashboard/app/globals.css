@@ -93,8 +93,13 @@ body {
     background-clip: text;
     color: transparent;
   }
+  /* 60% opacity read as a subtle frosted edge in dark theme (near-black
+     blurred through near-black is invisible either way) but as a hazy,
+     unfinished-looking wash in light theme, where the sidebar/header sit
+     on top of colorful page content all day. High enough opacity now
+     that the blur is a faint depth cue, not the dominant visual. */
   .glass {
-    background: theme("colors.surface.raised / 60%");
+    background: theme("colors.surface.raised / 94%");
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
   }

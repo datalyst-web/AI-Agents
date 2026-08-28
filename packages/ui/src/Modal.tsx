@@ -36,7 +36,16 @@ export function Modal({
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-up" onClick={onClose} />
       <div className="relative flex min-h-full items-center justify-center px-4 py-8">
         <div className="relative w-full max-w-md animate-fade-up rounded-xl3 bg-brand-gradient-soft p-px shadow-card-hover">
-          <div className="max-h-[85vh] overflow-y-auto rounded-[calc(1.75rem-1px)] bg-surface-raised/98 p-6 backdrop-blur">
+          {/* Fully opaque, no backdrop-blur of its own — the scrim above
+              already blurs/dims the page. A translucent panel here
+              double-blurred through an already-dimmed backdrop, which
+              read as a faint, muddy haze in dark theme but as a visibly
+              washed-out, low-contrast panel in light theme (near-white
+              at 98% opacity over a gray-ish blurred scrim, on a light
+              page, doesn't read as "solid" the way near-black does).
+              A modal should look foregrounded and solid regardless of
+              theme, not partially see-through. */}
+          <div className="max-h-[85vh] overflow-y-auto rounded-[calc(1.75rem-1px)] bg-surface-raised p-6">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-base font-semibold tracking-tight text-foreground">{title}</h3>
