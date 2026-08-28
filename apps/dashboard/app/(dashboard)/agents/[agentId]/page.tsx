@@ -642,11 +642,15 @@ export default function AgentDetailPage() {
       ) : null}
 
       {/* Floating corner bubble — added alongside the embedded panel above
-          (not a replacement), visible on every tab while testing is
-          possible, sharing the exact same conversation. Styled to match
-          the real widget's launcher + panel so this is a faithful preview
-          of what a real customer sees once the agent goes live. */}
-      {agent.status === "LIVE" || agent.status === "TESTING" ? (
+          (not a replacement), visible on every OTHER tab while testing is
+          possible, sharing the exact same conversation. Hidden on the Test
+          Agent tab itself — the embedded panel already sits bottom-right
+          there, in the same corner as this fixed-position launcher/Send
+          button, so showing both at once meant the floating button covered
+          the embedded panel's own Send button. Styled to match the real
+          widget's launcher + panel so this is a faithful preview of what a
+          real customer sees once the agent goes live. */}
+      {(agent.status === "LIVE" || agent.status === "TESTING") && tab !== "Test Agent" ? (
         <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-3">
           {floatingOpen ? (
             <div className="flex h-[30rem] w-[22rem] flex-col overflow-hidden rounded-xl3 bg-brand-gradient-soft p-px shadow-card-hover animate-fade-up">
