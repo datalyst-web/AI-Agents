@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Card, CardHeader, CardBody, Button, AgentStatusBadge, StatTile, ContentSourceTag, LineChart, BarBreakdown, CardRowSkeleton, Modal } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
@@ -115,6 +115,119 @@ function CopyField({ value }: { value: string }) {
   );
 }
 
+/**
+ * Shared by both the embedded Test Agent tab and the floating corner
+ * bubble (added alongside it, not a replacement — the real widget
+ * script only ever works once an agent is LIVE, since it's the public,
+ * unauthenticated surface real customers use; this stays on the
+ * authenticated test-message endpoint so it works from DRAFT onward,
+ * while visually/behaviorally matching the real widget so testing here
+ * is a faithful preview of it).
+ */
+function TestConversationBody({
+  agentName,
+  messages,
+  sending,
+  pendingConfirmation,
+  error,
+  input,
+  onInputChange,
+  onSubmit,
+  onConfirm,
+  onCancelConfirmation,
+  scrollRef,
+}: {
+  agentName: string;
+  messages: TestMessage[];
+  sending: boolean;
+  pendingConfirmation: PendingConfirmation | null;
+  error: string | null;
+  input: string;
+  onInputChange: (value: string) => void;
+  onSubmit: (e: FormEvent) => void;
+  onConfirm: () => void;
+  onCancelConfirmation: () => void;
+  scrollRef: RefObject<HTMLDivElement>;
+}) {
+  return (
+    <>
+      <div ref={scrollRef} className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
+        {messages.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-gradient shadow-glow">
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                <path d="M2 8a6 6 0 1 1 6 6" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
+                <circle cx="12" cy="12" r="1.4" fill="white" />
+              </svg>
+            </div>
+            <p className="max-w-xs text-sm text-foreground/45">
+              Say hello to <span className="text-foreground/80">{agentName}</span> to try it out — this uses your real
+              knowledge base, tools, and guardrails.
+            </p>
+          </div>
+        ) : (
+          messages.map((m) => (
+            <div key={m.id} className={`flex ${m.role === "customer" ? "justify-end" : "justify-start"}`}>
+              {m.role === "system" ? (
+                <span className="mx-auto rounded-full bg-warning/10 px-3 py-1 text-[11px] font-medium text-warning ring-1 ring-inset ring-warning/25">
+                  {m.text}
+                </span>
+              ) : (
+                <span
+                  className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+                    m.role === "customer"
+                      ? "rounded-br-md bg-brand-gradient text-white"
+                      : "rounded-bl-md bg-foreground/[0.06] text-foreground/90 ring-1 ring-inset ring-foreground/10"
+                  }`}
+                >
+                  {m.text}
+                </span>
+              )}
+            </div>
+          ))
+        )}
+        {sending ? (
+          <div className="flex justify-start">
+            <span className="flex items-center gap-1 rounded-2xl rounded-bl-md bg-foreground/[0.06] px-3.5 py-3 ring-1 ring-inset ring-foreground/10">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground/50" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground/50 [animation-delay:0.15s]" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground/50 [animation-delay:0.3s]" />
+            </span>
+          </div>
+        ) : null}
+      </div>
+
+      {pendingConfirmation ? (
+        <div className="border-t border-warning/25 bg-warning/[0.06] px-4 py-3">
+          <p className="mb-2 text-xs text-foreground/80">{pendingConfirmation.confirmationPrompt}</p>
+          <div className="flex gap-2">
+            <Button variant="secondary" className="!bg-success/15 !text-success hover:!bg-success/25" onClick={onConfirm}>
+              Confirm
+            </Button>
+            <Button variant="ghost" onClick={onCancelConfirmation}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      {error ? <p className="border-t border-surface-border px-4 py-2 text-xs text-danger">{error}</p> : null}
+
+      <form onSubmit={onSubmit} className="flex gap-2 border-t border-surface-border p-3">
+        <input
+          value={input}
+          onChange={(e) => onInputChange(e.target.value)}
+          placeholder="Type a message to test the agent..."
+          disabled={sending}
+          className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+        />
+        <Button type="submit" disabled={sending || !input.trim()}>
+          Send
+        </Button>
+      </form>
+    </>
+  );
+}
+
 export default function AgentDetailPage() {
   const { agentId } = useParams<{ agentId: string }>();
   const router = useRouter();
@@ -150,9 +263,15 @@ export default function AgentDetailPage() {
   const [testError, setTestError] = useState<string | null>(null);
   const [pendingConfirmation, setPendingConfirmation] = useState<PendingConfirmation | null>(null);
   const testScrollRef = useRef<HTMLDivElement>(null);
+  // The floating corner bubble shares this exact same conversation —
+  // opening it mid-test continues where the embedded panel left off,
+  // never a second/independent test conversation.
+  const [floatingOpen, setFloatingOpen] = useState(false);
+  const floatingScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     testScrollRef.current?.scrollTo({ top: testScrollRef.current.scrollHeight, behavior: "smooth" });
+    floatingScrollRef.current?.scrollTo({ top: floatingScrollRef.current.scrollHeight, behavior: "smooth" });
   }, [testMessages, testSending]);
 
   async function sendTestMessage(text: string, confirmToolCallId?: string) {
@@ -498,98 +617,99 @@ export default function AgentDetailPage() {
               ) : null
             }
           />
-          <CardBody className="p-0">
-            <div ref={testScrollRef} className="flex h-[28rem] flex-col gap-3 overflow-y-auto px-5 py-5">
-              {testMessages.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-gradient shadow-glow">
-                    <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
-                      <path d="M2 8a6 6 0 1 1 6 6" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
-                      <circle cx="12" cy="12" r="1.4" fill="white" />
-                    </svg>
-                  </div>
-                  <p className="max-w-xs text-sm text-foreground/45">
-                    Say hello to <span className="text-foreground/80">{agent.name}</span> below to try it out — this uses your
-                    real knowledge base, tools, and guardrails.
-                  </p>
-                </div>
-              ) : (
-                testMessages.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`flex ${m.role === "customer" ? "justify-end" : "justify-start"}`}
-                  >
-                    {m.role === "system" ? (
-                      <span className="mx-auto rounded-full bg-warning/10 px-3 py-1 text-[11px] font-medium text-warning ring-1 ring-inset ring-warning/25">
-                        {m.text}
-                      </span>
-                    ) : (
-                      <span
-                        className={`max-w-[80%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                          m.role === "customer"
-                            ? "rounded-br-md bg-brand-gradient text-white"
-                            : "rounded-bl-md bg-foreground/[0.06] text-foreground/90 ring-1 ring-inset ring-foreground/10"
-                        }`}
-                      >
-                        {m.text}
-                      </span>
-                    )}
-                  </div>
-                ))
-              )}
-              {testSending ? (
-                <div className="flex justify-start">
-                  <span className="flex items-center gap-1 rounded-2xl rounded-bl-md bg-foreground/[0.06] px-3.5 py-3 ring-1 ring-inset ring-foreground/10">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground/50" />
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground/50 [animation-delay:0.15s]" />
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground/50 [animation-delay:0.3s]" />
-                  </span>
-                </div>
-              ) : null}
-            </div>
-
-            {pendingConfirmation ? (
-              <div className="border-t border-warning/25 bg-warning/[0.06] px-5 py-3">
-                <p className="mb-2 text-xs text-foreground/80">{pendingConfirmation.confirmationPrompt}</p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    className="!bg-success/15 !text-success hover:!bg-success/25"
-                    onClick={() => void sendTestMessage("", pendingConfirmation.toolCallId)}
-                  >
-                    Confirm
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setPendingConfirmation(null);
-                      setTestMessages((prev) => [
-                        ...prev,
-                        { id: crypto.randomUUID(), role: "system", text: "Action cancelled in this test conversation." },
-                      ]);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-            {testError ? <p className="border-t border-surface-border px-5 py-2 text-xs text-danger">{testError}</p> : null}
-
-            <form onSubmit={onTestSubmit} className="flex gap-2 border-t border-surface-border p-3">
-              <input
-                value={testInput}
-                onChange={(e) => setTestInput(e.target.value)}
-                placeholder="Type a message to test the agent..."
-                disabled={testSending}
-                className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
-              />
-              <Button type="submit" disabled={testSending || !testInput.trim()}>
-                Send
-              </Button>
-            </form>
+          <CardBody className="flex h-[28rem] flex-col p-0">
+            <TestConversationBody
+              agentName={agent.name}
+              messages={testMessages}
+              sending={testSending}
+              pendingConfirmation={pendingConfirmation}
+              error={testError}
+              input={testInput}
+              onInputChange={setTestInput}
+              onSubmit={onTestSubmit}
+              onConfirm={() => void sendTestMessage("", pendingConfirmation?.toolCallId)}
+              onCancelConfirmation={() => {
+                setPendingConfirmation(null);
+                setTestMessages((prev) => [
+                  ...prev,
+                  { id: crypto.randomUUID(), role: "system", text: "Action cancelled in this test conversation." },
+                ]);
+              }}
+              scrollRef={testScrollRef}
+            />
           </CardBody>
         </Card>
+      ) : null}
+
+      {/* Floating corner bubble — added alongside the embedded panel above
+          (not a replacement), visible on every tab while testing is
+          possible, sharing the exact same conversation. Styled to match
+          the real widget's launcher + panel so this is a faithful preview
+          of what a real customer sees once the agent goes live. */}
+      {agent.status === "LIVE" || agent.status === "TESTING" ? (
+        <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-3">
+          {floatingOpen ? (
+            <div className="flex h-[30rem] w-[22rem] flex-col overflow-hidden rounded-xl3 bg-brand-gradient-soft p-px shadow-card-hover animate-fade-up">
+              <div className="flex h-full flex-col overflow-hidden rounded-[calc(1.75rem-1px)] bg-surface-raised">
+                <div className="flex items-center justify-between border-b border-surface-border px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-gradient shadow-glow">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                        <path d="M2 8a6 6 0 1 1 6 6" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
+                        <circle cx="12" cy="12" r="1.4" fill="white" />
+                      </svg>
+                    </div>
+                    <div className="text-sm font-medium text-foreground">{agent.name}</div>
+                  </div>
+                  <button
+                    onClick={() => setFloatingOpen(false)}
+                    aria-label="Close"
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-foreground/40 transition-colors hover:bg-foreground/5 hover:text-foreground"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                      <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </div>
+                <TestConversationBody
+                  agentName={agent.name}
+                  messages={testMessages}
+                  sending={testSending}
+                  pendingConfirmation={pendingConfirmation}
+                  error={testError}
+                  input={testInput}
+                  onInputChange={setTestInput}
+                  onSubmit={onTestSubmit}
+                  onConfirm={() => void sendTestMessage("", pendingConfirmation?.toolCallId)}
+                  onCancelConfirmation={() => {
+                    setPendingConfirmation(null);
+                    setTestMessages((prev) => [
+                      ...prev,
+                      { id: crypto.randomUUID(), role: "system", text: "Action cancelled in this test conversation." },
+                    ]);
+                  }}
+                  scrollRef={floatingScrollRef}
+                />
+              </div>
+            </div>
+          ) : null}
+          <button
+            onClick={() => setFloatingOpen((v) => !v)}
+            aria-label={floatingOpen ? "Close test widget" : "Open test widget"}
+            className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-gradient shadow-glow-lg transition-transform hover:scale-105"
+          >
+            {floatingOpen ? (
+              <svg width="18" height="18" viewBox="0 0 14 14" fill="none">
+                <path d="M2 2l10 10M12 2L2 12" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 16 16" fill="none">
+                <path d="M2 8a6 6 0 1 1 6 6" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
+                <circle cx="12" cy="12" r="1.4" fill="white" />
+              </svg>
+            )}
+          </button>
+        </div>
       ) : null}
 
       {tab === "Configuration" ? (
