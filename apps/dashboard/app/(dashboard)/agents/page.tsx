@@ -35,6 +35,12 @@ export default function AgentsPage() {
 
   useEffect(refresh, [user]);
 
+  // One agent per client (CLAUDE.md: "configure each client's AI employee
+  // separately") — the backend now rejects a second create outright, so
+  // hide the option once one already exists rather than let staff hit
+  // that error.
+  const canCreateAgent = isStaff && agents !== null && agents.length === 0;
+
   async function onCreate(e: FormEvent) {
     e.preventDefault();
     if (!user) return;
@@ -69,11 +75,14 @@ export default function AgentsPage() {
           <h1 className="text-xl font-semibold text-foreground">Agents</h1>
           <p className="mt-1 text-sm text-foreground/50">Each agent is a separately configured AI employee.</p>
         </div>
-        {isStaff ? <Button onClick={() => setCreating((v) => !v)}>{creating ? "Cancel" : "New agent"}</Button> : null}
+        {canCreateAgent ? <Button onClick={() => setCreating((v) => !v)}>{creating ? "Cancel" : "New agent"}</Button> : null}
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
+      {isStaff && agents !== null && agents.length > 0 ? (
+        <p className="text-xs text-foreground/40">This client already has an agent — delete it first if you need to start over.</p>
+      ) : null}
 
-      {isStaff && creating ? (
+      {canCreateAgent && creating ? (
         <Card className="animate-fade-up">
           <CardBody>
             <form onSubmit={onCreate} className="space-y-3">

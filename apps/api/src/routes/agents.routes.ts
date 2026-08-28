@@ -133,6 +133,24 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
       const actorSource = request.tenantCtx!.impersonation ? "STAFF_MANAGED_SETUP" : "CLIENT";
       const actorUserId = request.tenantCtx!.impersonation?.staffUserId ?? request.authUser!.sub;
 
+      // One agent per tenant — "Build the AI engine once, configure each
+      // client's AI employee separately" (CLAUDE.md Core philosophy) means
+      // exactly one employee, not several duplicates from a double-click
+      // or a repeat "New agent" click. A tenant that genuinely needs a
+      // fresh agent deletes the old one first (still supported for any
+      // non-LIVE agent). Checked outside the create transaction so a
+      // rejection never opens one.
+      const existingCount = await withTenant(ctx.prisma, request.tenantCtx!, (tx) =>
+        tx.agent.count({ where: { tenantId: request.tenantCtx!.tenantId } }),
+      );
+      if (existingCount > 0) {
+        reply.code(409).send({
+          error: "tenant_already_has_agent",
+          message: "This client already has an agent — delete it first if you need to start over with a new one.",
+        });
+        return;
+      }
+
       const agent = await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
         const created = await tx.agent.create({
           data: {

@@ -88,6 +88,13 @@ export async function registerManagedSetupRoutes(app: FastifyInstance, ctx: AppC
     const tenants = await withPlatformContext(ctx.prisma, (tx) =>
       tx.tenant.findMany({ where: { managedSetupTier: { in: ["ASSISTED_SETUP", "FULLY_MANAGED"] } }, orderBy: { updatedAt: "asc" } }),
     );
-    reply.send(tenants);
+    // logoObjectKey is an internal S3 key — never leak it, expose the
+    // servable route instead (same transform as GET /v1/tenants/:tenantId).
+    reply.send(
+      tenants.map(({ logoObjectKey, ...rest }) => ({
+        ...rest,
+        logoUrl: logoObjectKey ? `/v1/tenants/${rest.id}/branding/logo` : null,
+      })),
+    );
   });
 }

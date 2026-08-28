@@ -141,9 +141,6 @@ export const api = {
     }>("/v1/auth/me"),
   updateTenantTheme: (tenantId: string, theme: "DARK" | "LIGHT") =>
     apiFetch(`/v1/tenants/${tenantId}/theme`, { method: "PATCH", body: JSON.stringify({ theme }) }),
-  updateTenantBranding: (tenantId: string, brandName: string | null) =>
-    apiFetch(`/v1/tenants/${tenantId}/branding`, { method: "PATCH", body: JSON.stringify({ brandName }) }),
-  uploadTenantLogo: (tenantId: string, file: File) => uploadLogo(`/v1/tenants/${tenantId}/branding/logo`, file),
   updatePlatformBranding: (brandName: string | null) =>
     apiFetch(`/v1/platform/branding`, { method: "PATCH", body: JSON.stringify({ brandName }) }),
   uploadPlatformLogo: (file: File) => uploadLogo(`/v1/platform/branding/logo`, file),
@@ -155,6 +152,11 @@ export const api = {
     }),
   cancelClient: (tenantId: string) => apiFetch(`/v1/platform/tenants/${tenantId}/cancel`, { method: "POST" }),
   reactivateClient: (tenantId: string) => apiFetch(`/v1/platform/tenants/${tenantId}/reactivate`, { method: "POST" }),
+  // Per-client white-label branding — staff-only, edited directly from the
+  // Managed Setup queue (no impersonation session required).
+  updateClientBranding: (tenantId: string, brandName: string | null) =>
+    apiFetch(`/v1/platform/tenants/${tenantId}/branding`, { method: "PATCH", body: JSON.stringify({ brandName }) }),
+  uploadClientLogo: (tenantId: string, file: File) => uploadLogo(`/v1/platform/tenants/${tenantId}/branding/logo`, file),
 
   listStaff: () =>
     apiFetch<{ id: string; email: string; displayName: string; role: string; isActive: boolean; createdAt: string }[]>(
@@ -165,9 +167,21 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email, password, displayName, role }),
     }),
+  deactivateStaff: (staffId: string) => apiFetch(`/v1/platform/staff/${staffId}/deactivate`, { method: "POST" }),
+  reactivateStaff: (staffId: string) => apiFetch(`/v1/platform/staff/${staffId}/reactivate`, { method: "POST" }),
 
   listManagedSetupQueue: () =>
-    apiFetch<{ id: string; name: string; managedSetupTier: string; subscriptionState: string; updatedAt: string }[]>(
+    apiFetch<
+      {
+        id: string;
+        name: string;
+        managedSetupTier: string;
+        subscriptionState: string;
+        updatedAt: string;
+        brandName: string | null;
+        logoUrl: string | null;
+      }[]
+    >(
       "/v1/managed-setup/queue",
     ),
   startImpersonation: (tenantId: string, reason: string, durationMinutes = 60) =>

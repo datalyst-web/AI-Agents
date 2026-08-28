@@ -59,4 +59,28 @@ export async function registerPlatformStaffRoutes(app: FastifyInstance, ctx: App
     );
     reply.send({ id: user.id, email: user.email, displayName: user.displayName, role: user.role });
   });
+
+  /**
+   * "Remove" a staff account = deactivate (isActive: false, login.routes
+   * already rejects inactive users), never a hard delete — same
+   * never-delete reasoning as client removal, plus a deactivated staff
+   * user's past audit log rows stay attributable. A staff member can't
+   * deactivate their own account (would lock them out with no one able
+   * to undo it if they're the only admin left).
+   */
+  app.post("/v1/platform/staff/:staffId/deactivate", { preHandler: [app.authenticate, requireStaff()] }, async (request, reply) => {
+    const { staffId } = request.params as { staffId: string };
+    if (staffId === request.authUser!.sub) {
+      reply.code(400).send({ error: "cannot_deactivate_self" });
+      return;
+    }
+    const user = await withPlatformContext(ctx.prisma, (tx) => tx.user.update({ where: { id: staffId }, data: { isActive: false } }));
+    reply.send({ id: user.id, email: user.email, displayName: user.displayName, role: user.role, isActive: user.isActive });
+  });
+
+  app.post("/v1/platform/staff/:staffId/reactivate", { preHandler: [app.authenticate, requireStaff()] }, async (request, reply) => {
+    const { staffId } = request.params as { staffId: string };
+    const user = await withPlatformContext(ctx.prisma, (tx) => tx.user.update({ where: { id: staffId }, data: { isActive: true } }));
+    reply.send({ id: user.id, email: user.email, displayName: user.displayName, role: user.role, isActive: user.isActive });
+  });
 }

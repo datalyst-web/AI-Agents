@@ -190,31 +190,6 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
     },
   );
 
-  /**
-   * White-label dashboard branding — staff-only (requireStaff, not any
-   * tenant Permission) since this is explicitly something staff set up
-   * for a client during onboarding, never client-editable. Distinct from
-   * the theme route above, which any tenant user with tenant:customize
-   * can change for themselves.
-   */
-  app.patch(
-    "/v1/tenants/:tenantId/branding",
-    { preHandler: [app.authenticate, requireTenantMatch(), verifyActiveImpersonation(ctx.prisma), requireStaff()] },
-    async (request, reply) => {
-      const { brandName } = z.object({ brandName: z.string().trim().min(1).max(80).nullable() }).parse(request.body);
-      const updated = await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
-        const tenant = await tx.tenant.update({ where: { id: request.tenantCtx!.tenantId }, data: { brandName } });
-        await writeAuditLog(tx, request.tenantCtx!, {
-          actorUserId: request.authUser!.sub,
-          action: "tenant_branding_updated",
-          metadata: { brandName },
-        });
-        return tenant;
-      });
-      reply.send(updated);
-    },
-  );
-
   const LOGO_MIME_TO_EXT: Record<string, string> = {
     "image/png": "png",
     "image/jpeg": "jpg",
@@ -223,10 +198,36 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
   };
   const LOGO_EXT_TO_MIME = Object.fromEntries(Object.entries(LOGO_MIME_TO_EXT).map(([m, e]) => [e, m]));
 
-  app.post(
-    "/v1/tenants/:tenantId/branding/logo",
-    { preHandler: [app.authenticate, requireTenantMatch(), verifyActiveImpersonation(ctx.prisma), requireStaff()] },
+  /**
+   * White-label per-client branding — lives under /v1/platform/tenants,
+   * not /v1/tenants, and uses requireStaff() + withPlatformContext
+   * rather than requireTenantMatch()/impersonation: staff manage a
+   * client's branding directly from the Managed Setup queue, without
+   * first starting a full "act as tenant" session for it (that
+   * architecture — setup_specialist's resolveTenantContext always
+   * requires an active impersonation to resolve *any* tenant context —
+   * is exactly why this couldn't be a tenant-scoped route). Distinct
+   * from the theme route above, which the tenant itself controls.
+   */
+  app.patch(
+    "/v1/platform/tenants/:tenantId/branding",
+    { preHandler: [app.authenticate, requireStaff()] },
     async (request, reply) => {
+      const { tenantId } = request.params as { tenantId: string };
+      const { brandName } = z.object({ brandName: z.string().trim().min(1).max(80).nullable() }).parse(request.body);
+      const updated = await withPlatformContext(ctx.prisma, (tx) => tx.tenant.update({ where: { id: tenantId }, data: { brandName } }));
+      await withTenant(ctx.prisma, { tenantId }, (tx) =>
+        writeAuditLog(tx, { tenantId }, { actorUserId: request.authUser!.sub, action: "tenant_branding_updated", metadata: { brandName } }),
+      );
+      reply.send(updated);
+    },
+  );
+
+  app.post(
+    "/v1/platform/tenants/:tenantId/branding/logo",
+    { preHandler: [app.authenticate, requireStaff()] },
+    async (request, reply) => {
+      const { tenantId } = request.params as { tenantId: string };
       const file = await request.file();
       if (!file) {
         reply.code(400).send({ error: "no_file_uploaded" });
@@ -238,17 +239,12 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
         return;
       }
       const buffer = await file.toBuffer();
-      const key = ctx.objectStore.tenantKey(request.tenantCtx!.tenantId, "branding", `logo-${Date.now()}.${ext}`);
+      const key = ctx.objectStore.tenantKey(tenantId, "branding", `logo-${Date.now()}.${ext}`);
       await ctx.objectStore.putObject(key, buffer, file.mimetype);
-      const updated = await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
-        const tenant = await tx.tenant.update({ where: { id: request.tenantCtx!.tenantId }, data: { logoObjectKey: key } });
-        await writeAuditLog(tx, request.tenantCtx!, {
-          actorUserId: request.authUser!.sub,
-          action: "tenant_branding_updated",
-          metadata: { logoUploaded: true },
-        });
-        return tenant;
-      });
+      const updated = await withPlatformContext(ctx.prisma, (tx) => tx.tenant.update({ where: { id: tenantId }, data: { logoObjectKey: key } }));
+      await withTenant(ctx.prisma, { tenantId }, (tx) =>
+        writeAuditLog(tx, { tenantId }, { actorUserId: request.authUser!.sub, action: "tenant_branding_updated", metadata: { logoUploaded: true } }),
+      );
       reply.send(updated);
     },
   );

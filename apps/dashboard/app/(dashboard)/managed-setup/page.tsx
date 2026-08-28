@@ -11,6 +11,8 @@ interface QueueTenant {
   managedSetupTier: string;
   subscriptionState: string;
   updatedAt: string;
+  brandName: string | null;
+  logoUrl: string | null;
 }
 interface StaffAccount {
   id: string;
@@ -36,8 +38,16 @@ export default function ManagedSetupPage() {
   const [target, setTarget] = useState<QueueTenant | null>(null);
   const [reason, setReason] = useState("");
   const [starting, setStarting] = useState(false);
-  const [busyTenantId, setBusyTenantId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<QueueTenant | null>(null);
+
+  const [brandingTarget, setBrandingTarget] = useState<QueueTenant | null>(null);
+  const [clientBrandName, setClientBrandName] = useState("");
+  const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null);
+  const [savingClientBrand, setSavingClientBrand] = useState(false);
+  const [uploadingClientLogo, setUploadingClientLogo] = useState(false);
+  const [clientBrandingError, setClientBrandingError] = useState<string | null>(null);
+  const clientLogoInputRef = useRef<HTMLInputElement>(null);
 
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [newTenantName, setNewTenantName] = useState("");
@@ -134,7 +144,7 @@ export default function ManagedSetupPage() {
 
   async function cancelClient() {
     if (!cancelTarget) return;
-    setBusyTenantId(cancelTarget.id);
+    setBusyId(cancelTarget.id);
     setError(null);
     try {
       await api.cancelClient(cancelTarget.id);
@@ -143,12 +153,12 @@ export default function ManagedSetupPage() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not remove this client.");
     } finally {
-      setBusyTenantId(null);
+      setBusyId(null);
     }
   }
 
   async function reactivateClient(tenantId: string) {
-    setBusyTenantId(tenantId);
+    setBusyId(tenantId);
     setError(null);
     try {
       await api.reactivateClient(tenantId);
@@ -156,7 +166,69 @@ export default function ManagedSetupPage() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not reactivate this client.");
     } finally {
-      setBusyTenantId(null);
+      setBusyId(null);
+    }
+  }
+
+  function openBranding(t: QueueTenant) {
+    setBrandingTarget(t);
+    setClientBrandName(t.brandName ?? "");
+    setClientLogoUrl(t.logoUrl);
+    setClientBrandingError(null);
+  }
+
+  async function saveClientBrandName() {
+    if (!brandingTarget) return;
+    setSavingClientBrand(true);
+    setClientBrandingError(null);
+    try {
+      await api.updateClientBranding(brandingTarget.id, clientBrandName.trim() || null);
+      refresh();
+    } catch (err) {
+      setClientBrandingError(err instanceof ApiError ? err.message : "Could not save the console name.");
+    } finally {
+      setSavingClientBrand(false);
+    }
+  }
+
+  async function uploadClientLogo(file: File) {
+    if (!brandingTarget) return;
+    setUploadingClientLogo(true);
+    setClientBrandingError(null);
+    try {
+      await api.uploadClientLogo(brandingTarget.id, file);
+      setClientLogoUrl(`/v1/tenants/${brandingTarget.id}/branding/logo?t=${Date.now()}`);
+      refresh();
+    } catch (err) {
+      setClientBrandingError(err instanceof ApiError ? err.message : "Could not upload the logo.");
+    } finally {
+      setUploadingClientLogo(false);
+    }
+  }
+
+  async function deactivateStaff(staffId: string) {
+    setBusyId(staffId);
+    setError(null);
+    try {
+      await api.deactivateStaff(staffId);
+      refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not remove this staff account.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function reactivateStaff(staffId: string) {
+    setBusyId(staffId);
+    setError(null);
+    try {
+      await api.reactivateStaff(staffId);
+      refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not reactivate this staff account.");
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -260,18 +332,24 @@ export default function ManagedSetupPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => openBranding(t)}
+                      className="text-xs font-medium text-foreground/40 transition-colors hover:text-foreground/70"
+                    >
+                      Branding
+                    </button>
                     {t.subscriptionState === "CANCELLED" ? (
                       <button
                         onClick={() => reactivateClient(t.id)}
-                        disabled={busyTenantId === t.id}
+                        disabled={busyId === t.id}
                         className="text-xs font-medium text-brand-300 transition-colors hover:text-brand-200 disabled:opacity-50"
                       >
-                        {busyTenantId === t.id ? "Reactivating…" : "Reactivate"}
+                        {busyId === t.id ? "Reactivating…" : "Reactivate"}
                       </button>
                     ) : (
                       <button
                         onClick={() => setCancelTarget(t)}
-                        disabled={busyTenantId === t.id}
+                        disabled={busyId === t.id}
                         className="text-xs font-medium text-foreground/30 transition-colors hover:text-danger disabled:opacity-50"
                       >
                         Remove
@@ -306,15 +384,45 @@ export default function ManagedSetupPage() {
             {staff.length === 0 ? (
               <p className="px-5 py-6 text-center text-sm text-foreground/40">No staff accounts yet.</p>
             ) : (
-              staff.map((s) => (
-                <div key={s.id} className="flex items-center justify-between px-5 py-3.5 text-sm">
-                  <div>
-                    <div className="text-foreground">{s.displayName}</div>
-                    <div className="text-xs text-foreground/40">{s.email}</div>
+              staff.map((s) => {
+                const isSelf = s.id === user?.id;
+                return (
+                  <div key={s.id} className={`flex items-center justify-between px-5 py-3.5 text-sm ${s.isActive ? "" : "opacity-50"}`}>
+                    <div>
+                      <div className="text-foreground">
+                        {s.displayName}
+                        {isSelf ? <span className="ml-1.5 text-[11px] text-foreground/35">(you)</span> : null}
+                      </div>
+                      <div className="text-xs text-foreground/40">{s.email}</div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge tone={s.role === "platform_admin" ? "brand" : "neutral"}>{ROLE_LABEL[s.role] ?? s.role}</Badge>
+                      {!s.isActive ? (
+                        <Badge tone="warning">removed</Badge>
+                      ) : null}
+                      {!isSelf ? (
+                        s.isActive ? (
+                          <button
+                            onClick={() => deactivateStaff(s.id)}
+                            disabled={busyId === s.id}
+                            className="text-xs font-medium text-foreground/30 transition-colors hover:text-danger disabled:opacity-50"
+                          >
+                            {busyId === s.id ? "Removing…" : "Remove"}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => reactivateStaff(s.id)}
+                            disabled={busyId === s.id}
+                            className="text-xs font-medium text-brand-300 transition-colors hover:text-brand-200 disabled:opacity-50"
+                          >
+                            {busyId === s.id ? "Reactivating…" : "Reactivate"}
+                          </button>
+                        )
+                      ) : null}
+                    </div>
                   </div>
-                  <Badge tone={s.role === "platform_admin" ? "brand" : "neutral"}>{ROLE_LABEL[s.role] ?? s.role}</Badge>
-                </div>
-              ))
+                );
+              })
             )}
           </CardBody>
         )}
@@ -341,6 +449,62 @@ export default function ManagedSetupPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={brandingTarget !== null}
+        onClose={() => setBrandingTarget(null)}
+        title={`${brandingTarget?.name ?? ""} branding`}
+        subtitle="What this client sees on their own dashboard — never client-editable."
+      >
+        <div className="space-y-4">
+          {clientBrandingError ? <p className="text-xs text-danger">{clientBrandingError}</p> : null}
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-foreground/10 bg-foreground/5">
+              {clientLogoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={`${API_BASE}${clientLogoUrl}`} alt="" className="h-full w-full object-contain" />
+              ) : (
+                <span className="text-[10px] text-foreground/30">No logo</span>
+              )}
+            </div>
+            <div>
+              <input
+                ref={clientLogoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void uploadClientLogo(file);
+                }}
+              />
+              <Button variant="secondary" type="button" disabled={uploadingClientLogo} onClick={() => clientLogoInputRef.current?.click()}>
+                {uploadingClientLogo ? "Uploading…" : "Upload logo"}
+              </Button>
+              <p className="mt-1.5 text-xs text-foreground/40">PNG, JPEG, SVG, or WebP.</p>
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-foreground/60">Console name</label>
+            <div className="flex gap-2">
+              <input
+                value={clientBrandName}
+                onChange={(e) => setClientBrandName(e.target.value)}
+                placeholder={`e.g. ${brandingTarget?.name ?? "Acme Inc"}`}
+                className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-500"
+              />
+              <Button type="button" disabled={savingClientBrand} onClick={saveClientBrandName}>
+                {savingClientBrand ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          </div>
+          <div className="flex justify-end pt-1">
+            <Button type="button" variant="ghost" onClick={() => setBrandingTarget(null)}>
+              Done
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       <Modal
@@ -401,11 +565,11 @@ export default function ManagedSetupPage() {
         subtitle="This cancels their subscription and suspends their agent — it does not delete their data, and can be undone with Reactivate."
       >
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => setCancelTarget(null)} disabled={busyTenantId === cancelTarget?.id}>
+          <Button variant="ghost" onClick={() => setCancelTarget(null)} disabled={busyId === cancelTarget?.id}>
             Cancel
           </Button>
-          <Button variant="danger" onClick={cancelClient} disabled={busyTenantId === cancelTarget?.id}>
-            {busyTenantId === cancelTarget?.id ? "Removing…" : "Remove client"}
+          <Button variant="danger" onClick={cancelClient} disabled={busyId === cancelTarget?.id}>
+            {busyId === cancelTarget?.id ? "Removing…" : "Remove client"}
           </Button>
         </div>
       </Modal>
