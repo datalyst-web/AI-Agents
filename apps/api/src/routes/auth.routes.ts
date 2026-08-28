@@ -182,17 +182,41 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
 
   app.get("/v1/auth/me", { preHandler: app.authenticate }, async (request, reply) => {
     const authUser = request.authUser!;
-    // Tenant-scoped users go through withTenant with the tenant the JWT
-    // already vouches for; a platform_admin's token carries no tenantId
-    // (they aren't scoped to one), so that case alone uses platform context.
-    const { user, theme, subscriptionTier, subscriptionState, brandName, logoUrl } = authUser.tenantId
-      ? await withTenant(ctx.prisma, { tenantId: authUser.tenantId }, async (tx) => {
-          const [user, tenant] = await Promise.all([
-            tx.user.findUniqueOrThrow({ where: { id: authUser.sub } }),
-            tx.tenant.findUniqueOrThrow({ where: { id: authUser.tenantId! } }),
-          ]);
+
+    // The impersonation JWT deliberately carries no tenantId claim (every
+    // other route resolves it from the DB session via the URL's :tenantId
+    // instead, never trusting the JWT) — but /me has no :tenantId to read.
+    // Without this lookup, authUser.tenantId is always undefined while
+    // impersonating, so this endpoint silently fell through to the
+    // "no tenant in scope" branch on every single impersonation session:
+    // theme/branding/plan never reflected the actual client being
+    // managed, only ever the bare default. Found live, not hypothetical.
+    let impersonatedTenantId: string | undefined;
+    if (authUser.role === "setup_specialist" && authUser.impersonation) {
+      const session = await withPlatformContext(ctx.prisma, (tx) =>
+        tx.staffImpersonationSession.findFirst({
+          where: {
+            id: authUser.impersonation!.sessionId,
+            staffUserId: authUser.impersonation!.staffUserId,
+            endedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+        }),
+      );
+      impersonatedTenantId = session?.tenantId;
+    }
+    const effectiveTenantId = authUser.tenantId ?? impersonatedTenantId;
+
+    // The caller's own user row is always fetched via platform context,
+    // never tenant-scoped — a staff row doesn't belong to whichever
+    // tenant is currently being impersonated, so RLS would hide it under
+    // withTenant(effectiveTenantId) and throw.
+    const user = await withPlatformContext(ctx.prisma, (tx) => tx.user.findUniqueOrThrow({ where: { id: authUser.sub } }));
+
+    const { theme, subscriptionTier, subscriptionState, brandName, logoUrl } = effectiveTenantId
+      ? await withTenant(ctx.prisma, { tenantId: effectiveTenantId }, async (tx) => {
+          const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: effectiveTenantId! } });
           return {
-            user,
             theme: tenant.theme,
             subscriptionTier: tenant.subscriptionTier,
             subscriptionState: tenant.subscriptionState,
@@ -200,18 +224,16 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
             logoUrl: tenant.logoObjectKey ? `/v1/tenants/${tenant.id}/branding/logo` : null,
           };
         })
-      : await withPlatformContext(ctx.prisma, async (tx) => ({
-          user: await tx.user.findUniqueOrThrow({ where: { id: authUser.sub } }),
-          // A staff account with no tenant in scope yet (pre-impersonation)
-          // has no tenant theme/plan/branding to inherit — the dashboard
-          // chrome just stays on the default until an impersonation
-          // session picks one.
+      : {
+          // No tenant in scope at all (staff pre-impersonation, or a
+          // platform_admin token) — the dashboard chrome stays on the
+          // default until an impersonation session picks one.
           theme: "DARK" as const,
           subscriptionTier: null,
           subscriptionState: null,
           brandName: null,
           logoUrl: null,
-        }));
+        };
     // Platform operator's own brand — always fetched regardless of tenant
     // scope, since it's the fallback the dashboard sidebar falls back to
     // whenever a tenant hasn't been given its own white-label branding
