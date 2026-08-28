@@ -56,13 +56,6 @@ export default function ManagedSetupPage() {
   const [creatingClient, setCreatingClient] = useState(false);
   const [addClientError, setAddClientError] = useState<string | null>(null);
 
-  const [platformBrandName, setPlatformBrandName] = useState("");
-  const [savingBrand, setSavingBrand] = useState(false);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [brandingError, setBrandingError] = useState<string | null>(null);
-  const [brandingSaved, setBrandingSaved] = useState(false);
-  const logoInputRef = useRef<HTMLInputElement>(null);
-
   const [staff, setStaff] = useState<StaffAccount[] | null>(null);
   const [addStaffOpen, setAddStaffOpen] = useState(false);
   const [newStaffEmail, setNewStaffEmail] = useState("");
@@ -71,38 +64,6 @@ export default function ManagedSetupPage() {
   const [newStaffRole, setNewStaffRole] = useState<"setup_specialist" | "platform_admin">("setup_specialist");
   const [creatingStaff, setCreatingStaff] = useState(false);
   const [staffError, setStaffError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (user?.platformBrandName) setPlatformBrandName(user.platformBrandName);
-  }, [user?.platformBrandName]);
-
-  async function savePlatformBrandName() {
-    setSavingBrand(true);
-    setBrandingError(null);
-    setBrandingSaved(false);
-    try {
-      await api.updatePlatformBranding(platformBrandName.trim() || null);
-      setBrandingSaved(true);
-    } catch (err) {
-      setBrandingError(err instanceof ApiError ? err.message : "Could not save the platform name.");
-    } finally {
-      setSavingBrand(false);
-    }
-  }
-
-  async function uploadPlatformLogo(file: File) {
-    setUploadingLogo(true);
-    setBrandingError(null);
-    setBrandingSaved(false);
-    try {
-      await api.uploadPlatformLogo(file);
-      setBrandingSaved(true);
-      window.location.reload(); // simplest way to pick up the new logo everywhere it's rendered
-    } catch (err) {
-      setBrandingError(err instanceof ApiError ? err.message : "Could not upload the logo.");
-      setUploadingLogo(false);
-    }
-  }
 
   function refresh() {
     if (!user) return;
@@ -262,54 +223,6 @@ export default function ManagedSetupPage() {
       {error ? <p className="text-xs text-danger">{error}</p> : null}
 
       <Card>
-        <CardHeader title="Platform branding" subtitle="Your own dashboard identity — shown here and as the default for any client you haven't branded yet." />
-        <CardBody className="space-y-4">
-          {brandingError ? <p className="text-xs text-danger">{brandingError}</p> : null}
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-foreground/10 bg-foreground/5">
-              {user?.platformLogoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={`${API_BASE}${user.platformLogoUrl}`} alt="" className="h-full w-full object-contain" />
-              ) : (
-                <span className="text-[10px] text-foreground/30">No logo</span>
-              )}
-            </div>
-            <div>
-              <input
-                ref={logoInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void uploadPlatformLogo(file);
-                }}
-              />
-              <Button variant="secondary" type="button" disabled={uploadingLogo} onClick={() => logoInputRef.current?.click()}>
-                {uploadingLogo ? "Uploading…" : "Upload logo"}
-              </Button>
-              <p className="mt-1.5 text-xs text-foreground/40">PNG, JPEG, SVG, or WebP. Shown in the corner of your dashboard.</p>
-            </div>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-foreground/60">Platform name</label>
-            <div className="flex max-w-md gap-2">
-              <input
-                value={platformBrandName}
-                onChange={(e) => setPlatformBrandName(e.target.value)}
-                placeholder="e.g. Datalyst Africa"
-                className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-500"
-              />
-              <Button type="button" disabled={savingBrand} onClick={savePlatformBrandName}>
-                {savingBrand ? "Saving…" : "Save"}
-              </Button>
-            </div>
-          </div>
-          {brandingSaved ? <p className="text-xs text-success">Saved.</p> : null}
-        </CardBody>
-      </Card>
-
-      <Card>
         <CardHeader
           title="Queue"
           subtitle={queue ? `${queue.length} client${queue.length === 1 ? "" : "s"}` : undefined}
@@ -400,25 +313,24 @@ export default function ManagedSetupPage() {
                       {!s.isActive ? (
                         <Badge tone="warning">removed</Badge>
                       ) : null}
-                      {!isSelf ? (
-                        s.isActive ? (
-                          <button
-                            onClick={() => deactivateStaff(s.id)}
-                            disabled={busyId === s.id}
-                            className="text-xs font-medium text-foreground/30 transition-colors hover:text-danger disabled:opacity-50"
-                          >
-                            {busyId === s.id ? "Removing…" : "Remove"}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => reactivateStaff(s.id)}
-                            disabled={busyId === s.id}
-                            className="text-xs font-medium text-brand-300 transition-colors hover:text-brand-200 disabled:opacity-50"
-                          >
-                            {busyId === s.id ? "Reactivating…" : "Reactivate"}
-                          </button>
-                        )
-                      ) : null}
+                      {s.isActive ? (
+                        <button
+                          onClick={() => deactivateStaff(s.id)}
+                          disabled={isSelf || busyId === s.id}
+                          title={isSelf ? "You can't remove your own account." : undefined}
+                          className="text-xs font-medium text-foreground/30 transition-colors hover:text-danger disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-foreground/30"
+                        >
+                          {busyId === s.id ? "Removing…" : "Remove"}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => reactivateStaff(s.id)}
+                          disabled={busyId === s.id}
+                          className="text-xs font-medium text-brand-300 transition-colors hover:text-brand-200 disabled:opacity-50"
+                        >
+                          {busyId === s.id ? "Reactivating…" : "Reactivate"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
