@@ -20,6 +20,9 @@ interface AuthUser {
   /** Staff-set white-label console name/logo — see tenants.routes.ts branding endpoints. Null until staff set them. */
   brandName: string | null;
   logoUrl: string | null;
+  /** The platform operator's own brand (e.g. "Datalyst Africa") — fallback when the tenant has no branding of its own yet. */
+  platformBrandName: string | null;
+  platformLogoUrl: string | null;
 }
 
 interface AuthContextValue {

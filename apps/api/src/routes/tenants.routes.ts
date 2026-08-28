@@ -168,4 +168,63 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
     const contentType = LOGO_EXT_TO_MIME[ext] ?? "application/octet-stream";
     reply.header("cache-control", "public, max-age=3600").type(contentType).send(buffer);
   });
+
+  // ---------------------------------------------------------------------
+  // Platform branding — the platform operator's OWN identity (e.g.
+  // "Datalyst Africa"), not a specific client's. Shown on staff's own
+  // unscoped dashboard view and as the fallback for any tenant with no
+  // white-label branding of its own yet. Not tenant-scoped, so this uses
+  // requireStaff() directly rather than requireTenantMatch().
+  // ---------------------------------------------------------------------
+  app.patch(
+    "/v1/platform/branding",
+    { preHandler: [app.authenticate, requireStaff()] },
+    async (request, reply) => {
+      const { brandName } = z.object({ brandName: z.string().trim().min(1).max(80).nullable() }).parse(request.body);
+      const updated = await ctx.prisma.platformSettings.upsert({
+        where: { id: "global" },
+        create: { id: "global", brandName },
+        update: { brandName },
+      });
+      reply.send(updated);
+    },
+  );
+
+  app.post(
+    "/v1/platform/branding/logo",
+    { preHandler: [app.authenticate, requireStaff()] },
+    async (request, reply) => {
+      const file = await request.file();
+      if (!file) {
+        reply.code(400).send({ error: "no_file_uploaded" });
+        return;
+      }
+      const ext = LOGO_MIME_TO_EXT[file.mimetype];
+      if (!ext) {
+        reply.code(400).send({ error: "unsupported_file_type", supported: Object.keys(LOGO_MIME_TO_EXT) });
+        return;
+      }
+      const buffer = await file.toBuffer();
+      const key = `platform/branding/logo-${Date.now()}.${ext}`;
+      await ctx.objectStore.putObject(key, buffer, file.mimetype);
+      const updated = await ctx.prisma.platformSettings.upsert({
+        where: { id: "global" },
+        create: { id: "global", logoObjectKey: key },
+        update: { logoObjectKey: key },
+      });
+      reply.send(updated);
+    },
+  );
+
+  app.get("/v1/platform/branding/logo", async (_request, reply) => {
+    const settings = await ctx.prisma.platformSettings.findUnique({ where: { id: "global" } });
+    if (!settings?.logoObjectKey) {
+      reply.code(404).send({ error: "no_logo" });
+      return;
+    }
+    const buffer = await ctx.objectStore.getObject(settings.logoObjectKey);
+    const ext = settings.logoObjectKey.split(".").pop()?.toLowerCase() ?? "";
+    const contentType = LOGO_EXT_TO_MIME[ext] ?? "application/octet-stream";
+    reply.header("cache-control", "public, max-age=3600").type(contentType).send(buffer);
+  });
 }

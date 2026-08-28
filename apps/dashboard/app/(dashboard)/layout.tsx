@@ -75,14 +75,21 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     );
   }
 
+  // Prefer this tenant's own white-label branding; fall back to the
+  // platform operator's own brand (e.g. "Datalyst Africa") when the
+  // tenant hasn't been given a custom logo/name yet, or when there's no
+  // tenant in scope at all (staff's own Managed Setup view).
+  const sidebarLogoUrl = user.logoUrl ?? user.platformLogoUrl;
+  const sidebarBrandName = user.brandName ?? user.platformBrandName;
+
   return (
     <div className="flex min-h-screen">
       <aside className="glass sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-surface-border">
         <div className="flex items-center gap-2.5 px-5 py-6">
-          {user.logoUrl ? (
+          {sidebarLogoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={`${API_BASE}${user.logoUrl}`}
+              src={`${API_BASE}${sidebarLogoUrl}`}
               alt=""
               className="h-8 w-8 shrink-0 rounded-lg object-contain"
             />
@@ -96,10 +103,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           )}
           <div className="min-w-0">
             <span className="block truncate text-sm font-semibold tracking-tight text-foreground">
-              {user.brandName ?? "Chat Agent"}
+              {sidebarBrandName ?? "Chat Agent"}
             </span>
             <span className="block text-[10px] font-medium uppercase tracking-wider text-foreground/35">
-              {user.brandName ? "AI Console" : "Client Console"}
+              {sidebarBrandName ? "AI Console" : "Client Console"}
             </span>
           </div>
         </div>

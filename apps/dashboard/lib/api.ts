@@ -93,6 +93,22 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   return resp.json() as Promise<T>;
 }
 
+async function uploadLogo(path: string, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const token = getToken();
+  const resp = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({ error: resp.statusText }));
+    throw new ApiError(resp.status, body.message ?? body.error ?? resp.statusText);
+  }
+  return resp.json();
+}
+
 export const api = {
   login: (email: string, password: string) =>
     apiFetch<{ token: string; user: { id: string; tenantId: string; role: string } }>("/v1/auth/login", {
@@ -120,26 +136,17 @@ export const api = {
       subscriptionState: "ACTIVE" | "TRIAL" | "PAST_DUE" | "SUSPENDED" | "CANCELLED" | null;
       brandName: string | null;
       logoUrl: string | null;
+      platformBrandName: string | null;
+      platformLogoUrl: string | null;
     }>("/v1/auth/me"),
   updateTenantTheme: (tenantId: string, theme: "DARK" | "LIGHT") =>
     apiFetch(`/v1/tenants/${tenantId}/theme`, { method: "PATCH", body: JSON.stringify({ theme }) }),
   updateTenantBranding: (tenantId: string, brandName: string | null) =>
     apiFetch(`/v1/tenants/${tenantId}/branding`, { method: "PATCH", body: JSON.stringify({ brandName }) }),
-  uploadTenantLogo: async (tenantId: string, file: File) => {
-    const form = new FormData();
-    form.append("file", file);
-    const token = getToken();
-    const resp = await fetch(`${API_BASE}/v1/tenants/${tenantId}/branding/logo`, {
-      method: "POST",
-      headers: token ? { authorization: `Bearer ${token}` } : {},
-      body: form,
-    });
-    if (!resp.ok) {
-      const body = await resp.json().catch(() => ({ error: resp.statusText }));
-      throw new ApiError(resp.status, body.message ?? body.error ?? resp.statusText);
-    }
-    return resp.json();
-  },
+  uploadTenantLogo: (tenantId: string, file: File) => uploadLogo(`/v1/tenants/${tenantId}/branding/logo`, file),
+  updatePlatformBranding: (brandName: string | null) =>
+    apiFetch(`/v1/platform/branding`, { method: "PATCH", body: JSON.stringify({ brandName }) }),
+  uploadPlatformLogo: (file: File) => uploadLogo(`/v1/platform/branding/logo`, file),
 
   listManagedSetupQueue: () =>
     apiFetch<{ id: string; name: string; managedSetupTier: string; subscriptionState: string; updatedAt: string }[]>(

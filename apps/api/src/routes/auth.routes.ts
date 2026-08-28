@@ -212,6 +212,11 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
           brandName: null,
           logoUrl: null,
         }));
+    // Platform operator's own brand — always fetched regardless of tenant
+    // scope, since it's the fallback the dashboard sidebar falls back to
+    // whenever a tenant hasn't been given its own white-label branding
+    // (or there's no tenant in scope at all, e.g. staff pre-impersonation).
+    const platformSettings = await ctx.prisma.platformSettings.findUnique({ where: { id: "global" } });
     reply.send({
       id: user.id,
       email: user.email,
@@ -223,6 +228,8 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       subscriptionState,
       brandName,
       logoUrl,
+      platformBrandName: platformSettings?.brandName ?? null,
+      platformLogoUrl: platformSettings?.logoObjectKey ? "/v1/platform/branding/logo" : null,
     });
   });
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardBody, CardHeader, Badge, Button, Modal, CardRowSkeleton } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, API_BASE } from "@/lib/api";
 
 interface QueueTenant {
   id: string;
@@ -25,6 +25,45 @@ export default function ManagedSetupPage() {
   const [target, setTarget] = useState<QueueTenant | null>(null);
   const [reason, setReason] = useState("");
   const [starting, setStarting] = useState(false);
+
+  const [platformBrandName, setPlatformBrandName] = useState("");
+  const [savingBrand, setSavingBrand] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [brandingError, setBrandingError] = useState<string | null>(null);
+  const [brandingSaved, setBrandingSaved] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (user?.platformBrandName) setPlatformBrandName(user.platformBrandName);
+  }, [user?.platformBrandName]);
+
+  async function savePlatformBrandName() {
+    setSavingBrand(true);
+    setBrandingError(null);
+    setBrandingSaved(false);
+    try {
+      await api.updatePlatformBranding(platformBrandName.trim() || null);
+      setBrandingSaved(true);
+    } catch (err) {
+      setBrandingError(err instanceof ApiError ? err.message : "Could not save the platform name.");
+    } finally {
+      setSavingBrand(false);
+    }
+  }
+
+  async function uploadPlatformLogo(file: File) {
+    setUploadingLogo(true);
+    setBrandingError(null);
+    setBrandingSaved(false);
+    try {
+      await api.uploadPlatformLogo(file);
+      setBrandingSaved(true);
+      window.location.reload(); // simplest way to pick up the new logo everywhere it's rendered
+    } catch (err) {
+      setBrandingError(err instanceof ApiError ? err.message : "Could not upload the logo.");
+      setUploadingLogo(false);
+    }
+  }
 
   function refresh() {
     if (user) api.listManagedSetupQueue().then(setQueue).catch((err) => setError(err instanceof ApiError ? err.message : "Could not load the queue."));
@@ -53,6 +92,54 @@ export default function ManagedSetupPage() {
         </p>
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
+
+      <Card>
+        <CardHeader title="Platform branding" subtitle="Your own dashboard identity — shown here and as the default for any client you haven't branded yet." />
+        <CardBody className="space-y-4">
+          {brandingError ? <p className="text-xs text-danger">{brandingError}</p> : null}
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-foreground/10 bg-foreground/5">
+              {user?.platformLogoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={`${API_BASE}${user.platformLogoUrl}`} alt="" className="h-full w-full object-contain" />
+              ) : (
+                <span className="text-[10px] text-foreground/30">No logo</span>
+              )}
+            </div>
+            <div>
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void uploadPlatformLogo(file);
+                }}
+              />
+              <Button variant="secondary" type="button" disabled={uploadingLogo} onClick={() => logoInputRef.current?.click()}>
+                {uploadingLogo ? "Uploading…" : "Upload logo"}
+              </Button>
+              <p className="mt-1.5 text-xs text-foreground/40">PNG, JPEG, SVG, or WebP. Shown in the corner of your dashboard.</p>
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-foreground/60">Platform name</label>
+            <div className="flex max-w-md gap-2">
+              <input
+                value={platformBrandName}
+                onChange={(e) => setPlatformBrandName(e.target.value)}
+                placeholder="e.g. Datalyst Africa"
+                className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-500"
+              />
+              <Button type="button" disabled={savingBrand} onClick={savePlatformBrandName}>
+                {savingBrand ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          </div>
+          {brandingSaved ? <p className="text-xs text-success">Saved.</p> : null}
+        </CardBody>
+      </Card>
 
       <Card>
         <CardHeader title="Queue" subtitle={queue ? `${queue.length} client${queue.length === 1 ? "" : "s"}` : undefined} />

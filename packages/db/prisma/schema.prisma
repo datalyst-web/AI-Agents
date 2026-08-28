@@ -763,3 +763,20 @@ model AuditLogEntry {
   @@map("audit_log_entries")
   @@schema("chat")
 }
+
+// Singleton (always id "global") — the platform operator's OWN brand
+// (e.g. "Datalyst Africa"), shown in the dashboard sidebar for staff's
+// own unscoped view (Managed Setup, no active impersonation) and as the
+// fallback for any tenant that hasn't been given its own white-label
+// logo/name yet. Distinct from Tenant.logoObjectKey/brandName, which is
+// per-client. Not a white-label violation (CLAUDE.md principle 6 is
+// about hiding the AI provider/infra, not the reseller's own identity).
+model PlatformSettings {
+  id            String   @id @default("global")
+  logoObjectKey String?  @map("logo_object_key")
+  brandName     String?  @map("brand_name")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_settings")
+  @@schema("chat")
+}
