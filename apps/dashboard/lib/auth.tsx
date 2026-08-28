@@ -17,6 +17,9 @@ interface AuthUser {
   theme: DashboardTheme;
   subscriptionTier: "STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE" | null;
   subscriptionState: "ACTIVE" | "TRIAL" | "PAST_DUE" | "SUSPENDED" | "CANCELLED" | null;
+  /** Staff-set white-label console name/logo — see tenants.routes.ts branding endpoints. Null until staff set them. */
+  brandName: string | null;
+  logoUrl: string | null;
 }
 
 interface AuthContextValue {

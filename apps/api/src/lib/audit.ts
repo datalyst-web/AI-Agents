@@ -17,6 +17,7 @@ type ExtendedAuditAction =
   | "memory:cross_conversation_write"
   | "conversation_marked_resolved"
   | "tenant_theme_updated"
+  | "tenant_branding_updated"
   | "password_reset_requested"
   | "password_reset_completed";
 

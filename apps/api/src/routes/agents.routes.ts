@@ -97,7 +97,9 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
    */
   app.post(
     "/v1/tenants/:tenantId/agents/:agentId/test-message",
-    { preHandler: [...scoped, requirePermission("agent:write")] },
+    // agent:test, not agent:write — a client must be able to test their
+    // own already-configured agent without also getting edit rights.
+    { preHandler: [...scoped, requirePermission("agent:test")] },
     async (request, reply) => {
       const { agentId } = request.params as { agentId: string };
       const body = TestMessageSchema.parse(request.body);

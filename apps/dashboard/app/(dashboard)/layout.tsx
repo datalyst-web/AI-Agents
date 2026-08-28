@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth, type DashboardTheme } from "@/lib/auth";
+import { API_BASE } from "@/lib/api";
 
 const THEMES: { value: DashboardTheme; label: string; swatch: string }[] = [
   { value: "DARK", label: "Dark", swatch: "bg-[#08090f]" },
@@ -17,6 +18,11 @@ const PLAN_LABEL: Record<"STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE", string> 
   ENTERPRISE: "Enterprise Plan",
 };
 
+// Full nav — staff (while impersonating) only. Engineering/config
+// surfaces (Tools, Workflows, Audit Log) are deliberately absent from
+// CLIENT_NAV below under the fully-managed model: staff configure
+// everything, clients only test/approve/view. See CLAUDE.md Managed
+// Setup Service.
 const TENANT_NAV = [
   { href: "/", label: "Overview", icon: IconGrid },
   { href: "/agents", label: "Agents", icon: IconBot },
@@ -24,6 +30,17 @@ const TENANT_NAV = [
   { href: "/workflows", label: "Workflows", icon: IconFlow },
   { href: "/approvals", label: "Approvals", icon: IconCheck },
   { href: "/billing", label: "Billing & Usage", icon: IconCard },
+  { href: "/audit-log", label: "Audit Log", icon: IconShield },
+];
+const CLIENT_NAV = [
+  { href: "/", label: "Overview", icon: IconGrid },
+  { href: "/agents", label: "Agents", icon: IconBot },
+  { href: "/approvals", label: "Approvals", icon: IconCheck },
+  { href: "/billing", label: "Billing & Usage", icon: IconCard },
+  // Kept for clients on purpose (not an "AI console") — CLAUDE.md requires
+  // staff actions on a client's behalf stay visible to that client
+  // ("never ambiguity about who configured what"); hiding it would
+  // defeat the audit trail's whole point.
   { href: "/audit-log", label: "Audit Log", icon: IconShield },
 ];
 const STAFF_NAV = [{ href: "/managed-setup", label: "Managed Setup", icon: IconStaff }];
@@ -35,7 +52,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const isStaff = user?.role === "setup_specialist" || user?.role === "platform_admin";
   // A staff account with no active impersonation has no tenant to scope
   // client-facing pages to — only the Managed Setup queue makes sense.
-  const nav = isStaff && !impersonation ? STAFF_NAV : impersonation ? [...STAFF_NAV, ...TENANT_NAV] : TENANT_NAV;
+  // A genuine client (never staff) always gets the restricted nav —
+  // staff retain the full nav while impersonating, per CLAUDE.md's "staff
+  // use the exact same tenant-scoped tools a client would," just not a
+  // reduced version of them.
+  const nav = isStaff && !impersonation ? STAFF_NAV : impersonation ? [...STAFF_NAV, ...TENANT_NAV] : CLIENT_NAV;
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -58,15 +79,28 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen">
       <aside className="glass sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-surface-border">
         <div className="flex items-center gap-2.5 px-5 py-6">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-gradient shadow-glow">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M2 8a6 6 0 1 1 6 6" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
-              <circle cx="12" cy="12" r="1.4" fill="white" />
-            </svg>
-          </div>
-          <div>
-            <span className="block text-sm font-semibold tracking-tight text-foreground">Chat Agent</span>
-            <span className="block text-[10px] font-medium uppercase tracking-wider text-foreground/35">Client Console</span>
+          {user.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={`${API_BASE}${user.logoUrl}`}
+              alt=""
+              className="h-8 w-8 shrink-0 rounded-lg object-contain"
+            />
+          ) : (
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-gradient shadow-glow">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M2 8a6 6 0 1 1 6 6" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
+                <circle cx="12" cy="12" r="1.4" fill="white" />
+              </svg>
+            </div>
+          )}
+          <div className="min-w-0">
+            <span className="block truncate text-sm font-semibold tracking-tight text-foreground">
+              {user.brandName ?? "Chat Agent"}
+            </span>
+            <span className="block text-[10px] font-medium uppercase tracking-wider text-foreground/35">
+              {user.brandName ? "AI Console" : "Client Console"}
+            </span>
           </div>
         </div>
 

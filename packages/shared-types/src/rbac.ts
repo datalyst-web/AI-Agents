@@ -23,6 +23,11 @@ export const PermissionSchema = z.enum([
   // Agent config
   "agent:read",
   "agent:write",
+  // Send a message to an agent (test console) without full config-edit
+  // rights — split out so clients can test their own agent under the
+  // "staff configures, client only tests/approves" model without also
+  // getting write access to its config. See CLAUDE.md Managed Setup.
+  "agent:test",
   "agent:publish",
   "agent:rollback",
   // Knowledge base
@@ -47,6 +52,11 @@ export const PermissionSchema = z.enum([
   "team:remove",
   // Analytics
   "analytics:read",
+  // Cosmetic, per-tenant self-service preferences that aren't agent
+  // config (currently: dashboard/widget theme) — deliberately its own
+  // permission so it survives even when a tenant's agent:write is
+  // revoked under the fully-managed model.
+  "tenant:customize",
   // Managed setup / staff
   "managed_setup:act_as_tenant",
   "managed_setup:publish_without_approval",
@@ -57,6 +67,14 @@ export const PermissionSchema = z.enum([
 ]);
 export type Permission = z.infer<typeof PermissionSchema>;
 
+/**
+ * Fully-managed-by-default model: staff (setup_specialist, via a logged
+ * impersonation session) own all agent/knowledge/tool/workflow
+ * configuration. Client roles keep only what they need to test their
+ * already-configured agent, approve it for launch, handle live
+ * conversations/approvals, and manage their own billing/team/theme —
+ * never config-write. See CLAUDE.md "Managed Setup Service".
+ */
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   platform_admin: [
     "platform:manage_tenants",
@@ -70,6 +88,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     // is present and unexpired. See packages/db StaffImpersonationSession.
     "agent:read",
     "agent:write",
+    "agent:test",
     "knowledge:read",
     "knowledge:write",
     "knowledge:delete",
@@ -78,57 +97,46 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "workflow:write",
     "conversation:read",
     "conversation:write",
+    "tenant:customize",
     // publish/agent:publish is intentionally excluded by default — see
     // "managed_setup:publish_without_approval" which is granted per-tenant
     // only when delegatesAutoPublish is true.
   ],
   tenant_owner: [
     "agent:read",
-    "agent:write",
+    "agent:test",
     "agent:publish",
-    "agent:rollback",
     "knowledge:read",
-    "knowledge:write",
-    "knowledge:delete",
     "conversation:read",
     "conversation:write",
     "conversation:export",
-    "tool:configure",
     "tool:execute_high_risk",
-    "workflow:read",
-    "workflow:write",
     "billing:read",
     "billing:write",
     "team:invite",
     "team:remove",
     "analytics:read",
+    "tenant:customize",
   ],
   tenant_admin: [
     "agent:read",
-    "agent:write",
+    "agent:test",
     "agent:publish",
     "knowledge:read",
-    "knowledge:write",
-    "knowledge:delete",
     "conversation:read",
     "conversation:write",
     "conversation:export",
-    "tool:configure",
-    "workflow:read",
-    "workflow:write",
     "billing:read",
     "team:invite",
     "analytics:read",
+    "tenant:customize",
   ],
   tenant_agent_editor: [
     "agent:read",
-    "agent:write",
+    "agent:test",
     "knowledge:read",
-    "knowledge:write",
     "conversation:read",
     "conversation:write",
-    "workflow:read",
-    "workflow:write",
     "analytics:read",
   ],
   tenant_viewer: ["agent:read", "knowledge:read", "conversation:read", "analytics:read"],

@@ -80,6 +80,12 @@ model Tenant {
   delegatesAutoPublish Boolean           @default(false)
   dataRetentionDays    Int               @default(365)
   theme                DashboardTheme    @default(DARK)
+  // White-label per-tenant dashboard branding, set by staff only (never
+  // client-editable) — see apps/api routes/tenants.routes.ts branding
+  // endpoints. logoObjectKey is an internal S3 key, never returned
+  // directly to clients; the API computes a servable logoUrl from it.
+  logoObjectKey        String?           @map("logo_object_key")
+  brandName            String?           @map("brand_name")
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 

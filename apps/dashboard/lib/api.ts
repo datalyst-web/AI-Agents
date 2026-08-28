@@ -1,6 +1,6 @@
 "use client";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
+export const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -118,9 +118,28 @@ export const api = {
       theme: "DARK" | "LIGHT";
       subscriptionTier: "STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE" | null;
       subscriptionState: "ACTIVE" | "TRIAL" | "PAST_DUE" | "SUSPENDED" | "CANCELLED" | null;
+      brandName: string | null;
+      logoUrl: string | null;
     }>("/v1/auth/me"),
   updateTenantTheme: (tenantId: string, theme: "DARK" | "LIGHT") =>
     apiFetch(`/v1/tenants/${tenantId}/theme`, { method: "PATCH", body: JSON.stringify({ theme }) }),
+  updateTenantBranding: (tenantId: string, brandName: string | null) =>
+    apiFetch(`/v1/tenants/${tenantId}/branding`, { method: "PATCH", body: JSON.stringify({ brandName }) }),
+  uploadTenantLogo: async (tenantId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const token = getToken();
+    const resp = await fetch(`${API_BASE}/v1/tenants/${tenantId}/branding/logo`, {
+      method: "POST",
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({ error: resp.statusText }));
+      throw new ApiError(resp.status, body.message ?? body.error ?? resp.statusText);
+    }
+    return resp.json();
+  },
 
   listManagedSetupQueue: () =>
     apiFetch<{ id: string; name: string; managedSetupTier: string; subscriptionState: string; updatedAt: string }[]>(

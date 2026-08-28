@@ -14,6 +14,7 @@ interface Agent {
 
 export default function AgentsPage() {
   const { user } = useAuth();
+  const isStaff = user?.role === "setup_specialist" || user?.role === "platform_admin";
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -68,11 +69,11 @@ export default function AgentsPage() {
           <h1 className="text-xl font-semibold text-foreground">Agents</h1>
           <p className="mt-1 text-sm text-foreground/50">Each agent is a separately configured AI employee.</p>
         </div>
-        <Button onClick={() => setCreating((v) => !v)}>{creating ? "Cancel" : "New agent"}</Button>
+        {isStaff ? <Button onClick={() => setCreating((v) => !v)}>{creating ? "Cancel" : "New agent"}</Button> : null}
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
 
-      {creating ? (
+      {isStaff && creating ? (
         <Card className="animate-fade-up">
           <CardBody>
             <form onSubmit={onCreate} className="space-y-3">

@@ -73,6 +73,22 @@ export function requirePublishPermission() {
   };
 }
 
+/**
+ * Staff-only gate (platform_admin or setup_specialist), independent of any
+ * per-tenant Permission grant — for actions like setting a client's
+ * branding that must never be self-service even for tenant_owner, which
+ * otherwise has fairly broad tenant-level permissions.
+ */
+export function requireStaff() {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = request.authUser;
+    if (!user || (user.role !== "platform_admin" && user.role !== "setup_specialist")) {
+      reply.code(403).send({ error: "forbidden", reason: "staff_only" });
+      return;
+    }
+  };
+}
+
 export function requireTenantMatch() {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const routeTenantId = (request.params as { tenantId?: string }).tenantId;

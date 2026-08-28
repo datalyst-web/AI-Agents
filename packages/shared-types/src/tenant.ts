@@ -47,6 +47,10 @@ export interface Tenant {
   delegatesAutoPublish: boolean;
   dataRetentionDays: number;
   theme: DashboardTheme;
+  /** Staff-set white-label console name; falls back to `name` in the UI when unset. */
+  brandName: string | null;
+  /** Servable API path for the tenant's logo (null when none uploaded) — never the raw storage key. */
+  logoUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }

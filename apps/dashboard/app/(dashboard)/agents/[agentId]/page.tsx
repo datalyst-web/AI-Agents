@@ -62,7 +62,11 @@ const OUTCOME_TONE = {
   IN_PROGRESS: "info",
 } as const;
 
-const TABS = ["Test Agent", "Configuration", "Knowledge", "Conversations", "Analytics"] as const;
+const ALL_TABS = ["Test Agent", "Configuration", "Knowledge", "Conversations", "Analytics"] as const;
+// Clients test/approve/watch — staff (impersonating) configure. See
+// CLAUDE.md Managed Setup: config/knowledge is staff-only, never
+// client-editable.
+const CLIENT_TABS = ["Test Agent", "Conversations", "Analytics"] as const satisfies readonly (typeof ALL_TABS)[number][];
 
 interface TestMessage {
   id: string;
@@ -115,9 +119,11 @@ export default function AgentDetailPage() {
   const { agentId } = useParams<{ agentId: string }>();
   const router = useRouter();
   const { user, impersonation } = useAuth();
+  const isStaff = user?.role === "setup_specialist" || user?.role === "platform_admin";
+  const TABS = isStaff ? ALL_TABS : CLIENT_TABS;
   const [dashboardOrigin, setDashboardOrigin] = useState("");
   useEffect(() => setDashboardOrigin(window.location.origin), []);
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Test Agent");
+  const [tab, setTab] = useState<(typeof ALL_TABS)[number]>("Test Agent");
   const [agent, setAgent] = useState<AgentDetail | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -410,7 +416,7 @@ export default function AgentDetailPage() {
           <span className="text-xs text-foreground/30">{agent.version}</span>
         </div>
         <div className="flex gap-2">
-          {["DRAFT", "CONFIGURING", "KNOWLEDGE_PROCESSING"].includes(agent.status) ? (
+          {isStaff && ["DRAFT", "CONFIGURING", "KNOWLEDGE_PROCESSING"].includes(agent.status) ? (
             <Button onClick={startTesting}>Start Testing</Button>
           ) : null}
           {agent.status === "TESTING" ? (
@@ -424,7 +430,7 @@ export default function AgentDetailPage() {
             </Button>
           ) : null}
           {agent.status === "APPROVED" ? <Button onClick={publish}>Publish to Live</Button> : null}
-          {agent.status !== "LIVE" ? (
+          {isStaff && agent.status !== "LIVE" ? (
             <Button variant="ghost" className="!text-danger hover:!bg-danger/10" onClick={() => setDeleteModalOpen(true)}>
               Delete
             </Button>
@@ -438,7 +444,10 @@ export default function AgentDetailPage() {
           and approve, or have them delegate auto-publish authority in their account settings if that's already agreed.
         </p>
       ) : null}
-      {agent.status === "DRAFT" ? (
+      {agent.status === "DRAFT" && !isStaff ? (
+        <p className="text-xs text-foreground/40">Your AI Setup Team is configuring this agent — check back soon.</p>
+      ) : null}
+      {agent.status === "DRAFT" && isStaff ? (
         <p className="text-xs text-foreground/40">
           Save your instructions and add some knowledge below, then click <span className="text-foreground/70">Start Testing</span> to unlock the Test Agent tab.
         </p>

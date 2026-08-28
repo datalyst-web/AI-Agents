@@ -29,6 +29,7 @@ function dayLabel(iso: string) {
 
 export default function OverviewPage() {
   const { user } = useAuth();
+  const isStaff = user?.role === "setup_specialist" || user?.role === "platform_admin";
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [daily, setDaily] = useState<DailyUsage[] | null>(null);
@@ -70,12 +71,14 @@ export default function OverviewPage() {
           </h1>
           <p className="mt-1 text-sm text-foreground/50">Here&apos;s how your AI employees are performing.</p>
         </div>
-        <Link
-          href="/agents"
-          className="inline-flex items-center gap-2 rounded-lg bg-brand-gradient bg-[length:160%_auto] bg-left px-4 py-2.5 text-sm font-medium text-white shadow-glow transition-all duration-300 hover:bg-right hover:shadow-glow-lg"
-        >
-          + New agent
-        </Link>
+        {isStaff ? (
+          <Link
+            href="/agents"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-gradient bg-[length:160%_auto] bg-left px-4 py-2.5 text-sm font-medium text-white shadow-glow transition-all duration-300 hover:bg-right hover:shadow-glow-lg"
+          >
+            + New agent
+          </Link>
+        ) : null}
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
 
@@ -142,10 +145,14 @@ export default function OverviewPage() {
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-500/10 ring-1 ring-inset ring-brand-500/25">
                   <DotIcon />
                 </div>
-                <p className="text-sm text-foreground/50">No agents yet. Create your first AI employee to get started.</p>
-                <Link href="/agents" className="text-xs font-medium text-brand-300 hover:underline">
-                  Create an agent →
-                </Link>
+                <p className="text-sm text-foreground/50">
+                  {isStaff ? "No agents yet. Create your first AI employee to get started." : "Your AI Setup Team is configuring your agent — check back soon."}
+                </p>
+                {isStaff ? (
+                  <Link href="/agents" className="text-xs font-medium text-brand-300 hover:underline">
+                    Create an agent →
+                  </Link>
+                ) : null}
               </div>
             ) : (
               agents.map((agent) => (
