@@ -109,7 +109,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setImpersonation(null);
     setImpersonationState(null);
-    setUser((prev) => (prev ? { ...prev, tenantId: "" } : prev));
+    // A manual { ...prev, tenantId: "" } patch here left theme/brandName/
+    // logoUrl/subscriptionTier/subscriptionState stale — the client's
+    // values kept showing (sidebar branding, theme) until something else
+    // happened to trigger a fresh /me call. A real refetch is the only
+    // way to get the staff's own default state back immediately; /me's
+    // own session lookup already resolves correctly here since the
+    // session was just marked ended above.
+    await refreshMe();
     router.push("/managed-setup");
   }
 
