@@ -98,6 +98,12 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "conversation:read",
     "conversation:write",
     "tenant:customize",
+    // Staff use the client's own Overview/Billing pages while
+    // impersonating (CLAUDE.md: "exact same tenant-scoped tools a client
+    // would use") — without this, those pages 403 on every usage call
+    // for every impersonation session, not just as a display glitch.
+    "analytics:read",
+    "billing:read",
     // publish/agent:publish is intentionally excluded by default — see
     // "managed_setup:publish_without_approval" which is granted per-tenant
     // only when delegatesAutoPublish is true.
