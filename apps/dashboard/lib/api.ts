@@ -148,6 +148,24 @@ export const api = {
     apiFetch(`/v1/platform/branding`, { method: "PATCH", body: JSON.stringify({ brandName }) }),
   uploadPlatformLogo: (file: File) => uploadLogo(`/v1/platform/branding/logo`, file),
 
+  createClient: (tenantName: string, email: string, password: string) =>
+    apiFetch<{ id: string; name: string }>("/v1/platform/clients", {
+      method: "POST",
+      body: JSON.stringify({ tenantName, email, password }),
+    }),
+  cancelClient: (tenantId: string) => apiFetch(`/v1/platform/tenants/${tenantId}/cancel`, { method: "POST" }),
+  reactivateClient: (tenantId: string) => apiFetch(`/v1/platform/tenants/${tenantId}/reactivate`, { method: "POST" }),
+
+  listStaff: () =>
+    apiFetch<{ id: string; email: string; displayName: string; role: string; isActive: boolean; createdAt: string }[]>(
+      "/v1/platform/staff",
+    ),
+  createStaff: (email: string, password: string, displayName: string, role: "setup_specialist" | "platform_admin") =>
+    apiFetch<{ id: string; email: string; displayName: string; role: string }>("/v1/platform/staff", {
+      method: "POST",
+      body: JSON.stringify({ email, password, displayName, role }),
+    }),
+
   listManagedSetupQueue: () =>
     apiFetch<{ id: string; name: string; managedSetupTier: string; subscriptionState: string; updatedAt: string }[]>(
       "/v1/managed-setup/queue",

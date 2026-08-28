@@ -15,6 +15,7 @@ import { registerConversationRoutes } from "./routes/conversations.routes.js";
 import { registerToolRoutes } from "./routes/tools.routes.js";
 import { registerWorkflowRoutes } from "./routes/workflows.routes.js";
 import { registerManagedSetupRoutes } from "./routes/managedSetup.routes.js";
+import { registerPlatformStaffRoutes } from "./routes/platformStaff.routes.js";
 import { registerWidgetConfigRoutes } from "./routes/widgetConfig.routes.js";
 import { registerUsageRoutes } from "./routes/usage.routes.js";
 import { registerApprovalRoutes } from "./routes/approvals.routes.js";
@@ -64,6 +65,7 @@ export async function buildApp(ctx: AppContext = buildAppContext()) {
   await registerToolRoutes(app, ctx);
   await registerWorkflowRoutes(app, ctx);
   await registerManagedSetupRoutes(app, ctx);
+  await registerPlatformStaffRoutes(app, ctx);
   await registerUsageRoutes(app, ctx);
   await registerApprovalRoutes(app, ctx);
   await registerAuditRoutes(app, ctx);

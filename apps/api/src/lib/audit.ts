@@ -18,6 +18,9 @@ type ExtendedAuditAction =
   | "conversation_marked_resolved"
   | "tenant_theme_updated"
   | "tenant_branding_updated"
+  | "tenant_created_by_staff"
+  | "tenant_cancelled_by_staff"
+  | "tenant_reactivated_by_staff"
   | "password_reset_requested"
   | "password_reset_completed";
 

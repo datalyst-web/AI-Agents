@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import bcrypt from "bcryptjs";
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { withPlatformContext, withTenant } from "@chat-agent/db";
@@ -12,6 +14,12 @@ const UpdateTenantSchema = z.object({
   subscriptionTier: SubscriptionTierSchema.optional(),
   managedSetupTier: ManagedSetupTierSchema.optional(),
   delegatesAutoPublish: z.boolean().optional(),
+});
+
+const CreateClientSchema = z.object({
+  tenantName: z.string().min(1).max(120),
+  email: z.string().email(),
+  password: z.string().min(8),
 });
 
 /**
@@ -38,6 +46,104 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
       const body = UpdateTenantSchema.parse(request.body);
       const updated = await withPlatformContext(ctx.prisma, (tx) =>
         tx.tenant.update({ where: { id: tenantId }, data: body }),
+      );
+      reply.send(updated);
+    },
+  );
+
+  /**
+   * Staff-initiated client creation — the "we add all the information
+   * ourselves" onboarding path (CLAUDE.md Managed Setup Service): staff
+   * create the tenant + its owner login here, then continue setup via
+   * the normal impersonation flow. Deliberately requireStaff(), not the
+   * platform:manage_tenants used above — this is routine day-to-day staff
+   * work, not a rarer platform-admin action. Mirrors auth.routes.ts
+   * signup's tenant+user creation exactly, just staff-initiated and
+   * defaulted to FULLY_MANAGED instead of SELF_SERVE.
+   */
+  app.post(
+    "/v1/platform/clients",
+    { preHandler: [app.authenticate, requireStaff()] },
+    async (request, reply) => {
+      const body = CreateClientSchema.parse(request.body);
+      const existing = await withPlatformContext(ctx.prisma, (tx) => tx.user.findUnique({ where: { email: body.email } }));
+      if (existing) {
+        reply.code(409).send({ error: "email_already_registered" });
+        return;
+      }
+      const passwordHash = await bcrypt.hash(body.password, 12);
+      const slug = body.tenantName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "")
+        .slice(0, 60);
+
+      const tenant = await withPlatformContext(ctx.prisma, async (tx) => {
+        const tenant = await tx.tenant.create({
+          data: {
+            id: randomUUID(),
+            name: body.tenantName,
+            slug: `${slug}-${randomUUID().slice(0, 6)}`,
+            subscriptionState: "ACTIVE",
+            subscriptionTier: "STARTER",
+            managedSetupTier: "FULLY_MANAGED",
+          },
+        });
+        await tx.user.create({
+          data: {
+            id: randomUUID(),
+            tenantId: tenant.id,
+            email: body.email,
+            passwordHash,
+            role: "tenant_owner",
+            displayName: body.tenantName,
+          },
+        });
+        return tenant;
+      });
+      await withTenant(ctx.prisma, { tenantId: tenant.id }, (tx) =>
+        writeAuditLog(tx, { tenantId: tenant.id }, {
+          actorUserId: request.authUser!.sub,
+          action: "tenant_created_by_staff",
+          metadata: { ownerEmail: body.email },
+        }),
+      );
+      reply.send(tenant);
+    },
+  );
+
+  /**
+   * "Remove" a client = cancel, never a hard delete — CLAUDE.md "On
+   * expiry, suspend the agent — never delete client data." A dedicated,
+   * narrow action (not the broad PATCH above, which stays
+   * platform_admin-only) so day-to-day staff can do this without also
+   * getting billing-tier-edit rights.
+   */
+  app.post(
+    "/v1/platform/tenants/:tenantId/cancel",
+    { preHandler: [app.authenticate, requireStaff()] },
+    async (request, reply) => {
+      const { tenantId } = request.params as { tenantId: string };
+      const updated = await withPlatformContext(ctx.prisma, (tx) =>
+        tx.tenant.update({ where: { id: tenantId }, data: { subscriptionState: "CANCELLED" } }),
+      );
+      await withTenant(ctx.prisma, { tenantId }, (tx) =>
+        writeAuditLog(tx, { tenantId }, { actorUserId: request.authUser!.sub, action: "tenant_cancelled_by_staff" }),
+      );
+      reply.send(updated);
+    },
+  );
+
+  app.post(
+    "/v1/platform/tenants/:tenantId/reactivate",
+    { preHandler: [app.authenticate, requireStaff()] },
+    async (request, reply) => {
+      const { tenantId } = request.params as { tenantId: string };
+      const updated = await withPlatformContext(ctx.prisma, (tx) =>
+        tx.tenant.update({ where: { id: tenantId }, data: { subscriptionState: "ACTIVE" } }),
+      );
+      await withTenant(ctx.prisma, { tenantId }, (tx) =>
+        writeAuditLog(tx, { tenantId }, { actorUserId: request.authUser!.sub, action: "tenant_reactivated_by_staff" }),
       );
       reply.send(updated);
     },

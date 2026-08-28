@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Card, CardBody, CardHeader, Badge, Button, Modal, CardRowSkeleton } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
 import { api, ApiError, API_BASE } from "@/lib/api";
@@ -12,10 +12,21 @@ interface QueueTenant {
   subscriptionState: string;
   updatedAt: string;
 }
+interface StaffAccount {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+  isActive: boolean;
+}
 
 const TIER_LABEL: Record<string, string> = {
   ASSISTED_SETUP: "Assisted setup",
   FULLY_MANAGED: "Fully managed",
+};
+const ROLE_LABEL: Record<string, string> = {
+  setup_specialist: "Setup specialist",
+  platform_admin: "Platform admin",
 };
 
 export default function ManagedSetupPage() {
@@ -25,6 +36,15 @@ export default function ManagedSetupPage() {
   const [target, setTarget] = useState<QueueTenant | null>(null);
   const [reason, setReason] = useState("");
   const [starting, setStarting] = useState(false);
+  const [busyTenantId, setBusyTenantId] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<QueueTenant | null>(null);
+
+  const [addClientOpen, setAddClientOpen] = useState(false);
+  const [newTenantName, setNewTenantName] = useState("");
+  const [newClientEmail, setNewClientEmail] = useState("");
+  const [newClientPassword, setNewClientPassword] = useState("");
+  const [creatingClient, setCreatingClient] = useState(false);
+  const [addClientError, setAddClientError] = useState<string | null>(null);
 
   const [platformBrandName, setPlatformBrandName] = useState("");
   const [savingBrand, setSavingBrand] = useState(false);
@@ -32,6 +52,15 @@ export default function ManagedSetupPage() {
   const [brandingError, setBrandingError] = useState<string | null>(null);
   const [brandingSaved, setBrandingSaved] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+
+  const [staff, setStaff] = useState<StaffAccount[] | null>(null);
+  const [addStaffOpen, setAddStaffOpen] = useState(false);
+  const [newStaffEmail, setNewStaffEmail] = useState("");
+  const [newStaffName, setNewStaffName] = useState("");
+  const [newStaffPassword, setNewStaffPassword] = useState("");
+  const [newStaffRole, setNewStaffRole] = useState<"setup_specialist" | "platform_admin">("setup_specialist");
+  const [creatingStaff, setCreatingStaff] = useState(false);
+  const [staffError, setStaffError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.platformBrandName) setPlatformBrandName(user.platformBrandName);
@@ -66,11 +95,13 @@ export default function ManagedSetupPage() {
   }
 
   function refresh() {
-    if (user) api.listManagedSetupQueue().then(setQueue).catch((err) => setError(err instanceof ApiError ? err.message : "Could not load the queue."));
+    if (!user) return;
+    api.listManagedSetupQueue().then(setQueue).catch((err) => setError(err instanceof ApiError ? err.message : "Could not load the queue."));
+    api.listStaff().then(setStaff).catch(() => setStaff([]));
   }
   useEffect(refresh, [user]);
 
-  async function begin(e: React.FormEvent) {
+  async function begin(e: FormEvent) {
     e.preventDefault();
     if (!target) return;
     setStarting(true);
@@ -80,6 +111,71 @@ export default function ManagedSetupPage() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not start the session.");
       setStarting(false);
+    }
+  }
+
+  async function createClient(e: FormEvent) {
+    e.preventDefault();
+    setCreatingClient(true);
+    setAddClientError(null);
+    try {
+      await api.createClient(newTenantName, newClientEmail, newClientPassword);
+      setAddClientOpen(false);
+      setNewTenantName("");
+      setNewClientEmail("");
+      setNewClientPassword("");
+      refresh();
+    } catch (err) {
+      setAddClientError(err instanceof ApiError ? err.message : "Could not create this client.");
+    } finally {
+      setCreatingClient(false);
+    }
+  }
+
+  async function cancelClient() {
+    if (!cancelTarget) return;
+    setBusyTenantId(cancelTarget.id);
+    setError(null);
+    try {
+      await api.cancelClient(cancelTarget.id);
+      setCancelTarget(null);
+      refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not remove this client.");
+    } finally {
+      setBusyTenantId(null);
+    }
+  }
+
+  async function reactivateClient(tenantId: string) {
+    setBusyTenantId(tenantId);
+    setError(null);
+    try {
+      await api.reactivateClient(tenantId);
+      refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not reactivate this client.");
+    } finally {
+      setBusyTenantId(null);
+    }
+  }
+
+  async function createStaff(e: FormEvent) {
+    e.preventDefault();
+    setCreatingStaff(true);
+    setStaffError(null);
+    try {
+      await api.createStaff(newStaffEmail, newStaffPassword, newStaffName, newStaffRole);
+      setAddStaffOpen(false);
+      setNewStaffEmail("");
+      setNewStaffName("");
+      setNewStaffPassword("");
+      setNewStaffRole("setup_specialist");
+      refresh();
+    } catch (err) {
+      setStaffError(err instanceof ApiError ? err.message : "Could not create this staff account.");
+    } finally {
+      setCreatingStaff(false);
     }
   }
 
@@ -142,7 +238,11 @@ export default function ManagedSetupPage() {
       </Card>
 
       <Card>
-        <CardHeader title="Queue" subtitle={queue ? `${queue.length} client${queue.length === 1 ? "" : "s"}` : undefined} />
+        <CardHeader
+          title="Queue"
+          subtitle={queue ? `${queue.length} client${queue.length === 1 ? "" : "s"}` : undefined}
+          action={<Button onClick={() => setAddClientOpen(true)}>+ Add client</Button>}
+        />
         {queue === null ? (
           <CardRowSkeleton />
         ) : (
@@ -159,14 +259,60 @@ export default function ManagedSetupPage() {
                       <Badge tone={t.subscriptionState === "ACTIVE" ? "success" : "neutral"}>{t.subscriptionState.toLowerCase()}</Badge>
                     </div>
                   </div>
-                  <Button
-                    onClick={() => {
-                      setTarget(t);
-                      setReason("");
-                    }}
-                  >
-                    Manage this client
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {t.subscriptionState === "CANCELLED" ? (
+                      <button
+                        onClick={() => reactivateClient(t.id)}
+                        disabled={busyTenantId === t.id}
+                        className="text-xs font-medium text-brand-300 transition-colors hover:text-brand-200 disabled:opacity-50"
+                      >
+                        {busyTenantId === t.id ? "Reactivating…" : "Reactivate"}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setCancelTarget(t)}
+                        disabled={busyTenantId === t.id}
+                        className="text-xs font-medium text-foreground/30 transition-colors hover:text-danger disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    )}
+                    <Button
+                      onClick={() => {
+                        setTarget(t);
+                        setReason("");
+                      }}
+                    >
+                      Manage this client
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardBody>
+        )}
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="Staff accounts"
+          subtitle={staff ? `${staff.length} account${staff.length === 1 ? "" : "s"}` : undefined}
+          action={<Button onClick={() => setAddStaffOpen(true)}>+ Add staff</Button>}
+        />
+        {staff === null ? (
+          <CardRowSkeleton rows={2} />
+        ) : (
+          <CardBody className="divide-y divide-surface-border p-0">
+            {staff.length === 0 ? (
+              <p className="px-5 py-6 text-center text-sm text-foreground/40">No staff accounts yet.</p>
+            ) : (
+              staff.map((s) => (
+                <div key={s.id} className="flex items-center justify-between px-5 py-3.5 text-sm">
+                  <div>
+                    <div className="text-foreground">{s.displayName}</div>
+                    <div className="text-xs text-foreground/40">{s.email}</div>
+                  </div>
+                  <Badge tone={s.role === "platform_admin" ? "brand" : "neutral"}>{ROLE_LABEL[s.role] ?? s.role}</Badge>
                 </div>
               ))
             )}
@@ -192,6 +338,134 @@ export default function ManagedSetupPage() {
             </Button>
             <Button type="submit" disabled={starting}>
               {starting ? "Starting…" : "Start session"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={addClientOpen}
+        onClose={() => setAddClientOpen(false)}
+        title="Add a new client"
+        subtitle="Creates their tenant and login now — you'll build their agent and knowledge base yourself via Managed Setup."
+      >
+        <form onSubmit={createClient} className="space-y-3">
+          {addClientError ? <p className="text-xs text-danger">{addClientError}</p> : null}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-foreground/60">Business name</label>
+            <input
+              required
+              value={newTenantName}
+              onChange={(e) => setNewTenantName(e.target.value)}
+              placeholder="e.g. Acme Plumbing"
+              className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-foreground/60">Their login email</label>
+            <input
+              required
+              type="email"
+              value={newClientEmail}
+              onChange={(e) => setNewClientEmail(e.target.value)}
+              className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-foreground/60">Their initial password</label>
+            <input
+              required
+              type="text"
+              minLength={8}
+              value={newClientPassword}
+              onChange={(e) => setNewClientPassword(e.target.value)}
+              placeholder="At least 8 characters — share this with them securely"
+              className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="ghost" onClick={() => setAddClientOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={creatingClient}>
+              {creatingClient ? "Creating…" : "Create client"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={cancelTarget !== null}
+        onClose={() => setCancelTarget(null)}
+        title={`Remove ${cancelTarget?.name ?? ""}?`}
+        subtitle="This cancels their subscription and suspends their agent — it does not delete their data, and can be undone with Reactivate."
+      >
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setCancelTarget(null)} disabled={busyTenantId === cancelTarget?.id}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={cancelClient} disabled={busyTenantId === cancelTarget?.id}>
+            {busyTenantId === cancelTarget?.id ? "Removing…" : "Remove client"}
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={addStaffOpen}
+        onClose={() => setAddStaffOpen(false)}
+        title="Add a staff account"
+        subtitle="They'll be able to log in and manage clients through Managed Setup, same as you."
+      >
+        <form onSubmit={createStaff} className="space-y-3">
+          {staffError ? <p className="text-xs text-danger">{staffError}</p> : null}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-foreground/60">Name</label>
+            <input
+              required
+              value={newStaffName}
+              onChange={(e) => setNewStaffName(e.target.value)}
+              className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-foreground/60">Email</label>
+            <input
+              required
+              type="email"
+              value={newStaffEmail}
+              onChange={(e) => setNewStaffEmail(e.target.value)}
+              className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-foreground/60">Initial password</label>
+            <input
+              required
+              type="text"
+              minLength={8}
+              value={newStaffPassword}
+              onChange={(e) => setNewStaffPassword(e.target.value)}
+              placeholder="At least 8 characters — share this with them securely"
+              className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-foreground/60">Role</label>
+            <select
+              value={newStaffRole}
+              onChange={(e) => setNewStaffRole(e.target.value as typeof newStaffRole)}
+              className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
+            >
+              <option value="setup_specialist" className="bg-surface-overlay">Setup specialist — manages clients (recommended)</option>
+              <option value="platform_admin" className="bg-surface-overlay">Platform admin — also manages subscriptions/billing tiers</option>
+            </select>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" variant="ghost" onClick={() => setAddStaffOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={creatingStaff}>
+              {creatingStaff ? "Creating…" : "Create account"}
             </Button>
           </div>
         </form>
