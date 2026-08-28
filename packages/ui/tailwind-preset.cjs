@@ -33,6 +33,12 @@ module.exports = {
           800: "#262c86",
           900: "#1f2568",
           950: "#12153c",
+          // Theme-adaptive text color for links/active-nav/badge text sitting
+          // directly on the page surface — unlike the fixed scale above,
+          // this repaints per theme so it stays readable on both (see
+          // globals.css [data-theme] blocks).
+          link: themeVar("--color-brand-link"),
+          "link-hover": themeVar("--color-brand-link-hover"),
         },
         accent: {
           300: "#f0abfc",
@@ -48,10 +54,16 @@ module.exports = {
           border: themeVar("--color-surface-border"),
         },
         foreground: themeVar("--color-foreground"),
-        success: "#2fbf71",
-        warning: "#e8a53d",
-        danger: "#e5484d",
-        info: "#4a9eff",
+        // Theme-adaptive, not fixed hex — each is used both as a tinted
+        // background/border (bg-success/10, ring-success/25, fine at low
+        // opacity in either theme) and as full-opacity text (badge
+        // labels, error messages), where the original fixed values only
+        // ever had ~2-2.8:1 contrast on a light surface. See globals.css
+        // [data-theme] blocks for the actual per-theme values.
+        success: themeVar("--color-success"),
+        warning: themeVar("--color-warning"),
+        danger: themeVar("--color-danger"),
+        info: themeVar("--color-info"),
       },
       fontFamily: {
         sans: ["'Inter var'", "Inter", "system-ui", "sans-serif"],

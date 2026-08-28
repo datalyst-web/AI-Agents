@@ -8,7 +8,7 @@ const toneClasses: Record<BadgeTone, string> = {
   warning: "bg-warning/10 text-warning ring-warning/25",
   danger: "bg-danger/10 text-danger ring-danger/25",
   info: "bg-info/10 text-info ring-info/25",
-  brand: "bg-brand-500/10 text-brand-300 ring-brand-500/25",
+  brand: "bg-brand-500/10 text-brand-link ring-brand-500/25",
 };
 
 export function Badge({ tone = "neutral", children }: { tone?: BadgeTone; children: ReactNode }) {

@@ -128,7 +128,7 @@ export default function AgentsPage() {
                   className="flex items-center justify-between px-5 py-3.5 text-sm transition-colors hover:bg-foreground/[0.03]"
                 >
                   <span className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-gradient-soft text-xs font-semibold text-brand-200 ring-1 ring-inset ring-brand-500/20">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-gradient-soft text-xs font-semibold text-brand-link ring-1 ring-inset ring-brand-500/20">
                       {agent.name.slice(0, 1).toUpperCase()}
                     </span>
                     <span className="text-foreground">{agent.name}</span>

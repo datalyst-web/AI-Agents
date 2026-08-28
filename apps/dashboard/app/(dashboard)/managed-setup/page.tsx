@@ -255,7 +255,7 @@ export default function ManagedSetupPage() {
                       <button
                         onClick={() => reactivateClient(t.id)}
                         disabled={busyId === t.id}
-                        className="text-xs font-medium text-brand-300 transition-colors hover:text-brand-200 disabled:opacity-50"
+                        className="text-xs font-medium text-brand-link transition-colors hover:text-brand-link-hover disabled:opacity-50"
                       >
                         {busyId === t.id ? "Reactivating…" : "Reactivate"}
                       </button>
@@ -326,7 +326,7 @@ export default function ManagedSetupPage() {
                         <button
                           onClick={() => reactivateStaff(s.id)}
                           disabled={busyId === s.id}
-                          className="text-xs font-medium text-brand-300 transition-colors hover:text-brand-200 disabled:opacity-50"
+                          className="text-xs font-medium text-brand-link transition-colors hover:text-brand-link-hover disabled:opacity-50"
                         >
                           {busyId === s.id ? "Reactivating…" : "Reactivate"}
                         </button>
@@ -532,8 +532,8 @@ export default function ManagedSetupPage() {
               onChange={(e) => setNewStaffRole(e.target.value as typeof newStaffRole)}
               className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
             >
-              <option value="setup_specialist" className="bg-surface-overlay">Setup specialist — manages clients (recommended)</option>
-              <option value="platform_admin" className="bg-surface-overlay">Platform admin — also manages subscriptions/billing tiers</option>
+              <option value="setup_specialist" className="bg-surface-overlay text-foreground">Setup specialist — manages clients (recommended)</option>
+              <option value="platform_admin" className="bg-surface-overlay text-foreground">Platform admin — also manages subscriptions/billing tiers</option>
             </select>
           </div>
           <div className="flex justify-end gap-2 pt-1">

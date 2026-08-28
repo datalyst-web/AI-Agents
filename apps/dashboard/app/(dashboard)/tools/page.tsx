@@ -132,7 +132,7 @@ export default function ToolsPage() {
             {tools.length === 0 ? (
               <div className="flex flex-col items-center gap-3 px-5 py-12 text-center">
                 <p className="text-sm text-foreground/50">No tools configured yet.</p>
-                <button onClick={() => setModalOpen(true)} className="text-xs font-medium text-brand-300 hover:underline">
+                <button onClick={() => setModalOpen(true)} className="text-xs font-medium text-brand-link hover:underline">
                   Add your first tool →
                 </button>
               </div>
@@ -202,7 +202,7 @@ export default function ToolsPage() {
                 className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
               >
                 {CATEGORIES.map((c) => (
-                  <option key={c} value={c} className="bg-surface-overlay">
+                  <option key={c} value={c} className="bg-surface-overlay text-foreground">
                     {c.replace(/_/g, " ")}
                   </option>
                 ))}
@@ -216,7 +216,7 @@ export default function ToolsPage() {
                 className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
               >
                 {TIERS.map((t) => (
-                  <option key={t.value} value={t.value} className="bg-surface-overlay">
+                  <option key={t.value} value={t.value} className="bg-surface-overlay text-foreground">
                     {t.value}
                   </option>
                 ))}

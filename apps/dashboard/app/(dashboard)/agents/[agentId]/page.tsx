@@ -769,7 +769,7 @@ export default function AgentDetailPage() {
                       }`}
                     >
                       {provider}
-                      {provider === "anthropic" ? <span className="ml-1 text-[10px] text-brand-300">default</span> : null}
+                      {provider === "anthropic" ? <span className="ml-1 text-[10px] text-brand-link">default</span> : null}
                     </button>
                   ))}
                 </div>
@@ -789,7 +789,7 @@ export default function AgentDetailPage() {
                     className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-500"
                   >
                     {(["haiku", "sonnet", "opus"] as const).map((tier) => (
-                      <option key={tier} value={tier} className="bg-surface-raised">
+                      <option key={tier} value={tier} className="bg-surface-raised text-foreground">
                         {ANTHROPIC_TIER_LABELS[tier]}
                       </option>
                     ))}
@@ -815,7 +815,7 @@ export default function AgentDetailPage() {
                     <button
                       onClick={() => rollback(v.version)}
                       disabled={rollingBackTo === v.version}
-                      className="text-xs font-medium text-brand-300 transition-colors hover:text-brand-200 disabled:opacity-50"
+                      className="text-xs font-medium text-brand-link transition-colors hover:text-brand-link-hover disabled:opacity-50"
                     >
                       {rollingBackTo === v.version ? "Rolling back…" : "Roll back to this version"}
                     </button>
@@ -929,7 +929,7 @@ export default function AgentDetailPage() {
                         <button
                           onClick={() => resolveConversation(c.id)}
                           disabled={resolvingConversationId === c.id}
-                          className="text-xs font-medium text-brand-300 transition-colors hover:text-brand-200 disabled:opacity-50"
+                          className="text-xs font-medium text-brand-link transition-colors hover:text-brand-link-hover disabled:opacity-50"
                         >
                           {resolvingConversationId === c.id ? "Resolving…" : "Mark resolved"}
                         </button>

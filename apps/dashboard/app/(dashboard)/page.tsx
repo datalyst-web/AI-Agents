@@ -137,7 +137,7 @@ export default function OverviewPage() {
           title="Your agents"
           subtitle={agents ? `${agents.length} configured` : undefined}
           action={
-            <Link href="/agents" className="text-xs font-medium text-brand-300 hover:underline">
+            <Link href="/agents" className="text-xs font-medium text-brand-link hover:underline">
               View all →
             </Link>
           }
@@ -155,7 +155,7 @@ export default function OverviewPage() {
                   {isStaff ? "No agents yet. Create your first AI employee to get started." : "Your AI Setup Team is configuring your agent — check back soon."}
                 </p>
                 {canCreateAgent ? (
-                  <Link href="/agents" className="text-xs font-medium text-brand-300 hover:underline">
+                  <Link href="/agents" className="text-xs font-medium text-brand-link hover:underline">
                     Create an agent →
                   </Link>
                 ) : null}
@@ -168,7 +168,7 @@ export default function OverviewPage() {
                   className="flex items-center justify-between px-5 py-3.5 text-sm transition-colors hover:bg-foreground/[0.03]"
                 >
                   <span className="flex items-center gap-3">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-gradient-soft text-xs font-semibold text-brand-200 ring-1 ring-inset ring-brand-500/20">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-gradient-soft text-xs font-semibold text-brand-link ring-1 ring-inset ring-brand-500/20">
                       {agent.name.slice(0, 1).toUpperCase()}
                     </span>
                     <span className="text-foreground">{agent.name}</span>

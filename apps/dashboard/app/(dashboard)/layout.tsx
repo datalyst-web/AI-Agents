@@ -134,7 +134,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 {active ? (
                   <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-brand-gradient" />
                 ) : null}
-                <Icon className={`h-4 w-4 shrink-0 ${active ? "text-brand-300" : "text-foreground/40 group-hover:text-foreground/70"}`} />
+                <Icon className={`h-4 w-4 shrink-0 ${active ? "text-brand-link" : "text-foreground/40 group-hover:text-foreground/70"}`} />
                 <span className="truncate">{item.label}</span>
               </Link>
             );
@@ -203,9 +203,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           </div>
           <div className="flex items-center gap-3">
             {user.subscriptionTier ? (
-              <span className="hidden items-center gap-1.5 rounded-full bg-brand-500/10 px-3 py-1.5 text-xs font-medium text-brand-200 ring-1 ring-inset ring-brand-500/25 sm:inline-flex">
+              <span className="hidden items-center gap-1.5 rounded-full bg-brand-500/10 px-3 py-1.5 text-xs font-medium text-brand-link ring-1 ring-inset ring-brand-500/25 sm:inline-flex">
                 {PLAN_LABEL[user.subscriptionTier]}
-                {user.subscriptionState === "TRIAL" ? <span className="text-brand-300/70">· Trial</span> : null}
+                {user.subscriptionState === "TRIAL" ? <span className="text-brand-link/70">· Trial</span> : null}
                 {user.subscriptionState === "PAST_DUE" ? <span className="text-warning">· Past due</span> : null}
               </span>
             ) : null}

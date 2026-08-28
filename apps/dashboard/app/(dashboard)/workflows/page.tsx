@@ -177,7 +177,7 @@ export default function WorkflowsPage() {
             {workflows.length === 0 ? (
               <div className="flex flex-col items-center gap-3 px-5 py-12 text-center">
                 <p className="text-sm text-foreground/50">No workflows yet. Automate a follow-up, escalation, or notification.</p>
-                <button onClick={() => setModalOpen(true)} className="text-xs font-medium text-brand-300 hover:underline">
+                <button onClick={() => setModalOpen(true)} className="text-xs font-medium text-brand-link hover:underline">
                   Create your first workflow →
                 </button>
               </div>
@@ -233,7 +233,7 @@ export default function WorkflowsPage() {
               className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
             >
               {TRIGGERS.map((t) => (
-                <option key={t} value={t} className="bg-surface-overlay">
+                <option key={t} value={t} className="bg-surface-overlay text-foreground">
                   {t.replace(/_/g, " ")}
                 </option>
               ))}
@@ -247,7 +247,7 @@ export default function WorkflowsPage() {
               className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
             >
               {ACTION_TYPES.map((t) => (
-                <option key={t} value={t} className="bg-surface-overlay">
+                <option key={t} value={t} className="bg-surface-overlay text-foreground">
                   {t.replace(/_/g, " ")}
                   {ACTIONS_NEEDING_SETUP.has(t) ? " (needs setup)" : ""}
                 </option>
@@ -272,9 +272,9 @@ export default function WorkflowsPage() {
                   onChange={(e) => setNotificationTarget(e.target.value as typeof notificationTarget)}
                   className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
                 >
-                  <option value="tenant_owner" className="bg-surface-overlay">Tenant owner</option>
-                  <option value="tenant_admin" className="bg-surface-overlay">Tenant admin</option>
-                  <option value="staff_fallback" className="bg-surface-overlay">Staff fallback</option>
+                  <option value="tenant_owner" className="bg-surface-overlay text-foreground">Tenant owner</option>
+                  <option value="tenant_admin" className="bg-surface-overlay text-foreground">Tenant admin</option>
+                  <option value="staff_fallback" className="bg-surface-overlay text-foreground">Staff fallback</option>
                 </select>
               </div>
               <div>
@@ -347,9 +347,9 @@ export default function WorkflowsPage() {
                 onChange={(e) => setNotifyTarget(e.target.value as typeof notifyTarget)}
                 className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
               >
-                <option value="tenant_owner" className="bg-surface-overlay">Tenant owner</option>
-                <option value="tenant_admin" className="bg-surface-overlay">Tenant admin</option>
-                <option value="staff_fallback" className="bg-surface-overlay">Staff fallback</option>
+                <option value="tenant_owner" className="bg-surface-overlay text-foreground">Tenant owner</option>
+                <option value="tenant_admin" className="bg-surface-overlay text-foreground">Tenant admin</option>
+                <option value="staff_fallback" className="bg-surface-overlay text-foreground">Staff fallback</option>
               </select>
             </div>
             <div>
@@ -359,8 +359,8 @@ export default function WorkflowsPage() {
                 onChange={(e) => setNotifyChannel(e.target.value as typeof notifyChannel)}
                 className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400"
               >
-                <option value="email" className="bg-surface-overlay">Email</option>
-                <option value="dashboard" className="bg-surface-overlay">Audit log only</option>
+                <option value="email" className="bg-surface-overlay text-foreground">Email</option>
+                <option value="dashboard" className="bg-surface-overlay text-foreground">Audit log only</option>
               </select>
             </div>
           </div>

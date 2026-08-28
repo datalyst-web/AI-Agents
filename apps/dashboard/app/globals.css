@@ -22,6 +22,22 @@
   --color-surface-border: 35 40 55;
   --color-foreground: 255 255 255;
   --color-scheme: dark;
+  /* brand-300/brand-200 — readable on dark, near-invisible on light (a
+     light periwinkle on a near-white surface has ~1.6:1 contrast, well
+     under WCAG AA's 4.5:1) — found live across every link/active-nav/badge
+     using them in light theme. These two adapt per theme instead. */
+  --color-brand-link: 157 179 255; /* brand-300 */
+  --color-brand-link-hover: 195 211 255; /* brand-200 */
+  /* Same problem, same fix, for the four semantic status colors: each was
+     a single fixed value used both as a tinted badge/border color (fine
+     at low opacity in either theme) AND as full-opacity text (error
+     messages, badge labels, StatTile deltas) — which measured ~2-2.8:1 on
+     a light surface, well under AA. Dark values below are the originals;
+     light values are darkened to ~5:1+ while keeping the same hue. */
+  --color-success: 47 191 113;
+  --color-warning: 232 165 61;
+  --color-danger: 229 72 77;
+  --color-info: 74 158 255;
 }
 
 [data-theme="light"] {
@@ -32,6 +48,12 @@
   --color-surface-border: 225 228 238;
   --color-foreground: 15 19 48;
   --color-scheme: light;
+  --color-brand-link: 55 66 214; /* brand-600 — ~8:1 contrast on white */
+  --color-brand-link-hover: 44 51 172; /* brand-700 — darker still, for hover feedback */
+  --color-success: 22 101 52; /* ~5.8:1 on white */
+  --color-warning: 133 77 14; /* ~5.3:1 on white */
+  --color-danger: 153 27 27; /* ~5.3:1 on white */
+  --color-info: 29 78 216; /* ~5:1 on white */
 }
 
 html {
