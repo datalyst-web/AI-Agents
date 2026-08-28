@@ -48,6 +48,11 @@ export const EnvSchema = z.object({
   S3_BUCKET: z.string().default("agents-platform-storage"),
   S3_KEY_PREFIX: z.string().default("chat"),
   AWS_REGION: z.string().default("us-east-1"),
+  // Set only when using an S3-compatible provider other than AWS itself
+  // (e.g. Cloudflare R2's account-scoped endpoint,
+  // https://<account_id>.r2.cloudflarestorage.com) — leave unset for
+  // real AWS S3, which needs no endpoint override.
+  S3_ENDPOINT: z.string().optional(),
 
   SQS_KNOWLEDGE_INGEST_QUEUE_URL: z.string().optional(),
   SQS_WORKFLOW_RUN_QUEUE_URL: z.string().optional(),

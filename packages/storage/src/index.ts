@@ -10,12 +10,23 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
  */
 export class ObjectStore {
   private client: S3Client;
+  private readonly isR2: boolean;
   constructor(
     private bucket: string,
     private productPrefix: string,
     region: string,
+    // When set, points the client at an S3-compatible provider other than
+    // AWS (e.g. Cloudflare R2's account-scoped endpoint) instead of real
+    // S3. R2 requires path-style addressing and has no concept of region
+    // beyond the literal string "auto" — AWS S3 itself is untouched when
+    // this is left unset.
+    endpoint?: string,
   ) {
-    this.client = new S3Client({ region });
+    this.isR2 = Boolean(endpoint);
+    this.client = new S3Client({
+      region: endpoint ? "auto" : region,
+      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+    });
   }
 
   tenantKey(tenantId: string, ...parts: string[]): string {
@@ -24,7 +35,15 @@ export class ObjectStore {
 
   async putObject(key: string, body: Buffer, contentType: string): Promise<void> {
     await this.client.send(
-      new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: body, ContentType: contentType, ServerSideEncryption: "aws:kms" }),
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+        // R2 doesn't support AWS-KMS-based SSE (and encrypts at rest by
+        // default regardless) — this parameter is AWS-S3-only.
+        ...(this.isR2 ? {} : { ServerSideEncryption: "aws:kms" as const }),
+      }),
     );
   }
 

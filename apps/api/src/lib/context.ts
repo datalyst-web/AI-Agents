@@ -56,7 +56,7 @@ export function buildAppContext(): AppContext {
     preferSqs: Boolean(env.SQS_KNOWLEDGE_INGEST_QUEUE_URL),
   });
 
-  const objectStore = new ObjectStore(env.S3_BUCKET, env.S3_KEY_PREFIX, env.AWS_REGION);
+  const objectStore = new ObjectStore(env.S3_BUCKET, env.S3_KEY_PREFIX, env.AWS_REGION, env.S3_ENDPOINT);
 
   const email = createEmailProviderFromEnv({
     SMTP_HOST: env.SMTP_HOST,
