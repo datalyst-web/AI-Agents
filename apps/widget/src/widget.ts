@@ -17,6 +17,7 @@ interface WidgetConfig {
   name: string;
   greeting: string;
   avatarUrl?: string;
+  logoUrl?: string | null;
   tone: string;
   theme?: WidgetTheme;
   widgetToken: string;
@@ -190,8 +191,12 @@ interface ChatResponse {
     config = (await resp.json()) as WidgetConfig;
     applyTheme(config.theme);
     nameEl.textContent = config.name;
-    if (config.avatarUrl) {
-      avatarEl.src = config.avatarUrl;
+    // The tenant's own white-label logo wins when set — consistent
+    // branding across every surface beats a per-agent avatar that's
+    // almost never actually configured.
+    const iconUrl = config.logoUrl || config.avatarUrl;
+    if (iconUrl) {
+      avatarEl.src = iconUrl;
       avatarEl.hidden = false;
       avatarFallback.hidden = true;
     }

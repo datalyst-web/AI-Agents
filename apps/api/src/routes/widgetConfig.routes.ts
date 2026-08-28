@@ -42,6 +42,11 @@ export async function registerWidgetConfigRoutes(app: FastifyInstance, ctx: AppC
       name: personality.name,
       greeting: personality.greeting,
       avatarUrl: personality.avatarUrl,
+      // The tenant's own white-label logo (set via Managed Setup) — the
+      // widget prefers this over avatarUrl for the header icon, since
+      // most agents never get a per-agent avatar set but every branded
+      // client has one logo that should show consistently everywhere.
+      logoUrl: tenant.logoObjectKey ? `${request.protocol}://${request.hostname}/v1/tenants/${tenant.id}/branding/logo` : null,
       tone: personality.tone,
       // Same value the dashboard's own chrome uses for this tenant — one
       // setting, two surfaces (CLAUDE.md: white-label-safe, no infra

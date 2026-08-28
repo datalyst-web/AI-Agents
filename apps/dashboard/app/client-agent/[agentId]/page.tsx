@@ -18,6 +18,7 @@ interface WidgetConfig {
   name: string;
   greeting: string;
   avatarUrl?: string;
+  logoUrl?: string | null;
   tone: string;
   theme?: "DARK" | "LIGHT";
   widgetToken: string;
@@ -117,9 +118,9 @@ export default function ClientAgentPage() {
 
       <header className="relative flex items-center gap-3 border-b border-surface-border px-5 py-4 sm:px-8">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-gradient shadow-glow">
-          {config?.avatarUrl ? (
+          {config?.logoUrl || config?.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={config.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+            <img src={config.logoUrl || config.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
           ) : (
             <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
               <path d="M2 8a6 6 0 1 1 6 6" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
