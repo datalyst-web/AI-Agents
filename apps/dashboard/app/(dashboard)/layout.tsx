@@ -81,6 +81,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   // tenant in scope at all (staff's own Managed Setup view).
   const sidebarLogoUrl = user.logoUrl ?? user.platformLogoUrl;
   const sidebarBrandName = user.brandName ?? user.platformBrandName;
+  // Staff's own home (no client in view yet) gets a fixed, neutral
+  // identity — "Client Console" would be misleading here since there's
+  // no client currently in scope. The moment "Manage this client" starts
+  // an impersonation session, sidebarBrandName/sidebarLogoUrl switch to
+  // that client's own branding (or the unbranded-client default below).
+  const isOwnStaffHome = isStaff && !impersonation;
 
   return (
     <div className="flex min-h-screen">
@@ -106,7 +112,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               {sidebarBrandName ?? "Chat Agent"}
             </span>
             <span className="block text-[10px] font-medium uppercase tracking-wider text-foreground/35">
-              {sidebarBrandName ? "AI Console" : "Client Console"}
+              {sidebarBrandName ? "AI Console" : isOwnStaffHome ? "Console" : "Client Console"}
             </span>
           </div>
         </div>
