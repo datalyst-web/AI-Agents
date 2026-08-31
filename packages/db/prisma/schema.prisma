@@ -98,6 +98,7 @@ model Tenant {
   workflowRuns              WorkflowRun[]
   usageRecords              UsageRecord[]
   billingLineItems          BillingLineItem[]
+  paynowPayments            PaynowPayment[]
   usageLimits               UsageLimits?
   auditLogEntries           AuditLogEntry[]
   impersonationSessions     StaffImpersonationSession[]
@@ -732,6 +733,44 @@ model BillingLineItem {
 
   @@index([tenantId])
   @@map("billing_line_items")
+  @@schema("chat")
+}
+
+enum PaynowPaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+  FAILED
+
+  @@schema("chat")
+}
+
+// One row per checkout attempt (Paynow's `reference` field, which we
+// generate and Paynow echoes back on every callback/poll, is how an
+// inbound webhook or poll response gets correlated back to what it was
+// for). A BillingLineItem is only ever created once a payment actually
+// reaches PAID — this row exists so a customer bouncing off Paynow's
+// hosted page without paying, or a webhook that never arrives, doesn't
+// silently vanish: it's a real row an admin can see and reconcile.
+model PaynowPayment {
+  id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String              @map("tenant_id") @db.Uuid
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reference        String              @unique
+  paynowReference  String?             @map("paynow_reference")
+  pollUrl          String?             @map("poll_url")
+  skuType          BillingSkuType      @map("sku_type")
+  description      String
+  amountUsd        Decimal             @map("amount_usd") @db.Decimal(12, 2)
+  status           PaynowPaymentStatus @default(PENDING)
+  subscriptionTier SubscriptionTier?   @map("subscription_tier")
+  periodStart      DateTime?           @map("period_start")
+  periodEnd        DateTime?           @map("period_end")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@map("paynow_payments")
   @@schema("chat")
 }
 

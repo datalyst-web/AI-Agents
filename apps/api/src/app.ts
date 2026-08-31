@@ -23,7 +23,7 @@ import { registerUsageRoutes } from "./routes/usage.routes.js";
 import { registerApprovalRoutes } from "./routes/approvals.routes.js";
 import { registerAuditRoutes } from "./routes/audit.routes.js";
 import { registerMemoryRoutes, registerPublicMemoryRoutes } from "./routes/memory.routes.js";
-import { registerBillingRoutes } from "./routes/billing.routes.js";
+import { registerPaynowBillingRoutes } from "./routes/paynowBilling.routes.js";
 
 export async function buildApp(ctx: AppContext = buildAppContext()) {
   const app = Fastify({
@@ -74,7 +74,7 @@ export async function buildApp(ctx: AppContext = buildAppContext()) {
   await registerApprovalRoutes(app, ctx);
   await registerAuditRoutes(app, ctx);
   await registerMemoryRoutes(app, ctx);
-  await registerBillingRoutes(app, ctx); // server-to-server webhook — CORS is moot, no browser involved
+  await registerPaynowBillingRoutes(app, ctx); // includes a server-to-server webhook — CORS is moot there, no browser involved
 
   app.setErrorHandler((err: FastifyError, request, reply) => {
     request.log.error(err);

@@ -133,8 +133,16 @@ export const EnvSchema = z.object({
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 
-  BILLING_PROVIDER_API_KEY: z.string().optional(),
-  BILLING_WEBHOOK_SECRET: z.string().optional(),
+  // Paynow (paynow.co.zw) — Zimbabwe's payment gateway, used instead of
+  // Stripe for this deployment. No client secret pair like OAuth — a
+  // single Integration ID + Integration Key issued per Paynow merchant
+  // account, used both to sign outbound checkout requests and to verify
+  // the authenticity of inbound result-URL webhook calls (see
+  // apps/api/src/lib/paynow.ts). Replaces the old generic
+  // BILLING_PROVIDER_API_KEY/BILLING_WEBHOOK_SECRET placeholders, which
+  // were never wired to a real provider.
+  PAYNOW_INTEGRATION_ID: z.string().optional(),
+  PAYNOW_INTEGRATION_KEY: z.string().optional(),
 
   // Explicit, documented escape hatch for a lean launch on a platform
   // without AWS (Railway/Vercel/etc.) — CLAUDE.md's default expectation is

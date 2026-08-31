@@ -25,6 +25,8 @@ type ExtendedAuditAction =
   | "channel_disconnected"
   | "integration_connected"
   | "integration_disconnected"
+  | "billing_checkout_initiated"
+  | "billing_payment_confirmed"
   | "password_reset_requested"
   | "password_reset_completed";
 

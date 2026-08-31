@@ -323,6 +323,32 @@ export const api = {
   disconnectBusinessIntegration: (tenantId: string, agentId: string, vendor: string) =>
     apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/integrations/${vendor}/disconnect`, { method: "POST" }),
 
+  getBillingPlans: (tenantId: string) =>
+    apiFetch<{
+      currentTier: "STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE";
+      currentState: "ACTIVE" | "TRIAL" | "PAST_DUE" | "SUSPENDED" | "CANCELLED";
+      plans: { tier: "STARTER" | "GROWTH" | "SCALE"; priceUsd: string }[];
+      paynowConfigured: boolean;
+    }>(`/v1/tenants/${tenantId}/billing/plans`),
+  listPaynowPayments: (tenantId: string) =>
+    apiFetch<
+      { id: string; reference: string; description: string; amountUsd: string; status: "PENDING" | "PAID" | "CANCELLED" | "FAILED"; createdAt: string }[]
+    >(`/v1/tenants/${tenantId}/billing/payments`),
+  getPaynowPayment: (tenantId: string, reference: string) =>
+    apiFetch<{ reference: string; status: "PENDING" | "PAID" | "CANCELLED" | "FAILED"; amountUsd: string; description: string }>(
+      `/v1/tenants/${tenantId}/billing/payments/${reference}`,
+    ),
+  startPaynowCheckout: (tenantId: string, tier: "STARTER" | "GROWTH" | "SCALE") =>
+    apiFetch<{ reference: string; redirectUrl: string }>(`/v1/tenants/${tenantId}/billing/checkout`, {
+      method: "POST",
+      body: JSON.stringify({ tier }),
+    }),
+  startPaynowMobileCheckout: (tenantId: string, tier: "STARTER" | "GROWTH" | "SCALE", phone: string, method: "ecocash" | "onemoney") =>
+    apiFetch<{ reference: string; instructions: string }>(`/v1/tenants/${tenantId}/billing/checkout/mobile`, {
+      method: "POST",
+      body: JSON.stringify({ tier, phone, method }),
+    }),
+
   getUsageSummary: (tenantId: string) => apiFetch(`/v1/tenants/${tenantId}/usage/summary`),
   getUsageDaily: (tenantId: string, days = 14) =>
     apiFetch<{ date: string; inputTokens: number; outputTokens: number; totalTokens: number }[]>(
