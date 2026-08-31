@@ -68,6 +68,16 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
+/* The ambient mesh above reads as a faint depth cue on the near-black dark
+   surface (12% blue / 10% magenta over near-black is barely perceptible),
+   but the identical blobs over a near-white light surface show up as
+   visible colored smears — busy rather than premium. Light theme stays
+   flat and basic instead; every other accent color (badges, buttons,
+   brand links) is untouched, so the palette itself doesn't change, just
+   this one decorative wash. */
+[data-theme="light"] body {
+  background-image: none;
+}
 
 ::selection {
   background: theme("colors.brand.500 / 35%");
