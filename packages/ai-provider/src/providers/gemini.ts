@@ -220,7 +220,15 @@ export class GeminiProvider implements AIProvider {
   async healthCheck(): Promise<HealthCheckResult> {
     const started = Date.now();
     try {
-      const model = this.client.getGenerativeModel({ model: "gemini-2.5-flash" });
+      // Keep in sync with packages/config's GEMINI_MODEL_ID default — this
+      // package doesn't depend on @chat-agent/config (providers stay
+      // model-id-agnostic per CLAUDE.md's AIProvider abstraction), so
+      // there's no single source of truth to read from here. Gemini
+      // retires model ids for new callers without much notice (this was
+      // last found broken when "gemini-2.5-flash" got retired), so if this
+      // health check starts failing, verify the id is still live before
+      // assuming the API key or provider itself is the problem.
+      const model = this.client.getGenerativeModel({ model: "gemini-3.5-flash-lite" });
       await model.countTokens("healthcheck");
       return { healthy: true, latencyMs: Date.now() - started, checkedAt: new Date().toISOString() };
     } catch (err) {
