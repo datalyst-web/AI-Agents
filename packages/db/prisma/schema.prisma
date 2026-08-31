@@ -106,6 +106,7 @@ model Tenant {
   crossAgentMemoryGrants    CrossAgentMemoryGrant[]
   memoryForgetRequests      MemoryForgetRequest[]
   pendingHumanApprovals     PendingHumanApproval[]
+  channelConnections        ChannelConnection[]
 
   @@map("tenants")
   @@schema("chat")
@@ -216,6 +217,7 @@ model Agent {
   conversations   Conversation[]
   tools           ToolDefinition[]
   workflows       WorkflowDefinition[]
+  channelConnections ChannelConnection[]
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -344,6 +346,10 @@ enum ConversationChannel {
   WIDGET
   STANDALONE_URL
   API
+  TELEGRAM
+  WHATSAPP
+  FACEBOOK_MESSENGER
+  INSTAGRAM
 
   @@schema("chat")
 }
@@ -778,5 +784,70 @@ model PlatformSettings {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   @@map("platform_settings")
+  @@schema("chat")
+}
+
+// ---------------------------------------------------------------------------
+// Channel integrations — deployment methods beyond the website widget /
+// standalone URL (CLAUDE.md Deployment Surfaces). A client connects their
+// own channel account (Telegram bot, WhatsApp number) to a specific agent;
+// staff never do this on the client's behalf since it requires credentials
+// only the client has (their bot token, their phone number).
+// ---------------------------------------------------------------------------
+
+enum ChannelType {
+  TELEGRAM
+  WHATSAPP
+  FACEBOOK_MESSENGER
+  INSTAGRAM
+
+  @@schema("chat")
+}
+
+enum ChannelConnectionStatus {
+  PENDING
+  CONNECTED
+  DISCONNECTED
+  ERROR
+
+  @@schema("chat")
+}
+
+model ChannelConnection {
+  id       String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId String      @map("tenant_id") @db.Uuid
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId  String      @map("agent_id") @db.Uuid
+  agent    Agent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  channel  ChannelType
+  status   ChannelConnectionStatus @default(PENDING)
+  // Public-safe label for display (bot username, phone number) — never
+  // the secret credential itself.
+  externalLabel String? @map("external_label")
+  // The provider-side id this connection routes on: Telegram uses the
+  // per-connection webhook URL itself for routing (unset here), but
+  // Meta's Messenger/Instagram/WhatsApp webhook is ONE shared platform
+  // URL across every tenant's connections — an inbound event only
+  // carries a Page/phone-number/IG-account id, so that id has to be
+  // looked up here to find which tenant+agent it belongs to.
+  externalId String? @map("external_id")
+  // AES-256-GCM encrypted blob (bot token, access token) — see
+  // apps/api/src/lib/channelCrypto.ts. Never returned to any client.
+  encryptedCredential String? @map("encrypted_credential")
+  // Per-connection shared secret Telegram echoes back on every webhook
+  // call, checked against the request header — without this, anyone who
+  // guesses/enumerates a connection id could POST fake "customer"
+  // messages straight into the agent loop. Meta channels instead verify
+  // the platform-wide X-Hub-Signature-256 header (see channels.routes.ts).
+  webhookSecret String? @map("webhook_secret")
+  errorMessage  String? @map("error_message")
+  connectedAt   DateTime? @map("connected_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@unique([tenantId, agentId, channel])
+  @@unique([channel, externalId])
+  @@index([tenantId])
+  @@map("channel_connections")
   @@schema("chat")
 }

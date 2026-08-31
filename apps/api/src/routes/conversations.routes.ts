@@ -94,14 +94,26 @@ export async function registerConversationRoutes(app: FastifyInstance, ctx: AppC
     },
   );
 
-  /** Aggregate analytics per CLAUDE.md's Conversation Analytics & Quality section. */
+  /**
+   * Aggregate analytics per CLAUDE.md's Conversation Analytics & Quality
+   * section — "did the conversation actually work," not just usage/cost.
+   * Every figure here is computed straight from real Conversation/Message
+   * rows (never estimated or invented) — resolutionRate/escalationRate/
+   * abandonmentRate/handoffRate read directly off ConversationOutcome and
+   * the handoffRequested flag; byChannel and byBusinessResult surface two
+   * fields (channel, businessResult) that were being written on every
+   * conversation but never actually surfaced anywhere until now.
+   */
   app.get(
     "/v1/tenants/:tenantId/agents/:agentId/analytics",
     { preHandler: [app.authenticate, requireTenantMatch(), verifyActiveImpersonation(ctx.prisma), requirePermission("analytics:read")] },
     async (request) => {
       const { agentId } = request.params as { agentId: string };
       return withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
-        const conversations = await tx.conversation.findMany({ where: { tenantId: request.tenantCtx!.tenantId, agentId } });
+        const conversations = await tx.conversation.findMany({
+          where: { tenantId: request.tenantCtx!.tenantId, agentId },
+          include: { _count: { select: { messages: true } } },
+        });
         const total = conversations.length;
         const byOutcome = conversations.reduce<Record<string, number>>((acc, c) => {
           acc[c.outcome] = (acc[c.outcome] ?? 0) + 1;
@@ -111,10 +123,50 @@ export async function registerConversationRoutes(app: FastifyInstance, ctx: AppC
           acc[c.dropOffPoint] = (acc[c.dropOffPoint] ?? 0) + 1;
           return acc;
         }, {});
-        const avgSentiment =
-          conversations.flatMap((c) => c.sentimentTrend).reduce((a, b) => a + b, 0) /
-          Math.max(1, conversations.flatMap((c) => c.sentimentTrend).length);
-        return { total, byOutcome, byDropOff, avgSentiment };
+        const byChannel = conversations.reduce<Record<string, number>>((acc, c) => {
+          acc[c.channel] = (acc[c.channel] ?? 0) + 1;
+          return acc;
+        }, {});
+        const byBusinessResult = conversations.reduce<Record<string, number>>((acc, c) => {
+          if (!c.businessResult) return acc;
+          acc[c.businessResult] = (acc[c.businessResult] ?? 0) + 1;
+          return acc;
+        }, {});
+        const allSentiment = conversations.flatMap((c) => c.sentimentTrend);
+        const avgSentiment = allSentiment.reduce((a, b) => a + b, 0) / Math.max(1, allSentiment.length);
+
+        // Rates are of TOTAL conversations (including still-IN_PROGRESS
+        // ones) rather than only ended ones — an agent that never resolves
+        // anything should show a low resolution rate, not an artificially
+        // inflated one from excluding its own failures.
+        const resolutionRate = total > 0 ? (byOutcome.RESOLVED ?? 0) / total : 0;
+        const escalationRate = total > 0 ? (byOutcome.ESCALATED_TO_HUMAN ?? 0) / total : 0;
+        const abandonmentRate = total > 0 ? (byOutcome.ABANDONED ?? 0) / total : 0;
+        const handoffRequestedCount = conversations.filter((c) => c.handoffRequested).length;
+        const handoffRate = total > 0 ? handoffRequestedCount / total : 0;
+
+        const avgMessagesPerConversation = total > 0 ? conversations.reduce((sum, c) => sum + c._count.messages, 0) / total : 0;
+
+        const ended = conversations.filter((c) => c.endedAt);
+        const avgDurationSeconds =
+          ended.length > 0
+            ? ended.reduce((sum, c) => sum + (c.endedAt!.getTime() - c.startedAt.getTime()) / 1000, 0) / ended.length
+            : null;
+
+        return {
+          total,
+          byOutcome,
+          byDropOff,
+          byChannel,
+          byBusinessResult,
+          avgSentiment,
+          resolutionRate,
+          escalationRate,
+          abandonmentRate,
+          handoffRate,
+          avgMessagesPerConversation,
+          avgDurationSeconds,
+        };
       });
     },
   );

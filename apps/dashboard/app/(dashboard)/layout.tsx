@@ -27,6 +27,11 @@ const TENANT_NAV = [
   { href: "/", label: "Overview", icon: IconGrid },
   { href: "/agents", label: "Agents", icon: IconBot },
   { href: "/tools", label: "Tools & Integrations", icon: IconPlug },
+  // Deployment channels (Telegram/WhatsApp/Messenger/Instagram) — unlike
+  // Tools above, connecting these needs the CLIENT's own external
+  // credentials, so channel:connect is deliberately granted to client
+  // roles too (see shared-types/rbac.ts) and this stays in CLIENT_NAV.
+  { href: "/integrations", label: "Integrations", icon: IconChannels },
   { href: "/workflows", label: "Workflows", icon: IconFlow },
   { href: "/approvals", label: "Approvals", icon: IconCheck },
   { href: "/billing", label: "Billing & Usage", icon: IconCard },
@@ -35,6 +40,7 @@ const TENANT_NAV = [
 const CLIENT_NAV = [
   { href: "/", label: "Overview", icon: IconGrid },
   { href: "/agents", label: "Agents", icon: IconBot },
+  { href: "/integrations", label: "Integrations", icon: IconChannels },
   { href: "/approvals", label: "Approvals", icon: IconCheck },
   { href: "/billing", label: "Billing & Usage", icon: IconCard },
   // Kept for clients on purpose (not an "AI console") — CLAUDE.md requires
@@ -245,6 +251,18 @@ function IconPlug({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 20 20" fill="none">
       <path d="M7 3v4M13 3v4M5 7h10v3a5 5 0 0 1-10 0V7Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M10 15v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconChannels({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none">
+      <path
+        d="M4 5.5A1.5 1.5 0 0 1 5.5 4h9A1.5 1.5 0 0 1 16 5.5v6A1.5 1.5 0 0 1 14.5 13H8l-3 2.5V13H5.5A1.5 1.5 0 0 1 4 11.5v-6Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

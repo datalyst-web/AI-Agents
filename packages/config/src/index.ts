@@ -76,6 +76,38 @@ export const EnvSchema = z.object({
   SMTP_PASSWORD: z.string().optional(),
   SMTP_FROM_ADDRESS: z.string().optional(),
   DASHBOARD_BASE_URL: z.string().default("http://localhost:3000"),
+  // This service's own public URL — needed to register outbound webhooks
+  // with third-party channel providers (Telegram's setWebhook, etc.),
+  // which must point back at us over the public internet, not localhost.
+  API_PUBLIC_BASE_URL: z.string().default("http://localhost:4000"),
+
+  // Per-tenant channel credentials (bot tokens, etc.) are encrypted at
+  // rest with this key (AES-256-GCM) rather than routed through
+  // SecretsProvider — that abstraction is AWS Secrets Manager-shaped and
+  // priced per-secret, unsuitable for potentially thousands of small
+  // per-tenant connection secrets. 32 raw bytes, base64-encoded.
+  CHANNEL_CREDENTIALS_ENCRYPTION_KEY: z.string().optional(),
+
+  // WhatsApp/Messenger/Instagram all run through one Meta App (the
+  // "shared platform account" model — each client's own Page/phone
+  // number/IG account connects under it, never a separate app per
+  // client). META_APP_SECRET signs every inbound webhook
+  // (X-Hub-Signature-256) — without verifying it, anyone who discovers
+  // the shared webhook URL could inject fake "customer" messages for
+  // any connected tenant. META_WEBHOOK_VERIFY_TOKEN is the one-time
+  // value Meta's dashboard "Verify and Save" step checks when you
+  // register the webhook URL.
+  META_APP_SECRET: z.string().optional(),
+  META_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
+
+  // "Sign in with Google" on the login page (existing accounts only — this
+  // never creates a tenant, it just verifies a Google-issued identity
+  // against an email that already has a password-based account). Same
+  // value must also be set as the dashboard's NEXT_PUBLIC_GOOGLE_CLIENT_ID
+  // so the Google Identity Services button renders with a matching client.
+  // No client secret needed — verifying an ID token is a public-key
+  // operation (google-auth-library fetches Google's JWKS itself).
+  GOOGLE_CLIENT_ID: z.string().optional(),
 
   API_PORT: z.coerce.number().default(4000),
   API_CORS_ORIGINS: z

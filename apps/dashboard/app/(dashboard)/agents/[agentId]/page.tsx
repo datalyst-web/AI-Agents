@@ -41,7 +41,15 @@ interface Analytics {
   total: number;
   byOutcome: Record<string, number>;
   byDropOff: Record<string, number>;
+  byChannel: Record<string, number>;
+  byBusinessResult: Record<string, number>;
   avgSentiment: number;
+  resolutionRate: number;
+  escalationRate: number;
+  abandonmentRate: number;
+  handoffRate: number;
+  avgMessagesPerConversation: number;
+  avgDurationSeconds: number | null;
 }
 interface DailyAnalytics {
   date: string;
@@ -92,6 +100,14 @@ const KNOWN_ERROR_MESSAGES: Record<string, string> = {
 function friendlyError(err: unknown, fallback: string): string {
   if (err instanceof ApiError) return KNOWN_ERROR_MESSAGES[err.message] ?? err.message;
   return fallback;
+}
+
+function formatDuration(totalSeconds: number | null): string {
+  if (totalSeconds === null) return "—";
+  const minutes = Math.round(totalSeconds / 60);
+  if (minutes < 1) return "<1m";
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
 function CopyField({ value }: { value: string }) {
@@ -948,9 +964,13 @@ export default function AgentDetailPage() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <StatTile label="Total conversations" value={analytics.total} />
-              <StatTile label="Resolved" value={analytics.byOutcome.RESOLVED ?? 0} deltaTone="positive" />
-              <StatTile label="Escalated" value={analytics.byOutcome.ESCALATED_TO_HUMAN ?? 0} deltaTone="negative" />
+              <StatTile label="Resolution rate" value={`${Math.round(analytics.resolutionRate * 100)}%`} deltaTone="positive" />
+              <StatTile label="Escalation rate" value={`${Math.round(analytics.escalationRate * 100)}%`} deltaTone="negative" />
+              <StatTile label="Abandonment rate" value={`${Math.round(analytics.abandonmentRate * 100)}%`} deltaTone="negative" />
+              <StatTile label="Handoff rate" value={`${Math.round(analytics.handoffRate * 100)}%`} />
               <StatTile label="Avg sentiment" value={analytics.avgSentiment.toFixed(2)} />
+              <StatTile label="Avg messages / conversation" value={analytics.avgMessagesPerConversation.toFixed(1)} />
+              <StatTile label="Avg conversation length" value={formatDuration(analytics.avgDurationSeconds)} />
             </div>
 
             <Card>
@@ -1009,14 +1029,50 @@ export default function AgentDetailPage() {
                   )}
                 </CardBody>
               </Card>
+              <Card>
+                <CardHeader title="Channel" subtitle="Where these conversations came in." />
+                <CardBody>
+                  {Object.keys(analytics.byChannel ?? {}).length === 0 ? (
+                    <p className="py-4 text-center text-sm text-foreground/40">No conversations yet.</p>
+                  ) : (
+                    <BarBreakdown
+                      items={Object.entries(analytics.byChannel).map(([channel, count]) => ({
+                        label: channel.replace(/_/g, " ").toLowerCase(),
+                        value: count,
+                        tone: "neutral",
+                      }))}
+                    />
+                  )}
+                </CardBody>
+              </Card>
+              <Card>
+                <CardHeader title="Business results" subtitle="Leads qualified, appointments booked, tickets created — whatever your workflows record." />
+                <CardBody>
+                  {Object.keys(analytics.byBusinessResult ?? {}).length === 0 ? (
+                    <p className="py-4 text-center text-sm text-foreground/40">No business outcomes recorded yet.</p>
+                  ) : (
+                    <BarBreakdown
+                      items={Object.entries(analytics.byBusinessResult).map(([result, count]) => ({
+                        label: result.replace(/_/g, " ").toLowerCase(),
+                        value: count,
+                        tone: "success",
+                      }))}
+                    />
+                  )}
+                </CardBody>
+              </Card>
             </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <StatTile label="Total conversations" value="—" />
-            <StatTile label="Resolved" value="—" />
-            <StatTile label="Escalated" value="—" />
+            <StatTile label="Resolution rate" value="—" />
+            <StatTile label="Escalation rate" value="—" />
+            <StatTile label="Abandonment rate" value="—" />
+            <StatTile label="Handoff rate" value="—" />
             <StatTile label="Avg sentiment" value="—" />
+            <StatTile label="Avg messages / conversation" value="—" />
+            <StatTile label="Avg conversation length" value="—" />
           </div>
         )
       ) : null}

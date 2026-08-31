@@ -2,12 +2,15 @@ import { randomUUID, randomBytes, createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
+import { OAuth2Client } from "google-auth-library";
 import { withPlatformContext, withTenant } from "@chat-agent/db";
 import type { AppContext } from "../lib/context.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { env } from "../env.js";
 
 const LoginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
+const GoogleLoginSchema = z.object({ credential: z.string().min(20) });
+const googleClient = env.GOOGLE_CLIENT_ID ? new OAuth2Client(env.GOOGLE_CLIENT_ID) : null;
 const SignupSchema = z.object({
   tenantName: z.string().min(1).max(120),
   email: z.string().email(),
@@ -96,6 +99,52 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       tenantId: user.tenantId ?? undefined,
       role: user.role,
     });
+    reply.send({ token, user: { id: user.id, email: user.email, role: user.role, tenantId: user.tenantId } });
+  });
+
+  /**
+   * "Sign in with Google" — login only, deliberately never a signup path.
+   * The dashboard's Google Identity Services button hands us a signed ID
+   * token (a "credential") directly from Google; we verify it server-side
+   * (signature, audience, issuer, expiry — all handled by
+   * google-auth-library against Google's own public keys) and then treat
+   * a verified email exactly like a successful password login would. If
+   * no account exists yet for that email, we say so rather than silently
+   * creating a tenant — Google identity says "this really is
+   * you@example.com," not "you're authorized to create a new business
+   * account here."
+   */
+  app.post("/v1/auth/google", async (request, reply) => {
+    if (!googleClient || !env.GOOGLE_CLIENT_ID) {
+      reply.code(501).send({ error: "google_signin_not_configured" });
+      return;
+    }
+    const body = GoogleLoginSchema.parse(request.body);
+
+    let email: string;
+    try {
+      const ticket = await googleClient.verifyIdToken({ idToken: body.credential, audience: env.GOOGLE_CLIENT_ID });
+      const payload = ticket.getPayload();
+      if (!payload?.email || !payload.email_verified) {
+        reply.code(401).send({ error: "google_email_unverified" });
+        return;
+      }
+      email = payload.email;
+    } catch {
+      reply.code(401).send({ error: "invalid_google_credential" });
+      return;
+    }
+
+    const user = await withPlatformContext(ctx.prisma, (tx) => tx.user.findUnique({ where: { email } }));
+    if (!user || !user.isActive) {
+      reply.code(404).send({
+        error: "no_account_for_email",
+        message: `No account found for ${email}. Sign up first, then Google sign-in will work for this email.`,
+      });
+      return;
+    }
+
+    const token = await reply.jwtSign({ sub: user.id, tenantId: user.tenantId ?? undefined, role: user.role });
     reply.send({ token, user: { id: user.id, email: user.email, role: user.role, tenantId: user.tenantId } });
   });
 

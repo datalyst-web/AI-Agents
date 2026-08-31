@@ -1,17 +1,38 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
+import Script from "next/script";
 import { Button } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 
+// Baked in at build time (Vercel env), same pattern as NEXT_PUBLIC_API_BASE_URL
+// elsewhere in this app — must match the API's GOOGLE_CLIENT_ID exactly, since
+// the backend verifies the token's audience against its own copy of this id.
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: { client_id: string; callback: (response: { credential: string }) => void }) => void;
+          renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
+        };
+      };
+    };
+  }
+}
+
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [googleScriptLoaded, setGoogleScriptLoaded] = useState(false);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -26,8 +47,37 @@ export default function LoginPage() {
     }
   }
 
+  useEffect(() => {
+    if (!googleScriptLoaded || !GOOGLE_CLIENT_ID || !googleButtonRef.current || !window.google) return;
+    window.google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: async (response) => {
+        setBusy(true);
+        setError(null);
+        try {
+          await loginWithGoogle(response.credential);
+        } catch (err) {
+          setError(err instanceof ApiError ? err.message : "Google sign-in failed.");
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
+    window.google.accounts.id.renderButton(googleButtonRef.current, {
+      theme: "filled_black",
+      size: "large",
+      shape: "pill",
+      width: 296,
+      text: "signin_with",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleScriptLoaded]);
+
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+      {GOOGLE_CLIENT_ID ? (
+        <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onLoad={() => setGoogleScriptLoaded(true)} />
+      ) : null}
       <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-brand-gradient opacity-20 blur-3xl" />
       <div className="relative w-full max-w-sm animate-fade-up">
         <div className="mb-8 text-center">
@@ -42,41 +92,54 @@ export default function LoginPage() {
         </div>
 
         <div className="rounded-xl3 bg-brand-gradient-soft p-px shadow-card">
-          <form onSubmit={onSubmit} className="space-y-3.5 rounded-[calc(1.75rem-1px)] bg-surface-raised/95 p-6 backdrop-blur">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-white/60">Email</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
-              />
-            </div>
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label className="block text-xs font-medium text-white/60">Password</label>
-                <Link href="/forgot-password" className="text-xs font-medium text-brand-300 hover:underline">
-                  Forgot password?
-                </Link>
+          <div className="space-y-3.5 rounded-[calc(1.75rem-1px)] bg-surface-raised/95 p-6 backdrop-blur">
+            <form onSubmit={onSubmit} className="space-y-3.5">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-white/60">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+                />
               </div>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
-              />
-            </div>
-            {error ? <p className="text-xs text-danger">{error}</p> : null}
-            <Button type="submit" disabled={busy} className="w-full">
-              {busy ? "Signing in..." : "Sign in"}
-            </Button>
-          </form>
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="block text-xs font-medium text-white/60">Password</label>
+                  <Link href="/forgot-password" className="text-xs font-medium text-brand-link hover:underline">
+                    Forgot password?
+                  </Link>
+                </div>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+                />
+              </div>
+              {error ? <p className="text-xs text-danger">{error}</p> : null}
+              <Button type="submit" disabled={busy} className="w-full">
+                {busy ? "Signing in..." : "Sign in"}
+              </Button>
+            </form>
+
+            {GOOGLE_CLIENT_ID ? (
+              <>
+                <div className="flex items-center gap-3 pt-1">
+                  <div className="h-px flex-1 bg-white/10" />
+                  <span className="text-xs text-white/40">or</span>
+                  <div className="h-px flex-1 bg-white/10" />
+                </div>
+                <div ref={googleButtonRef} className="flex justify-center" />
+              </>
+            ) : null}
+          </div>
         </div>
         <p className="mt-5 text-center text-xs text-white/40">
           No account?{" "}
-          <Link href="/signup" className="font-medium text-brand-300 hover:underline">
+          <Link href="/signup" className="font-medium text-brand-link hover:underline">
             Start your trial
           </Link>
         </p>

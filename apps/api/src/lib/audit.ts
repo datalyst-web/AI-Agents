@@ -21,6 +21,8 @@ type ExtendedAuditAction =
   | "tenant_created_by_staff"
   | "tenant_cancelled_by_staff"
   | "tenant_reactivated_by_staff"
+  | "channel_connected"
+  | "channel_disconnected"
   | "password_reset_requested"
   | "password_reset_completed";
 

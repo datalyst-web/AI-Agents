@@ -41,6 +41,11 @@ export const PermissionSchema = z.enum([
   // Tools & integrations
   "tool:configure",
   "tool:execute_high_risk",
+  // Deployment channels (Telegram, WhatsApp, ...) — deliberately a
+  // client action, not staff-configurable: connecting one means handing
+  // over the client's own bot token / phone number, which staff never
+  // has. See CLAUDE.md Deployment Surfaces.
+  "channel:connect",
   // Workflows
   "workflow:read",
   "workflow:write",
@@ -98,6 +103,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "conversation:read",
     "conversation:write",
     "tenant:customize",
+    "channel:connect",
     // Staff use the client's own Overview/Billing pages while
     // impersonating (CLAUDE.md: "exact same tenant-scoped tools a client
     // would use") — without this, those pages 403 on every usage call
@@ -123,6 +129,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "team:remove",
     "analytics:read",
     "tenant:customize",
+    "channel:connect",
   ],
   tenant_admin: [
     "agent:read",
@@ -136,6 +143,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "team:invite",
     "analytics:read",
     "tenant:customize",
+    "channel:connect",
   ],
   tenant_agent_editor: [
     "agent:read",
@@ -144,6 +152,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "conversation:read",
     "conversation:write",
     "analytics:read",
+    "channel:connect",
   ],
   tenant_viewer: ["agent:read", "knowledge:read", "conversation:read", "analytics:read"],
 };

@@ -30,6 +30,7 @@ interface AuthContextValue {
   loading: boolean;
   impersonation: ImpersonationContext | null;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => void;
   startImpersonation: (tenantId: string, tenantName: string, reason: string, durationMinutes?: number) => Promise<void>;
   endImpersonation: () => Promise<void>;
@@ -87,6 +88,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push("/");
   }
 
+  async function loginWithGoogle(credential: string) {
+    const { token } = await api.googleLogin(credential);
+    setToken(token);
+    setImpersonation(null);
+    await refreshMe();
+    router.push("/");
+  }
+
   function logout() {
     setToken(null);
     setImpersonation(null);
@@ -131,7 +140,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, impersonation, login, logout, startImpersonation, endImpersonation, setTheme }}>
+    <AuthContext.Provider
+      value={{ user, loading, impersonation, login, loginWithGoogle, logout, startImpersonation, endImpersonation, setTheme }}
+    >
       {children}
     </AuthContext.Provider>
   );

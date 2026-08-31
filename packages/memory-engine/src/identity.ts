@@ -1,7 +1,14 @@
 import { createHash } from "node:crypto";
 import type { Prisma } from "@chat-agent/db";
 
-export type IdentifierType = "authenticated_account" | "email" | "widget_session_cookie";
+export type IdentifierType =
+  | "authenticated_account"
+  | "email"
+  | "widget_session_cookie"
+  | "telegram_chat_id"
+  | "whatsapp_phone_number"
+  | "facebook_psid"
+  | "instagram_igsid";
 
 function hashIdentifier(value: string): string {
   // Identifiers (emails, cookies) are hashed at rest — never stored raw —

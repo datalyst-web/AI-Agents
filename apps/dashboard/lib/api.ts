@@ -115,6 +115,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
+  googleLogin: (credential: string) =>
+    apiFetch<{ token: string; user: { id: string; tenantId: string; role: string } }>("/v1/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ credential }),
+    }),
   forgotPassword: (email: string) =>
     apiFetch<{ message: string }>("/v1/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
   resetPassword: (token: string, newPassword: string) =>
@@ -262,6 +267,40 @@ export const api = {
     apiFetch(`/v1/tenants/${tenantId}/approvals/${approvalId}/approve`, { method: "POST" }),
   rejectApproval: (tenantId: string, approvalId: string, reason?: string) =>
     apiFetch(`/v1/tenants/${tenantId}/approvals/${approvalId}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+
+  listChannels: (tenantId: string, agentId: string) =>
+    apiFetch<
+      {
+        id: string;
+        channel: "TELEGRAM" | "WHATSAPP" | "FACEBOOK_MESSENGER" | "INSTAGRAM";
+        status: "PENDING" | "CONNECTED" | "DISCONNECTED" | "ERROR";
+        externalLabel: string | null;
+        errorMessage: string | null;
+        connectedAt: string | null;
+      }[]
+    >(`/v1/tenants/${tenantId}/agents/${agentId}/channels`),
+  connectTelegram: (tenantId: string, agentId: string, botToken: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/channels/telegram/connect`, {
+      method: "POST",
+      body: JSON.stringify({ botToken }),
+    }),
+  connectWhatsapp: (tenantId: string, agentId: string, externalId: string, accessToken: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/channels/whatsapp/connect`, {
+      method: "POST",
+      body: JSON.stringify({ externalId, accessToken }),
+    }),
+  connectMessenger: (tenantId: string, agentId: string, externalId: string, accessToken: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/channels/messenger/connect`, {
+      method: "POST",
+      body: JSON.stringify({ externalId, accessToken }),
+    }),
+  connectInstagram: (tenantId: string, agentId: string, externalId: string, accessToken: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/channels/instagram/connect`, {
+      method: "POST",
+      body: JSON.stringify({ externalId, accessToken }),
+    }),
+  disconnectChannel: (tenantId: string, agentId: string, channel: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/channels/${channel.toLowerCase()}/disconnect`, { method: "POST" }),
 
   getUsageSummary: (tenantId: string) => apiFetch(`/v1/tenants/${tenantId}/usage/summary`),
   getUsageDaily: (tenantId: string, days = 14) =>

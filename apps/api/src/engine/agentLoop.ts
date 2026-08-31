@@ -39,9 +39,19 @@ export interface IncomingMessage {
   tenantId: string;
   agentId: string;
   conversationId?: string;
-  channel: "WIDGET" | "STANDALONE_URL" | "API";
+  channel: "WIDGET" | "STANDALONE_URL" | "API" | "TELEGRAM" | "WHATSAPP" | "FACEBOOK_MESSENGER" | "INSTAGRAM";
   customerMessage: string;
-  customerIdentifier?: { type: "authenticated_account" | "email" | "widget_session_cookie"; value: string };
+  customerIdentifier?: {
+    type:
+      | "authenticated_account"
+      | "email"
+      | "widget_session_cookie"
+      | "telegram_chat_id"
+      | "whatsapp_phone_number"
+      | "facebook_psid"
+      | "instagram_igsid";
+    value: string;
+  };
   /** The server-generated id from a previous PendingConfirmationResponse, echoed back by the client. */
   confirmToolCallId?: string;
 }
