@@ -160,6 +160,11 @@ export interface PaynowStatusUpdate {
  * never act on a `status` field from a payload that fails verification.
  */
 export function verifyAndParseStatusUpdate(rawFormBody: string): PaynowStatusUpdate | undefined {
+  // Not configured is just another way this can't be trusted — an inbound
+  // call arriving before PAYNOW_INTEGRATION_KEY is set (or after it's
+  // unset) must fail closed the same as a bad hash, never throw a raw
+  // 500 out of the webhook route.
+  if (!env.PAYNOW_INTEGRATION_ID || !env.PAYNOW_INTEGRATION_KEY) return undefined;
   const { key } = getCredentials();
   const parsed = parseFormEncoded(rawFormBody);
   if (!verifyHash(parsed, key)) return undefined;

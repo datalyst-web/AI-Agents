@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import { createHash } from "node:crypto";
 
 // paynow.ts imports env.js at module scope — same timing gotcha as
@@ -85,6 +85,31 @@ describe("verifyAndParseStatusUpdate — Paynow result-URL webhook trust boundar
     const { reference: _omit, ...rest } = validFields;
     const body = buildSignedFormBody(rest);
     expect(verifyAndParseStatusUpdate(body)).toBeUndefined();
+  });
+});
+
+describe("verifyAndParseStatusUpdate — fails closed when Paynow isn't configured", () => {
+  it("returns undefined (never throws) for a webhook call arriving before PAYNOW_INTEGRATION_KEY is set", async () => {
+    // Regression test: found live — a webhook call arriving while
+    // unconfigured used to throw out of getCredentials() uncaught,
+    // surfacing as a raw 500 out of the public webhook route instead of
+    // the documented "always fail closed, never crash" behavior.
+    const previousId = process.env.PAYNOW_INTEGRATION_ID;
+    const previousKey = process.env.PAYNOW_INTEGRATION_KEY;
+    delete process.env.PAYNOW_INTEGRATION_ID;
+    delete process.env.PAYNOW_INTEGRATION_KEY;
+    vi.resetModules();
+
+    try {
+      const fresh = await import("./paynow.js");
+      const body = buildSignedFormBody({ reference: "sub-x", status: "Paid" });
+      expect(() => fresh.verifyAndParseStatusUpdate(body)).not.toThrow();
+      expect(fresh.verifyAndParseStatusUpdate(body)).toBeUndefined();
+    } finally {
+      if (previousId !== undefined) process.env.PAYNOW_INTEGRATION_ID = previousId;
+      if (previousKey !== undefined) process.env.PAYNOW_INTEGRATION_KEY = previousKey;
+      vi.resetModules();
+    }
   });
 });
 
