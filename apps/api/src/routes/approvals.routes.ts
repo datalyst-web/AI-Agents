@@ -12,6 +12,7 @@ import { verifyActiveImpersonation } from "../lib/impersonation.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { buildToolRegistryForAgent } from "../engine/toolRegistryForAgent.js";
 import { EMBEDDING_MODEL } from "../engine/agentLoop.js";
+import { env } from "../env.js";
 
 const RejectBodySchema = z.object({ reason: z.string().max(500).optional() }).default({});
 
@@ -57,6 +58,10 @@ export async function registerApprovalRoutes(app: FastifyInstance, ctx: AppConte
         tenantId: approval.tenantId,
         agentId: approval.agentId,
         enabledToolIds: agent.enabledToolIds,
+        googleCalendar:
+          env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET
+            ? { clientId: env.GOOGLE_CALENDAR_CLIENT_ID, clientSecret: env.GOOGLE_CALENDAR_CLIENT_SECRET }
+            : undefined,
         retrieve: async (query) => {
           const results = await retrieveKnowledge(tx, ctx.router, {
             tenantId: approval.tenantId,

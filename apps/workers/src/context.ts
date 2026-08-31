@@ -1,7 +1,7 @@
 import { Redis } from "ioredis";
 import { createPrismaClient, type PrismaClient } from "@chat-agent/db";
 import { createModelRouterFromConfig, type ModelRouter } from "@chat-agent/ai-provider";
-import { createSecretsProvider, type SecretsProvider } from "@chat-agent/secrets";
+import { createSecretsProvider, DbSecretsProvider, type SecretsProvider } from "@chat-agent/secrets";
 import { createQueueClient, type QueueClient } from "@chat-agent/queue";
 import { ObjectStore } from "@chat-agent/storage";
 import { createEmailProviderFromEnv, type EmailProvider } from "@chat-agent/email";
@@ -35,12 +35,24 @@ export function buildWorkerContext(): WorkerContext {
     anthropicOpusModelId: env.ANTHROPIC_MODEL_OPUS_ID,
     defaultChain: env.AI_FAILOVER_CHAIN,
   });
-  const secrets = createSecretsProvider({
-    mode: env.SECRETS_PROVIDER,
-    region: env.AWS_REGION,
-    pathPrefix: env.SECRETS_PATH_PREFIX,
-    allowEnvInProduction: env.ALLOW_ENV_SECRETS_IN_PRODUCTION,
-  });
+  // Mirrors apps/api/src/lib/context.ts's same fix — must read/write the
+  // exact same store the API writes tool/integration credentials into,
+  // or a workflow action running here would never find a credential a
+  // tenant connected via the dashboard.
+  if (env.SECRETS_PROVIDER === "env" && env.NODE_ENV === "production" && !env.ALLOW_ENV_SECRETS_IN_PRODUCTION) {
+    throw new Error(
+      "SECRETS_PROVIDER must be 'aws' in production, unless ALLOW_ENV_SECRETS_IN_PRODUCTION=true is set as a deliberate, temporary choice for a lean launch without AWS infra.",
+    );
+  }
+  const secrets: SecretsProvider =
+    env.SECRETS_PROVIDER === "aws"
+      ? createSecretsProvider({
+          mode: "aws",
+          region: env.AWS_REGION,
+          pathPrefix: env.SECRETS_PATH_PREFIX,
+          allowEnvInProduction: env.ALLOW_ENV_SECRETS_IN_PRODUCTION,
+        })
+      : new DbSecretsProvider(prisma, env.CHANNEL_CREDENTIALS_ENCRYPTION_KEY ?? "");
   const queue = createQueueClient({
     awsRegion: env.AWS_REGION,
     redisUrl: env.REDIS_URL,

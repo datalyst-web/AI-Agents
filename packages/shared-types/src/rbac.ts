@@ -46,6 +46,13 @@ export const PermissionSchema = z.enum([
   // over the client's own bot token / phone number, which staff never
   // has. See CLAUDE.md Deployment Surfaces.
   "channel:connect",
+  // Business-tool integrations (HubSpot CRM, Google Calendar, Zendesk) —
+  // same reasoning as channel:connect: connecting one hands over the
+  // client's own CRM/calendar/helpdesk account, which staff never has
+  // (and for Google Calendar's OAuth consent screen specifically, staff
+  // *couldn't* act on the client's behalf even if they wanted to — only
+  // the account owner can complete that consent flow).
+  "integration:connect",
   // Workflows
   "workflow:read",
   "workflow:write",
@@ -104,6 +111,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "conversation:write",
     "tenant:customize",
     "channel:connect",
+    "integration:connect",
     // Staff use the client's own Overview/Billing pages while
     // impersonating (CLAUDE.md: "exact same tenant-scoped tools a client
     // would use") — without this, those pages 403 on every usage call
@@ -130,6 +138,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "analytics:read",
     "tenant:customize",
     "channel:connect",
+    "integration:connect",
   ],
   tenant_admin: [
     "agent:read",
@@ -144,6 +153,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "analytics:read",
     "tenant:customize",
     "channel:connect",
+    "integration:connect",
   ],
   tenant_agent_editor: [
     "agent:read",
@@ -153,6 +163,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "conversation:write",
     "analytics:read",
     "channel:connect",
+    "integration:connect",
   ],
   tenant_viewer: ["agent:read", "knowledge:read", "conversation:read", "analytics:read"],
 };

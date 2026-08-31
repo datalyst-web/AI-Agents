@@ -159,6 +159,10 @@ export async function processCustomerMessage(
       tenantId: input.tenantId,
       agentId: input.agentId,
       enabledToolIds: agent.enabledToolIds,
+      googleCalendar:
+        env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET
+          ? { clientId: env.GOOGLE_CALENDAR_CLIENT_ID, clientSecret: env.GOOGLE_CALENDAR_CLIENT_SECRET }
+          : undefined,
       retrieve: async (query) => {
         const results = await retrieveKnowledge(tx, deps.router, {
           tenantId: input.tenantId,

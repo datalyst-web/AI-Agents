@@ -1,6 +1,6 @@
 import { createPrismaClient, type PrismaClient } from "@chat-agent/db";
 import { createModelRouterFromConfig, type ModelRouter } from "@chat-agent/ai-provider";
-import { createSecretsProvider, type SecretsProvider } from "@chat-agent/secrets";
+import { createSecretsProvider, DbSecretsProvider, type SecretsProvider } from "@chat-agent/secrets";
 import { createQueueClient, type QueueClient } from "@chat-agent/queue";
 import { ObjectStore } from "@chat-agent/storage";
 import { createEmailProviderFromEnv, type EmailProvider } from "@chat-agent/email";
@@ -42,12 +42,28 @@ export function buildAppContext(): AppContext {
   // stage (via withTenant), not from a global router.onUsage listener here —
   // a listener at this layer has no tenant/agent/conversation to attach to.
 
-  const secrets = createSecretsProvider({
-    mode: env.SECRETS_PROVIDER,
-    region: env.AWS_REGION,
-    pathPrefix: env.SECRETS_PATH_PREFIX,
-    allowEnvInProduction: env.ALLOW_ENV_SECRETS_IN_PRODUCTION,
-  });
+  // "env" mode's own EnvSecretsProvider is read-only (see
+  // DbSecretsProvider's own comment) — every tenant-supplied credential
+  // (tool/CRM/calendar/ticketing connections) needs a real place to write
+  // to in deployments without AWS Secrets Manager provisioned. Keeps the
+  // same ALLOW_ENV_SECRETS_IN_PRODUCTION gate createSecretsProvider
+  // enforces for "env" mode — DbSecretsProvider encrypts at rest (unlike
+  // raw env vars) but is still the deliberate non-AWS lean-launch choice
+  // that flag exists to make explicit, not a silent default.
+  if (env.SECRETS_PROVIDER === "env" && env.NODE_ENV === "production" && !env.ALLOW_ENV_SECRETS_IN_PRODUCTION) {
+    throw new Error(
+      "SECRETS_PROVIDER must be 'aws' in production, unless ALLOW_ENV_SECRETS_IN_PRODUCTION=true is set as a deliberate, temporary choice for a lean launch without AWS infra.",
+    );
+  }
+  const secrets: SecretsProvider =
+    env.SECRETS_PROVIDER === "aws"
+      ? createSecretsProvider({
+          mode: "aws",
+          region: env.AWS_REGION,
+          pathPrefix: env.SECRETS_PATH_PREFIX,
+          allowEnvInProduction: env.ALLOW_ENV_SECRETS_IN_PRODUCTION,
+        })
+      : new DbSecretsProvider(prisma, env.CHANNEL_CREDENTIALS_ENCRYPTION_KEY ?? "");
 
   const queue = createQueueClient({
     awsRegion: env.AWS_REGION,

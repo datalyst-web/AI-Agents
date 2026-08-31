@@ -787,6 +787,26 @@ model PlatformSettings {
   @@schema("chat")
 }
 
+// Backs packages/secrets' SecretsProvider interface when SECRETS_PROVIDER
+// is "env" (the lean-launch default without AWS — see
+// ALLOW_ENV_SECRETS_IN_PRODUCTION) via apps/api/src/lib/dbSecretsProvider.ts.
+// `key` is the opaque credentialRef string tools.routes.ts already builds
+// (e.g. "tenant/{tenantId}/tool/{toolId}") — not tenant-scoped RLS itself
+// since that scoping already lives inside the key string by convention,
+// same reasoning as ChannelConnection.encryptedCredential below.
+// `encryptedValue` uses the same AES-256-GCM scheme as channelCrypto.ts
+// (CHANNEL_CREDENTIALS_ENCRYPTION_KEY), reused rather than duplicated —
+// the crypto itself was already generic, not actually channel-specific.
+model PlatformSecret {
+  key            String   @id
+  encryptedValue String   @map("encrypted_value")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_secrets")
+  @@schema("chat")
+}
+
 // ---------------------------------------------------------------------------
 // Channel integrations — deployment methods beyond the website widget /
 // standalone URL (CLAUDE.md Deployment Surfaces). A client connects their

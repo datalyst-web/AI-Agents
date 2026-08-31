@@ -302,6 +302,27 @@ export const api = {
   disconnectChannel: (tenantId: string, agentId: string, channel: string) =>
     apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/channels/${channel.toLowerCase()}/disconnect`, { method: "POST" }),
 
+  listBusinessIntegrations: (tenantId: string, agentId: string) =>
+    apiFetch<{ vendor: "hubspot" | "zendesk" | "google_calendar"; connected: boolean; label?: string }[]>(
+      `/v1/tenants/${tenantId}/agents/${agentId}/integrations`,
+    ),
+  connectHubspot: (tenantId: string, agentId: string, accessToken: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/integrations/hubspot/connect`, {
+      method: "POST",
+      body: JSON.stringify({ accessToken }),
+    }),
+  connectZendesk: (tenantId: string, agentId: string, subdomain: string, email: string, apiToken: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/integrations/zendesk/connect`, {
+      method: "POST",
+      body: JSON.stringify({ subdomain, email, apiToken }),
+    }),
+  startGoogleCalendarConnect: (tenantId: string, agentId: string) =>
+    apiFetch<{ authUrl: string }>(`/v1/tenants/${tenantId}/agents/${agentId}/integrations/google-calendar/connect/start`, {
+      method: "POST",
+    }),
+  disconnectBusinessIntegration: (tenantId: string, agentId: string, vendor: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/integrations/${vendor}/disconnect`, { method: "POST" }),
+
   getUsageSummary: (tenantId: string) => apiFetch(`/v1/tenants/${tenantId}/usage/summary`),
   getUsageDaily: (tenantId: string, days = 14) =>
     apiFetch<{ date: string; inputTokens: number; outputTokens: number; totalTokens: number }[]>(

@@ -109,6 +109,18 @@ export const EnvSchema = z.object({
   // operation (google-auth-library fetches Google's JWKS itself).
   GOOGLE_CLIENT_ID: z.string().optional(),
 
+  // Google Calendar tool integration (packages/tool-sdk's
+  // createGoogleCalendarBookTool/CancelTool) — a full OAuth2
+  // authorization-code flow, separate from GOOGLE_CLIENT_ID above (which
+  // only verifies an already-issued ID token for login and has no client
+  // secret). Can reuse the SAME OAuth client as GOOGLE_CLIENT_ID as long
+  // as the Google Calendar API is enabled on that Cloud project and this
+  // app's callback URL is added to that client's authorized redirect
+  // URIs — the id/secret pair here is independent so that doesn't have to
+  // be true, though.
+  GOOGLE_CALENDAR_CLIENT_ID: z.string().optional(),
+  GOOGLE_CALENDAR_CLIENT_SECRET: z.string().optional(),
+
   API_PORT: z.coerce.number().default(4000),
   API_CORS_ORIGINS: z
     .string()

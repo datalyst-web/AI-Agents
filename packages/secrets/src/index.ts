@@ -5,6 +5,8 @@ import {
   CreateSecretCommand,
 } from "@aws-sdk/client-secrets-manager";
 
+export { DbSecretsProvider } from "./dbProvider.js";
+
 /**
  * Reads/writes secrets under a "chat/" path prefix in the platform-shared
  * Secrets Manager instance (see ARCHITECTURE.md "Shared platform hosting").

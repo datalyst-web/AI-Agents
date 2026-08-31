@@ -4,9 +4,13 @@ import {
   createApiTool,
   createEmailTool,
   createCrmCreateRecordTool,
+  createHubspotCrmTool,
   createCalendarBookTool,
   createCalendarCancelTool,
+  createGoogleCalendarBookTool,
+  createGoogleCalendarCancelTool,
   createTicketingTool,
+  createZendeskTicketingTool,
   createSearchKnowledgeTool,
   type RetrieveFn,
   type ToolHandler,
@@ -60,7 +64,20 @@ function resolveExecutionTier(handler: ToolHandler, configured: ExecutionTier | 
 export async function buildToolRegistryForAgent(
   tx: Prisma.TransactionClient,
   secrets: SecretsProvider,
-  params: { tenantId: string; agentId: string; enabledToolIds: string[]; retrieve: RetrieveFn },
+  params: {
+    tenantId: string;
+    agentId: string;
+    enabledToolIds: string[];
+    retrieve: RetrieveFn;
+    // Threaded in from the caller (which already has env access) rather
+    // than imported directly here — this file is otherwise fully
+    // env-agnostic and its own test exercises it with zero environment
+    // setup (a fake Prisma tx, no real DB/config needed); importing env.js
+    // directly would make merely IMPORTING this file require a fully
+    // valid app configuration (DATABASE_URL, JWT_SECRET, ...), breaking
+    // that isolation for two optional Google Calendar values.
+    googleCalendar?: { clientId: string; clientSecret: string };
+  },
 ): Promise<ToolRegistry> {
   const registry = new ToolRegistry(secrets);
 
@@ -101,16 +118,26 @@ export async function buildToolRegistryForAgent(
             fromAddress: config.fromAddress ?? "",
           });
         case "crm":
+          if (config.vendor === "hubspot") return createHubspotCrmTool();
           return createCrmCreateRecordTool({
             baseUrl: config.baseUrl ?? "",
             authHeaderName: config.authHeaderName ?? "Authorization",
             objectTypeToPath: parseHeaders(config.objectTypeToPath),
           });
         case "calendar":
+          if (config.vendor === "google_calendar") {
+            const gcalConfig = {
+              clientId: params.googleCalendar?.clientId ?? "",
+              clientSecret: params.googleCalendar?.clientSecret ?? "",
+              calendarId: config.calendarId ?? "primary",
+            };
+            return config.action === "cancel" ? createGoogleCalendarCancelTool(gcalConfig) : createGoogleCalendarBookTool(gcalConfig);
+          }
           return config.action === "cancel"
             ? createCalendarCancelTool({ baseUrl: config.baseUrl ?? "", authHeaderName: config.authHeaderName ?? "Authorization" })
             : createCalendarBookTool({ baseUrl: config.baseUrl ?? "", authHeaderName: config.authHeaderName ?? "Authorization" });
         case "ticketing":
+          if (config.vendor === "zendesk") return createZendeskTicketingTool({ subdomain: config.subdomain ?? "" });
           return createTicketingTool({ baseUrl: config.baseUrl ?? "", authHeaderName: config.authHeaderName ?? "Authorization" });
         default:
           return undefined;

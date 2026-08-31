@@ -405,6 +405,9 @@ importers:
       '@aws-sdk/client-secrets-manager':
         specifier: ^3.679.0
         version: 3.1113.0
+      '@chat-agent/db':
+        specifier: workspace:*
+        version: link:../db
     devDependencies:
       '@types/node':
         specifier: ^22.7.5

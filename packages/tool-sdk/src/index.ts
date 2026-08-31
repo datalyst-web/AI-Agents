@@ -6,4 +6,7 @@ export * from "./tools/email.js";
 export * from "./tools/crm.js";
 export * from "./tools/calendar.js";
 export * from "./tools/ticketing.js";
+export * from "./tools/hubspot.js";
+export * from "./tools/zendesk.js";
+export * from "./tools/googleCalendar.js";
 export * from "./tools/searchKnowledge.js";
