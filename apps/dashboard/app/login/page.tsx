@@ -64,10 +64,17 @@ export default function LoginPage() {
       },
     });
     window.google.accounts.id.renderButton(googleButtonRef.current, {
+      // The login card is always dark (fixed-dark by design, never
+      // theme-toggled) — filled_black is the only GIS theme that actually
+      // reads as "part of this card" instead of a lighter foreign box
+      // dropped on top of it. Width matches the card's own content width
+      // (measured, not hardcoded) so it lines up exactly with the
+      // full-width "Sign in" button above it instead of looking narrower.
       theme: "filled_black",
       size: "large",
       shape: "pill",
-      width: 296,
+      width: Math.round(googleButtonRef.current.clientWidth),
+      logo_alignment: "center",
       text: "signin_with",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
