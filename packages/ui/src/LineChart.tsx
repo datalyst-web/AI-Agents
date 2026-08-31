@@ -104,8 +104,18 @@ export function LineChart({
           <line x1={padX} x2={width - padX} y1={zeroY} y2={zeroY} stroke="rgb(var(--color-foreground) / 0.16)" strokeDasharray="3 3" strokeWidth={1} />
         ) : null}
 
-        <path d={areaPath} fill={`url(#${fillId})`} />
-        <path d={linePath} fill="none" stroke={stroke} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+        <path d={areaPath} fill={`url(#${fillId})`} className="animate-fade-up" style={{ animationDelay: "0.5s" }} />
+        <path
+          d={linePath}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          pathLength={1}
+          strokeDasharray={1}
+          className="animate-draw-line"
+        />
 
         {/* x-axis labels, selective */}
         {points.map((p, i) =>
@@ -122,7 +132,12 @@ export function LineChart({
             <circle cx={hovered.x} cy={hovered.y} r={4} fill={stroke} stroke="rgb(var(--color-surface))" strokeWidth={2} />
           </>
         ) : (
-          <circle cx={lastPoint.x} cy={lastPoint.y} r={3} fill={stroke} />
+          <>
+            {/* A soft "this is live" pulse on the most recent point — Tailwind's
+                built-in ping keyframe, expanding + fading from the dot's own size. */}
+            <circle cx={lastPoint.x} cy={lastPoint.y} r={3} fill={stroke} className="animate-ping" style={{ transformOrigin: `${lastPoint.x}px ${lastPoint.y}px`, transformBox: "fill-box" }} opacity={0.6} />
+            <circle cx={lastPoint.x} cy={lastPoint.y} r={3} fill={stroke} />
+          </>
         )}
 
         <rect

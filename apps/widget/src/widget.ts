@@ -210,6 +210,7 @@ interface ChatResponse {
     opened = open;
     clearTimeout(closeTimer);
     launcher.classList.toggle("open", open);
+    if (open) launcher.classList.remove("invite");
     if (open) {
       panel.hidden = false;
       // next frame, so the "hidden -> visible" transition actually animates
@@ -225,6 +226,17 @@ interface ChatResponse {
 
   launcher.addEventListener("click", () => toggle(!opened));
   closeBtn.addEventListener("click", () => toggle(false));
+
+  // A few "come say hi" sonar pulses shortly after the launcher's own
+  // entrance pop (see the .launcher rule, which plays on mount with no JS
+  // needed) — a first-impression nudge only, never repeats mid-session and
+  // stops the instant the visitor engages.
+  setTimeout(() => {
+    if (!opened) launcher.classList.add("invite");
+  }, 900);
+  launcher.addEventListener("animationend", (e) => {
+    if ((e as AnimationEvent).animationName === "sonarPing") launcher.classList.remove("invite");
+  });
 
   function appendMessage(role: "customer" | "agent", text: string) {
     const row = document.createElement("div");
@@ -328,6 +340,9 @@ interface ChatResponse {
       @keyframes panelIn { from { opacity: 0; transform: translateY(16px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
       @keyframes pulseDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
       @keyframes typingBounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 30% { transform: translateY(-3px); opacity: 1; } }
+      @keyframes launcherPop { 0% { opacity: 0; transform: scale(0.4) translateY(12px); } 60% { opacity: 1; transform: scale(1.08) translateY(0); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
+      @keyframes sonarPing { 0% { box-shadow: 0 0 0 0 rgba(74,94,245,0.45); } 100% { box-shadow: 0 0 0 22px rgba(74,94,245,0); } }
+      @keyframes bobIdle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 
       .launcher {
         position: fixed; bottom: 24px; right: 24px; width: 60px; height: 60px; border-radius: 50%;
@@ -335,10 +350,17 @@ interface ChatResponse {
         background-size: 160% auto; background-position: left center;
         color: white; display: flex; align-items: center; justify-content: center; cursor: pointer;
         box-shadow: 0 4px 14px rgba(74,94,245,0.3), 0 12px 32px rgba(74,94,245,0.28), 0 0 0 1px rgba(255,255,255,0.08) inset;
-        z-index: 999999; transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.25s ease, background-position 0.3s ease;
+        z-index: 999999;
+        /* Plays automatically the instant this element mounts — no JS
+           gating needed for the entrance itself, so it can never get stuck
+           invisible if a later script hook fails to run. */
+        animation: launcherPop 0.55s cubic-bezier(0.34,1.56,0.64,1) both, bobIdle 3.2s ease-in-out 0.6s infinite;
+        transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.25s ease, background-position 0.3s ease;
       }
-      .launcher:hover { transform: scale(1.07); background-position: right center; box-shadow: 0 6px 18px rgba(74,94,245,0.4), 0 16px 40px rgba(74,94,245,0.32), 0 0 0 1px rgba(255,255,255,0.1) inset; }
+      .launcher.invite { animation: launcherPop 0.55s cubic-bezier(0.34,1.56,0.64,1) both, sonarPing 1.6s ease-out 3, bobIdle 3.2s ease-in-out 0.6s infinite; }
+      .launcher:hover { animation-play-state: paused; transform: scale(1.07); background-position: right center; box-shadow: 0 6px 18px rgba(74,94,245,0.4), 0 16px 40px rgba(74,94,245,0.32), 0 0 0 1px rgba(255,255,255,0.1) inset; }
       .launcher:active { transform: scale(0.96); }
+      .launcher.open { animation: none; transform: scale(1); }
       .launcher .icon-chat, .launcher .icon-close { position: absolute; transition: opacity 0.18s ease, transform 0.25s cubic-bezier(0.34,1.56,0.64,1); }
       .launcher .icon-close { opacity: 0; transform: rotate(-45deg) scale(0.6); }
       .launcher.open .icon-chat { opacity: 0; transform: rotate(45deg) scale(0.6); }
@@ -375,7 +397,7 @@ interface ChatResponse {
       .messages::-webkit-scrollbar { width: 6px; }
       .messages::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 999px; }
 
-      .row { display: flex; flex-direction: column; margin-bottom: 10px; animation: fadeInUp 0.25s ease both; max-width: 84%; }
+      .row { display: flex; flex-direction: column; margin-bottom: 10px; animation: fadeInUp 0.32s cubic-bezier(0.16,1,0.3,1) both; max-width: 84%; }
       .row.agent { align-self: flex-start; align-items: flex-start; }
       .row.customer { align-self: flex-end; align-items: flex-end; }
       .bubble { padding: 10px 13px; border-radius: 15px; font-size: 13.5px; line-height: 1.48; white-space: pre-wrap; word-break: break-word; }

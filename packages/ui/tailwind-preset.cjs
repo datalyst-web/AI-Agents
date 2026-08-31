@@ -90,10 +90,17 @@ module.exports = {
       keyframes: {
         "fade-up": { "0%": { opacity: 0, transform: "translateY(6px)" }, "100%": { opacity: 1, transform: "translateY(0)" } },
         shimmer: { "0%": { backgroundPosition: "-200% 0" }, "100%": { backgroundPosition: "200% 0" } },
+        // Used with SVG `pathLength={1}` (normalizes any path to length 1)
+        // so a trend line "draws itself in" on mount regardless of its
+        // actual geometry — see packages/ui/src/LineChart.tsx.
+        "draw-line": { "0%": { strokeDashoffset: 1 }, "100%": { strokeDashoffset: 0 } },
+        "count-in": { "0%": { opacity: 0, transform: "translateY(4px) scale(0.94)" }, "100%": { opacity: 1, transform: "translateY(0) scale(1)" } },
       },
       animation: {
         "fade-up": "fade-up 0.4s cubic-bezier(0.16,1,0.3,1) both",
         shimmer: "shimmer 2.5s linear infinite",
+        "draw-line": "draw-line 1.1s cubic-bezier(0.16,1,0.3,1) both",
+        "count-in": "count-in 0.35s cubic-bezier(0.16,1,0.3,1) both",
       },
       letterSpacing: {
         tightest: "-0.04em",

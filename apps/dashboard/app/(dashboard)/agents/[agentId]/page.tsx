@@ -962,15 +962,22 @@ export default function AgentDetailPage() {
       {tab === "Analytics" ? (
         analytics ? (
           <div className="space-y-4">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-foreground/40">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+              </span>
+              Live
+            </div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <StatTile label="Total conversations" value={analytics.total} />
-              <StatTile label="Resolution rate" value={`${Math.round(analytics.resolutionRate * 100)}%`} deltaTone="positive" />
-              <StatTile label="Escalation rate" value={`${Math.round(analytics.escalationRate * 100)}%`} deltaTone="negative" />
-              <StatTile label="Abandonment rate" value={`${Math.round(analytics.abandonmentRate * 100)}%`} deltaTone="negative" />
-              <StatTile label="Handoff rate" value={`${Math.round(analytics.handoffRate * 100)}%`} />
-              <StatTile label="Avg sentiment" value={analytics.avgSentiment.toFixed(2)} />
-              <StatTile label="Avg messages / conversation" value={analytics.avgMessagesPerConversation.toFixed(1)} />
-              <StatTile label="Avg conversation length" value={formatDuration(analytics.avgDurationSeconds)} />
+              <StatTile label="Total conversations" value={analytics.total} delayMs={0} />
+              <StatTile label="Resolution rate" value={`${Math.round(analytics.resolutionRate * 100)}%`} deltaTone="positive" delayMs={40} />
+              <StatTile label="Escalation rate" value={`${Math.round(analytics.escalationRate * 100)}%`} deltaTone="negative" delayMs={80} />
+              <StatTile label="Abandonment rate" value={`${Math.round(analytics.abandonmentRate * 100)}%`} deltaTone="negative" delayMs={120} />
+              <StatTile label="Handoff rate" value={`${Math.round(analytics.handoffRate * 100)}%`} delayMs={160} />
+              <StatTile label="Avg sentiment" value={analytics.avgSentiment.toFixed(2)} delayMs={200} />
+              <StatTile label="Avg messages / conversation" value={analytics.avgMessagesPerConversation.toFixed(1)} delayMs={240} />
+              <StatTile label="Avg conversation length" value={formatDuration(analytics.avgDurationSeconds)} delayMs={280} />
             </div>
 
             <Card>

@@ -97,13 +97,21 @@ export default function OverviewPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatTile label="Agents" value={agents.length} icon={<DotIcon />} />
-          <StatTile label="Live" value={liveCount} deltaTone="positive" delta={liveCount > 0 ? "active" : undefined} icon={<PulseIcon />} />
+          <StatTile label="Agents" value={agents.length} icon={<DotIcon />} delayMs={0} />
+          <StatTile
+            label="Live"
+            value={liveCount}
+            deltaTone="positive"
+            delta={liveCount > 0 ? "active" : undefined}
+            icon={<PulseIcon />}
+            delayMs={40}
+          />
           <StatTile
             label="Tokens this month"
             value={usage.totalTokens.toLocaleString()}
             icon={<SparkIcon />}
             trend={trend}
+            delayMs={80}
           />
           <StatTile
             label="Est. overage"
@@ -111,6 +119,7 @@ export default function OverviewPage() {
             deltaTone={usage.estimatedOverageUsd > 0 ? "negative" : "positive"}
             delta={usage.estimatedOverageUsd > 0 ? undefined : "within plan"}
             icon={<CoinIcon />}
+            delayMs={120}
           />
         </div>
       )}
