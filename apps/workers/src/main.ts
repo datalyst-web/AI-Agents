@@ -1,3 +1,5 @@
+import "./instrument.js";
+import * as Sentry from "@sentry/node";
 import { QUEUE_NAMES } from "@chat-agent/queue";
 import type { KnowledgeIngestJob, WorkflowRunJob } from "@chat-agent/shared-types";
 import { buildWorkerContext } from "./context.js";
@@ -32,7 +34,10 @@ async function main() {
   setInterval(() => {
     void withDistributedLock(ctx.redis, "chat:lock:retention-sweep", RETENTION_SWEEP_INTERVAL_MS - 60_000, () =>
       runRetentionSweep(ctx),
-    ).catch((err) => console.error("[workers] retention sweep failed", err));
+    ).catch((err) => {
+      console.error("[workers] retention sweep failed", err);
+      Sentry.captureException(err);
+    });
   }, RETENTION_SWEEP_INTERVAL_MS);
 
   setInterval(() => {
@@ -41,22 +46,43 @@ async function main() {
       "chat:lock:conversation-timeout-sweep",
       CONVERSATION_TIMEOUT_SWEEP_INTERVAL_MS - 10_000,
       () => runConversationTimeoutSweep(ctx),
-    ).catch((err) => console.error("[workers] conversation timeout sweep failed", err));
+    ).catch((err) => {
+      console.error("[workers] conversation timeout sweep failed", err);
+      Sentry.captureException(err);
+    });
   }, CONVERSATION_TIMEOUT_SWEEP_INTERVAL_MS);
 
   await Promise.all([
     ctx.queue.consume<KnowledgeIngestJob>(knowledgeQueueTarget, async (msg) => {
       console.log(`[workers] knowledge-ingest job ${msg.id} for source ${msg.body.knowledgeSourceId}`);
-      await runKnowledgeIngestJob(ctx, msg.body);
+      try {
+        await runKnowledgeIngestJob(ctx, msg.body);
+      } catch (err) {
+        // Re-thrown, not swallowed — packages/queue's own retry/dead-letter
+        // logic (see redis.ts/sqs.ts) still needs to see this failure;
+        // Sentry just gets an extra copy of it.
+        Sentry.captureException(err);
+        throw err;
+      }
     }),
     ctx.queue.consume<WorkflowRunJob>(workflowQueueTarget, async (msg) => {
       console.log(`[workers] workflow-run job ${msg.id} for workflow ${msg.body.workflowId}`);
-      await runWorkflowJob(ctx, msg.body);
+      try {
+        await runWorkflowJob(ctx, msg.body);
+      } catch (err) {
+        Sentry.captureException(err);
+        throw err;
+      }
     }),
   ]);
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error("[workers] fatal error", err);
+  Sentry.captureException(err);
+  // process.exit() would otherwise cut off Sentry's async transport
+  // mid-send — this is the one crash a Railway restart-loop could hide
+  // if it never actually reached Sentry.
+  await Sentry.flush(2000).catch(() => undefined);
   process.exit(1);
 });

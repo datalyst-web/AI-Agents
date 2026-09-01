@@ -145,6 +145,11 @@ export const EnvSchema = z.object({
 
   WORKERS_CONCURRENCY: z.coerce.number().default(4),
 
+  // Error tracking (apps/api and apps/workers each initialize their own
+  // Sentry client from this — see instrument.ts in each). Optional so
+  // local dev/CI never needs a Sentry account.
+  SENTRY_DSN: z.string().optional(),
+
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 

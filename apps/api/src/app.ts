@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import * as Sentry from "@sentry/node";
 import Fastify, { type FastifyError, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
@@ -57,6 +58,13 @@ export async function buildApp(ctx: AppContext = buildAppContext()) {
     logger: { level: env.LOG_LEVEL },
     trustProxy: true,
   });
+
+  // Uses Fastify's onError hook internally (not setErrorHandler), so this
+  // coexists cleanly with the custom setErrorHandler registered at the
+  // bottom of this function — Sentry just observes/reports errors here,
+  // the custom handler still owns the actual HTTP response. A no-op when
+  // SENTRY_DSN isn't set (see instrument.ts).
+  Sentry.setupFastifyErrorHandler(app);
 
   // A single CORS registration, policy chosen per-request via the
   // `delegator` callback (registering @fastify/cors twice — once per route

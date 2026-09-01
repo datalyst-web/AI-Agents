@@ -23,7 +23,8 @@
     "@chat-agent/storage": "workspace:*",
     "@chat-agent/email": "workspace:*",
     "pino": "^9.5.0",
-    "ioredis": "^5.4.1"
+    "ioredis": "^5.4.1",
+    "@sentry/node": "^10.73.0"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
