@@ -17,7 +17,11 @@ declare global {
     google?: {
       accounts: {
         id: {
-          initialize: (config: { client_id: string; callback: (response: { credential: string }) => void }) => void;
+          initialize: (config: {
+            client_id: string;
+            callback: (response: { credential: string }) => void;
+            auto_select?: boolean;
+          }) => void;
           renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void;
         };
       };
@@ -51,6 +55,13 @@ export default function LoginPage() {
     if (!googleScriptLoaded || !GOOGLE_CLIENT_ID || !googleButtonRef.current || !window.google) return;
     window.google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID,
+      // Without this, a returning user gets Chrome's native FedCM
+      // "quick re-authentication" chip ("Sign in as {name}") popping up
+      // unprompted — a white pill the browser renders itself, completely
+      // outside our CSS/theme control, clashing with the always-dark
+      // login card. We already offer the styled filled_black button
+      // below for the same action, so the automatic one is just noise.
+      auto_select: false,
       callback: async (response) => {
         setBusy(true);
         setError(null);
