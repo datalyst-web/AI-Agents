@@ -1,67 +1,42 @@
-name: Deploy chat-api / chat-workers
+name: Deploy api / workers (Railway)
 
-# Per-service deploy onto the SHARED agents-platform ECS cluster (see
-# infra/README.md) — this workflow never touches Voice's or Sales'
-# services, only the chat-api / chat-workers ECS services and ECR repos
-# this product owns.
+# Real deploy target for this project: Railway services `api` and
+# `workers` in the `chat-agent-platform` project (see the memory doc /
+# session history — this replaced an earlier AWS ECS plan that was never
+# actually stood up). Runs only after CI has passed on main, via
+# workflow_run — never deploy on a red build.
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
-    paths:
-      - "apps/api/**"
-      - "apps/workers/**"
-      - "packages/**"
-      - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
-env:
-  AWS_REGION: us-east-1
-  ECS_CLUSTER: agents-platform
-
 jobs:
-  build-and-push:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: [chat-api, chat-workers]
-    outputs:
-      image_tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-
-      - id: tag
-        run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
-
-      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          # workflow_run doesn't check out the triggering commit by default
+          # — without this, a push landing on main between CI finishing and
+          # this job starting would deploy an untested commit instead of
+          # the one CI actually passed.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - uses: aws-actions/amazon-ecr-login@v2
-        id: ecr
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
 
-      - name: Build and push ${{ matrix.service }}
-        run: |
-          dockerfile="apps/${{ matrix.service == 'chat-api' && 'api' || 'workers' }}/Dockerfile"
-          repo="${{ steps.ecr.outputs.registry }}/${{ matrix.service }}"
-          docker build -f "$dockerfile" -t "$repo:${{ steps.tag.outputs.tag }}" -t "$repo:latest" .
-          docker push "$repo:${{ steps.tag.outputs.tag }}"
-          docker push "$repo:latest"
+      # `railway up` builds from each service's own Dockerfile (RAILWAY_DOCKERFILE_PATH
+      # is set per-service in the Railway project, not here) and deploys —
+      # the exact same command this project's deploys have used manually.
+      - name: Deploy api
+        run: railway up --service api --ci
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Force new deployment (picks up :latest via new task def revision managed by Terraform)
-        run: |
-          aws ecs update-service --cluster "$ECS_CLUSTER" --service chat-api --force-new-deployment
-          aws ecs update-service --cluster "$ECS_CLUSTER" --service chat-workers --force-new-deployment
-
-      - name: Wait for services to stabilize
-        run: |
-          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services chat-api chat-workers
+      - name: Deploy workers
+        run: railway up --service workers --ci
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

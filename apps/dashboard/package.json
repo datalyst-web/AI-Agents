@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
-    "build": "next build",
+    "build": "pnpm --filter @chat-agent/widget build && node -e \"require('fs').copyFileSync('../widget/dist/widget.js','public/widget.js')\" && next build",
     "start": "next start -p 3000",
     "typecheck": "tsc --noEmit",
     "lint": "next lint",

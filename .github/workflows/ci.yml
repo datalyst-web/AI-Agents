@@ -27,13 +27,27 @@ jobs:
 
     env:
       NODE_ENV: test
+      # Admin connection — schema/extension/role bootstrap and `prisma db
+      # push` (this project's actual schema-sync command; there is no
+      # prisma/migrations directory, so `prisma migrate deploy` is a no-op
+      # against this schema and was never actually testing anything).
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/chat_agent_test?schema=chat
+      # RLS-enforced connection — packages/db/src/client.test.ts and every
+      # "real chat_app_user connection" test (auth/chat/widgetConfig routes,
+      # cross-tenant tool isolation) is gated on
+      # describe.skipIf(!process.env.CHAT_APP_DATABASE_URL) — without this,
+      # CI silently skipped every one of those tests, which is most of what
+      # this session's security-test-suite work actually added.
+      CHAT_APP_DATABASE_URL: postgresql://chat_app_user:ci-app-user-password@localhost:5432/chat_agent_test?schema=chat
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-test-secret-not-real
       # CI runs against Gemini only, per CLAUDE.md principle 7 — no live
       # Anthropic/OpenAI credentials required for routine CI.
       DEFAULT_AI_PROVIDER: gemini
       GEMINI_API_KEY: ${{ secrets.CI_GEMINI_API_KEY }}
+      # Needed by paynow.test.ts's DbSecretsProvider-adjacent crypto and
+      # any test that touches channel/tool credential encryption.
+      CHANNEL_CREDENTIALS_ENCRYPTION_KEY: ${{ secrets.CI_CHANNEL_CREDENTIALS_ENCRYPTION_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -49,15 +63,31 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm --filter @chat-agent/db run generate
-
-      - name: Bootstrap chat schema for tests
+      # Mirrors infra/scripts/bootstrap-db.sh's real recipe, run once
+      # against this job's own ephemeral postgres rather than a shared
+      # cluster. The vector extension must exist BEFORE `prisma db push` —
+      # the schema's `Unsupported("vector(...)")` chunk column needs the
+      # type to already be defined, unlike vector_index.sql's own ordering
+      # comment (written for the old migrate-based plan, not db push).
+      - name: Bootstrap chat schema, pgvector extension, and chat_app_user role
         run: |
-          psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS chat;" || true
+          psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS chat;"
+          psql "$DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS vector SCHEMA chat;"
+          psql "$DATABASE_URL" -c "CREATE ROLE chat_app_user WITH LOGIN PASSWORD 'ci-app-user-password' NOBYPASSRLS;"
+          psql "$DATABASE_URL" -c "GRANT USAGE ON SCHEMA chat TO chat_app_user;"
+          psql "$DATABASE_URL" -c "ALTER ROLE chat_app_user SET search_path = chat, public;"
         env:
           PGPASSWORD: postgres
 
-      - run: pnpm --filter @chat-agent/db exec prisma migrate deploy
+      - run: pnpm --filter @chat-agent/db exec prisma db push --skip-generate --accept-data-loss
+      - run: pnpm --filter @chat-agent/db run generate
+
+      - name: Apply pgvector index + RLS policies
+        run: |
+          psql "$DATABASE_URL" -f packages/db/prisma/sql/vector_index.sql
+          psql "$DATABASE_URL" -f packages/db/prisma/sql/rls_policies.sql
+        env:
+          PGPASSWORD: postgres
 
       - run: pnpm typecheck
       - run: pnpm lint

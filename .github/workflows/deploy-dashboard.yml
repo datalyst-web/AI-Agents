@@ -1,48 +1,40 @@
-name: Deploy dashboard
+name: Deploy dashboard (Vercel)
 
-# Dashboard runs as its own ECS Fargate service on the shared cluster too
-# (see infra/README.md) — kept out of infra/terraform/ecs_api.tf's file
-# since it's a distinct app with its own task def/service, added the same
-# way any new product surface joins the platform: a new ECS service, no
-# new cluster.
+# Real deploy target: the Vercel project `datalyst3/dashboard`, rootDirectory
+# apps/dashboard. Must run from the repo ROOT (not apps/dashboard) — Vercel's
+# monorepo build needs the full pnpm workspace visible, or it falls back to
+# plain npm install and breaks on `workspace:*` deps (found live earlier
+# this project's history). widget.js is no longer a separate deploy: apps/
+# dashboard's own build script now rebuilds apps/widget and copies its
+# output into public/widget.js on every build, so it's never stale.
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
-    paths:
-      - "apps/dashboard/**"
-      - "packages/ui/**"
-      - "packages/shared-types/**"
-      - ".github/workflows/deploy-dashboard.yml"
   workflow_dispatch:
 
 env:
-  AWS_REGION: us-east-1
-  ECS_CLUSTER: agents-platform
+  VERCEL_ORG_ID: team_gQUHLw8BNoUniYa7cvuJwUBB
+  VERCEL_PROJECT_ID: prj_ns1TpswB2X4tSWNfesHXDP5eFd4y
 
 jobs:
-  build-and-deploy:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          # workflow_run doesn't check out the triggering commit by default
+          # — without this, a push landing on main between CI finishing and
+          # this job starting would deploy an untested commit instead of
+          # the one CI actually passed.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - uses: aws-actions/amazon-ecr-login@v2
-        id: ecr
+      - name: Install Vercel CLI
+        run: npm install -g vercel
 
-      - name: Build and push chat-dashboard
-        run: |
-          repo="${{ steps.ecr.outputs.registry }}/chat-dashboard"
-          docker build -f apps/dashboard/Dockerfile \
-            --build-arg NEXT_PUBLIC_API_BASE_URL="${{ secrets.CHAT_API_PUBLIC_URL }}" \
-            -t "$repo:${GITHUB_SHA::12}" -t "$repo:latest" .
-          docker push "$repo:${GITHUB_SHA::12}"
-          docker push "$repo:latest"
-
-      - name: Force new deployment
-        run: |
-          aws ecs update-service --cluster "$ECS_CLUSTER" --service chat-dashboard --force-new-deployment
-          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services chat-dashboard
+      - name: Deploy to Vercel production
+        run: vercel deploy --prod --yes --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
