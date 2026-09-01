@@ -38,15 +38,17 @@ jobs:
       # An account token needs RAILWAY_PROJECT_ID alongside it so the CLI
       # knows which project's `api`/`workers` services to target — without
       # it, `railway up` has no way to disambiguate across every project the
-      # token's workspace can see, and rejects the token outright.
+      # token's workspace can see, and rejects the token outright. It also
+      # can't infer the environment from an account token, hence
+      # --environment production (the only environment this project has).
       - name: Deploy api
-        run: railway up --service api --ci
+        run: railway up --service api --environment production --ci
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: 15de703e-d006-43d8-837f-10b800abb87e
 
       - name: Deploy workers
-        run: railway up --service workers --ci
+        run: railway up --service workers --environment production --ci
         env:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           RAILWAY_PROJECT_ID: 15de703e-d006-43d8-837f-10b800abb87e
