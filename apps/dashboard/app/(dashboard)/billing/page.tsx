@@ -170,7 +170,7 @@ function BillingPageContent() {
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold text-foreground">Billing & Usage</h1>
-        <p className="mt-1 text-sm text-foreground/50">Your plan, recent payments, and month-to-date usage against your plan's included limits.</p>
+        <p className="mt-1 text-sm text-foreground/50">Your plan, recent payments, and month-to-date usage against your plan&apos;s included limits.</p>
       </div>
       {returnNotice ? <p className={`text-xs text-${returnNotice.tone}`}>{returnNotice.text}</p> : null}
       {error ? <p className="text-xs text-danger">{error}</p> : null}
@@ -185,7 +185,7 @@ function BillingPageContent() {
           {!plans ? (
             <div className="h-16 animate-pulse rounded-lg bg-foreground/[0.03]" />
           ) : !plans.paynowConfigured ? (
-            <p className="text-sm text-foreground/50">Payments aren't set up yet on this platform — contact us to upgrade your plan.</p>
+            <p className="text-sm text-foreground/50">Payments aren&apos;t set up yet on this platform — contact us to upgrade your plan.</p>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {plans.plans.map((plan) => {
@@ -340,7 +340,7 @@ function BillingPageContent() {
                 </div>
               </>
             ) : (
-              <p className="text-xs text-foreground/40">You'll be taken to Paynow's secure page to complete payment, then brought back here.</p>
+              <p className="text-xs text-foreground/40">You&apos;ll be taken to Paynow&apos;s secure page to complete payment, then brought back here.</p>
             )}
 
             {mobileInstructions ? (

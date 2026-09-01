@@ -217,7 +217,7 @@ export default function ManagedSetupPage() {
       <div>
         <h1 className="text-xl font-semibold text-foreground">Managed Setup</h1>
         <p className="mt-1 text-sm text-foreground/50">
-          Clients on an Assisted or Fully Managed plan. Starting a session gives you time-boxed, fully audited access to their tenant — through the exact same tools they'd use themselves.
+          Clients on an Assisted or Fully Managed plan. Starting a session gives you time-boxed, fully audited access to their tenant — through the exact same tools they&apos;d use themselves.
         </p>
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}

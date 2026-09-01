@@ -361,7 +361,7 @@ function IntegrationsPageContent() {
           <div className="mb-3">
             <h2 className="text-sm font-semibold text-foreground">Business tools</h2>
             <p className="mt-0.5 text-xs text-foreground/40">
-              CRM, calendar, and support tools your agent can act on directly, gated by the confirmation/approval rules you'd expect for anything it creates or books.
+              CRM, calendar, and support tools your agent can act on directly, gated by the confirmation/approval rules you&apos;d expect for anything it creates or books.
             </p>
           </div>
           {bizIntegrations === null ? (

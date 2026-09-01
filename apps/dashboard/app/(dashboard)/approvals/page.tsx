@@ -65,7 +65,7 @@ export default function ApprovalsPage() {
       <div>
         <h1 className="text-xl font-semibold text-foreground">Approvals</h1>
         <p className="mt-1 text-sm text-foreground/50">
-          Actions your agents flagged as high-risk — configured to require your team's sign-off before they run. Nothing here executes until you approve it.
+          Actions your agents flagged as high-risk — configured to require your team&apos;s sign-off before they run. Nothing here executes until you approve it.
         </p>
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}

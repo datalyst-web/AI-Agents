@@ -576,7 +576,7 @@ export default function AgentDetailPage() {
       {agent.status === "TESTING" && impersonation ? (
         <p className="text-xs text-foreground/40">
           Only <span className="text-foreground/70">{impersonation.tenantName}</span> can approve this stage — ask them to log in
-          and approve, or have them delegate auto-publish authority in their account settings if that's already agreed.
+          and approve, or have them delegate auto-publish authority in their account settings if that&apos;s already agreed.
         </p>
       ) : null}
       {agent.status === "DRAFT" && !isStaff ? (

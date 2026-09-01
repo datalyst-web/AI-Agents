@@ -37,7 +37,7 @@ export default function ForgotPasswordPage() {
             </svg>
           </div>
           <h1 className="text-xl font-semibold tracking-tight text-white">Reset your password</h1>
-          <p className="mt-1 text-sm text-white/50">We'll email you a link to get back in.</p>
+          <p className="mt-1 text-sm text-white/50">We&apos;ll email you a link to get back in.</p>
         </div>
 
         <div className="rounded-xl3 bg-brand-gradient-soft p-px shadow-card">
