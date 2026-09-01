@@ -1,10 +1,37 @@
-import Fastify, { type FastifyError } from "fastify";
+import jwt from "jsonwebtoken";
+import Fastify, { type FastifyError, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import authPlugin from "./plugins/auth.js";
 import { buildAppContext, type AppContext } from "./lib/context.js";
 import { env } from "./env.js";
+
+/**
+ * Buckets by tenant, not by client IP, whenever a request's Bearer token
+ * names one — a dashboard JWT's `tenantId` claim, or a widget token's
+ * (see lib/widgetToken.ts; both are plain JWTs signed with JWT_SECRET, so
+ * one decode call handles either shape). jwt.decode() deliberately does
+ * NOT verify the signature — this is only ever used to pick a rate-limit
+ * bucket, never an authorization decision, so a forged/expired token
+ * simply lands in its own (harmless) bucket; real auth still verifies it
+ * properly downstream. Falls back to per-IP for anything with no
+ * decodable tenantId — pre-auth routes (login, signup) and a staff
+ * session's own JWT, which deliberately carries no tenantId while
+ * impersonating (see auth.routes.ts's /me comment).
+ */
+export function rateLimitKey(request: FastifyRequest): string {
+  const authHeader = request.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) {
+    try {
+      const decoded = jwt.decode(authHeader.slice(7)) as { tenantId?: string } | null;
+      if (decoded?.tenantId) return `tenant:${decoded.tenantId}`;
+    } catch {
+      // Malformed token — fall through to IP.
+    }
+  }
+  return `ip:${request.ip}`;
+}
 
 import { registerAuthRoutes } from "./routes/auth.routes.js";
 import { registerTenantRoutes } from "./routes/tenants.routes.js";
@@ -48,7 +75,11 @@ export async function buildApp(ctx: AppContext = buildAppContext()) {
       callback(null, isPublic ? { origin: true, credentials: false } : { origin: env.API_CORS_ORIGINS, credentials: true });
     },
   });
-  await app.register(rateLimit, { max: env.API_RATE_LIMIT_PER_MIN, timeWindow: "1 minute" });
+  await app.register(rateLimit, {
+    timeWindow: "1 minute",
+    keyGenerator: rateLimitKey,
+    max: (request) => (rateLimitKey(request).startsWith("tenant:") ? env.API_RATE_LIMIT_PER_TENANT_PER_MIN : env.API_RATE_LIMIT_PER_MIN),
+  });
   await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } });
   await app.register(authPlugin);
 

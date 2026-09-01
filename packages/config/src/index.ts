@@ -126,7 +126,22 @@ export const EnvSchema = z.object({
     .string()
     .default("http://localhost:3000")
     .transform((s) => s.split(",").map((o) => o.trim())),
+  // Fallback limit for requests with no resolvable tenant — pre-auth
+  // routes (login, signup) and anything else keyed by raw IP. Deliberately
+  // tighter than the per-tenant limit below since it's meant to blunt
+  // credential-stuffing/spam-signup attempts, not real traffic volume.
   API_RATE_LIMIT_PER_MIN: z.coerce.number().default(120),
+  // Applies once a request's JWT (dashboard session or widget token) names
+  // a tenantId — every authenticated/tenant-scoped request, including the
+  // widget's own, then shares ONE bucket per tenant rather than per
+  // client IP. Higher than the IP fallback on purpose: this bucket
+  // aggregates a whole business's real customer traffic (many concurrent
+  // widget visitors), not one bad actor. See apps/api/src/app.ts's
+  // rate-limit keyGenerator — without this, one noisy tenant sharing an
+  // IP-based bucket with unrelated traffic (or a popular tenant's widget
+  // traffic spread across many customer IPs never being limited "as a
+  // tenant" at all) was the actual gap this fixes.
+  API_RATE_LIMIT_PER_TENANT_PER_MIN: z.coerce.number().default(600),
 
   WORKERS_CONCURRENCY: z.coerce.number().default(4),
 
