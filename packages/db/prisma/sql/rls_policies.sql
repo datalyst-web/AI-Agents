@@ -55,7 +55,8 @@ BEGIN
       'knowledge_sources', 'documents', 'chunks', 'conversations', 'messages',
       'customer_identities', 'cross_conversation_memory_facts', 'cross_agent_memory_grants',
       'memory_forget_requests', 'tool_definitions', 'pending_human_approvals', 'workflow_definitions', 'workflow_runs',
-      'usage_records', 'billing_line_items', 'usage_limits', 'audit_log_entries', 'channel_connections', 'paynow_payments'
+      'usage_records', 'billing_line_items', 'usage_limits', 'audit_log_entries', 'channel_connections', 'paynow_payments',
+      'team_invites'
     ])
   LOOP
     EXECUTE format('ALTER TABLE chat.%I ENABLE ROW LEVEL SECURITY', tbl);

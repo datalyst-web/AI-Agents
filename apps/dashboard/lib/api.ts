@@ -129,6 +129,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ tenantName, email, password }),
     }),
+  lookupInvite: (token: string) =>
+    apiFetch<{ email: string; role: string; tenantName: string }>(`/v1/auth/invites/${encodeURIComponent(token)}`),
+  acceptInvite: (token: string, displayName: string, password: string) =>
+    apiFetch<{ token: string; tenant: { id: string; slug: string; name: string } }>("/v1/auth/accept-invite", {
+      method: "POST",
+      body: JSON.stringify({ token, displayName, password }),
+    }),
   me: () =>
     apiFetch<{
       id: string;
@@ -356,4 +363,16 @@ export const api = {
     ),
   getAuditLog: (tenantId: string) => apiFetch(`/v1/tenants/${tenantId}/audit-log`),
   getTenant: (tenantId: string) => apiFetch(`/v1/tenants/${tenantId}`),
+
+  getTeam: (tenantId: string) =>
+    apiFetch<{
+      members: { id: string; email: string; displayName: string; role: string; createdAt: string }[];
+      invites: { id: string; email: string; role: string; expiresAt: string; createdAt: string; expired: boolean }[];
+    }>(`/v1/tenants/${tenantId}/team`),
+  inviteTeamMember: (tenantId: string, email: string, role: "tenant_admin" | "tenant_agent_editor" | "tenant_viewer") =>
+    apiFetch(`/v1/tenants/${tenantId}/team/invites`, { method: "POST", body: JSON.stringify({ email, role }) }),
+  revokeInvite: (tenantId: string, inviteId: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/team/invites/${inviteId}`, { method: "DELETE" }),
+  removeTeamMember: (tenantId: string, userId: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/team/members/${userId}`, { method: "DELETE" }),
 };

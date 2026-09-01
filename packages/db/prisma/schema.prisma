@@ -108,6 +108,7 @@ model Tenant {
   memoryForgetRequests      MemoryForgetRequest[]
   pendingHumanApprovals     PendingHumanApproval[]
   channelConnections        ChannelConnection[]
+  teamInvites                TeamInvite[]
 
   @@map("tenants")
   @@schema("chat")
@@ -147,6 +148,34 @@ model User {
 
   @@index([tenantId])
   @@map("users")
+  @@schema("chat")
+}
+
+/// A pending "join this tenant's dashboard" invite — tenant_owner/tenant_admin
+/// only (see shared-types/rbac.ts team:invite), never staff. One row per
+/// tenant+email; re-inviting the same address overwrites the existing
+/// pending row rather than creating a second one, mirroring how
+/// User.passwordResetTokenHash is reused rather than accumulated.
+model TeamInvite {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email    String
+  // Never tenant_owner (there's exactly one, set at signup) or a staff role
+  // — enforced in the route handler's Zod schema, not here.
+  role     Role
+
+  /// SHA-256 of the invite token, same reasoning as User.passwordResetTokenHash.
+  tokenHash       String    @map("token_hash")
+  invitedByUserId String    @map("invited_by_user_id") @db.Uuid
+  expiresAt       DateTime  @map("expires_at")
+  acceptedAt      DateTime? @map("accepted_at")
+  revokedAt       DateTime? @map("revoked_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("team_invites")
   @@schema("chat")
 }
 

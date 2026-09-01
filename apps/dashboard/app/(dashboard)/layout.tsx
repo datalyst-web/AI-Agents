@@ -35,6 +35,7 @@ const TENANT_NAV = [
   { href: "/workflows", label: "Workflows", icon: IconFlow },
   { href: "/approvals", label: "Approvals", icon: IconCheck },
   { href: "/billing", label: "Billing & Usage", icon: IconCard },
+  { href: "/team", label: "Team", icon: IconUsers },
   { href: "/audit-log", label: "Audit Log", icon: IconShield },
 ];
 const CLIENT_NAV = [
@@ -43,6 +44,7 @@ const CLIENT_NAV = [
   { href: "/integrations", label: "Integrations", icon: IconChannels },
   { href: "/approvals", label: "Approvals", icon: IconCheck },
   { href: "/billing", label: "Billing & Usage", icon: IconCard },
+  { href: "/team", label: "Team", icon: IconUsers },
   // Kept for clients on purpose (not an "AI console") — CLAUDE.md requires
   // staff actions on a client's behalf stay visible to that client
   // ("never ambiguity about who configured what"); hiding it would
@@ -289,6 +291,15 @@ function IconCard({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 20 20" fill="none">
       <rect x="3" y="5" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.5" />
       <path d="M3 8.5h14" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+function IconUsers({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none">
+      <circle cx="7.5" cy="6.5" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M3 16.5c0-2.8 2-5 4.5-5s4.5 2.2 4.5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M13 7a2.3 2.3 0 0 1 0 4.4M15.5 16c0-2.2-1.4-4-3.3-4.7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   );
 }

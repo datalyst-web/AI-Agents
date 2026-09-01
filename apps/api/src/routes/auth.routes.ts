@@ -18,9 +18,15 @@ const SignupSchema = z.object({
 });
 const ForgotPasswordSchema = z.object({ email: z.string().email() });
 const ResetPasswordSchema = z.object({ token: z.string().min(1), newPassword: z.string().min(8) });
+const AcceptInviteSchema = z.object({ token: z.string().min(1), displayName: z.string().min(1).max(120), password: z.string().min(8) });
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 function hashResetToken(rawToken: string): string {
+  return createHash("sha256").update(rawToken).digest("hex");
+}
+// Same hashing as team.routes.ts's hashInviteToken — duplicated rather than
+// shared since it's one line and the two files have no other coupling.
+function hashInviteToken(rawToken: string): string {
   return createHash("sha256").update(rawToken).digest("hex");
 }
 
@@ -227,6 +233,67 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
     }
 
     reply.send({ message: "Password updated — you can now log in with your new password." });
+  });
+
+  /**
+   * Public lookup so the accept-invite page can show "You've been invited
+   * to join {tenant} as {role}" before the user commits to setting a
+   * password — never exposes anything else about the tenant.
+   */
+  app.get("/v1/auth/invites/:token", async (request, reply) => {
+    const { token } = request.params as { token: string };
+    const tokenHash = hashInviteToken(token);
+    const invite = await withPlatformContext(ctx.prisma, (tx) =>
+      tx.teamInvite.findFirst({ where: { tokenHash }, include: { tenant: { select: { name: true } } } }),
+    );
+    if (!invite || invite.acceptedAt || invite.revokedAt || invite.expiresAt < new Date()) {
+      reply.code(400).send({ error: "invalid_or_expired_invite" });
+      return;
+    }
+    reply.send({ email: invite.email, role: invite.role, tenantName: invite.tenant.name });
+  });
+
+  app.post("/v1/auth/accept-invite", async (request, reply) => {
+    const body = AcceptInviteSchema.parse(request.body);
+    const tokenHash = hashInviteToken(body.token);
+
+    const result = await withPlatformContext(ctx.prisma, async (tx) => {
+      const invite = await tx.teamInvite.findFirst({ where: { tokenHash } });
+      if (!invite || invite.acceptedAt || invite.revokedAt || invite.expiresAt < new Date()) {
+        return null;
+      }
+      // Re-checked here (not just at invite-creation time) — the invited
+      // address could have registered a separate account in the days
+      // between being invited and accepting.
+      const existing = await tx.user.findUnique({ where: { email: invite.email } });
+      if (existing) {
+        return null;
+      }
+
+      const passwordHash = await bcrypt.hash(body.password, 12);
+      const user = await tx.user.create({
+        data: {
+          id: randomUUID(),
+          tenantId: invite.tenantId,
+          email: invite.email,
+          passwordHash,
+          role: invite.role,
+          displayName: body.displayName,
+        },
+      });
+      await tx.teamInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
+      const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: invite.tenantId } });
+      return { tenant, user };
+    });
+
+    if (!result) {
+      reply.code(400).send({ error: "invalid_or_expired_invite" });
+      return;
+    }
+    // Signed outside the transaction — jwtSign isn't a DB operation and
+    // has no reason to hold the transaction open.
+    const token = await reply.jwtSign({ sub: result.user.id, tenantId: result.tenant.id, role: result.user.role });
+    reply.send({ token, tenant: { id: result.tenant.id, slug: result.tenant.slug, name: result.tenant.name } });
   });
 
   app.get("/v1/auth/me", { preHandler: app.authenticate }, async (request, reply) => {
