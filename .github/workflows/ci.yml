@@ -33,6 +33,10 @@ jobs:
       # prisma/migrations directory, so `prisma migrate deploy` is a no-op
       # against this schema and was never actually testing anything).
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/chat_agent_test?schema=chat
+      # Same admin connection, minus Prisma's `?schema=` query param — that's
+      # a Prisma-only convention, not a libpq one, so raw `psql` rejects it
+      # ("invalid URI query parameter"). Used only by the two psql steps below.
+      PSQL_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/chat_agent_test
       # RLS-enforced connection — packages/db/src/client.test.ts and every
       # "real chat_app_user connection" test (auth/chat/widgetConfig routes,
       # cross-tenant tool isolation) is gated on
@@ -73,11 +77,11 @@ jobs:
       # comment (written for the old migrate-based plan, not db push).
       - name: Bootstrap chat schema, pgvector extension, and chat_app_user role
         run: |
-          psql "$DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS chat;"
-          psql "$DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS vector SCHEMA chat;"
-          psql "$DATABASE_URL" -c "CREATE ROLE chat_app_user WITH LOGIN PASSWORD 'ci-app-user-password' NOBYPASSRLS;"
-          psql "$DATABASE_URL" -c "GRANT USAGE ON SCHEMA chat TO chat_app_user;"
-          psql "$DATABASE_URL" -c "ALTER ROLE chat_app_user SET search_path = chat, public;"
+          psql "$PSQL_DATABASE_URL" -c "CREATE SCHEMA IF NOT EXISTS chat;"
+          psql "$PSQL_DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS vector SCHEMA chat;"
+          psql "$PSQL_DATABASE_URL" -c "CREATE ROLE chat_app_user WITH LOGIN PASSWORD 'ci-app-user-password' NOBYPASSRLS;"
+          psql "$PSQL_DATABASE_URL" -c "GRANT USAGE ON SCHEMA chat TO chat_app_user;"
+          psql "$PSQL_DATABASE_URL" -c "ALTER ROLE chat_app_user SET search_path = chat, public;"
         env:
           PGPASSWORD: postgres
 
@@ -86,8 +90,8 @@ jobs:
 
       - name: Apply pgvector index + RLS policies
         run: |
-          psql "$DATABASE_URL" -f packages/db/prisma/sql/vector_index.sql
-          psql "$DATABASE_URL" -f packages/db/prisma/sql/rls_policies.sql
+          psql "$PSQL_DATABASE_URL" -f packages/db/prisma/sql/vector_index.sql
+          psql "$PSQL_DATABASE_URL" -f packages/db/prisma/sql/rls_policies.sql
         env:
           PGPASSWORD: postgres
 
