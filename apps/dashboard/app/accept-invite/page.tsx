@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Button } from "@chat-agent/ui";
+import { Button, PasswordInput } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
 import { api, ApiError } from "@/lib/api";
 
@@ -85,25 +85,11 @@ function AcceptInviteForm() {
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-white/60">Password</label>
-        <input
-          type="password"
-          required
-          minLength={8}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
-        />
+        <PasswordInput required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
       <div>
         <label className="mb-1 block text-xs font-medium text-white/60">Confirm password</label>
-        <input
-          type="password"
-          required
-          minLength={8}
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
-        />
+        <PasswordInput required minLength={8} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
       <Button type="submit" disabled={busy} className="w-full">

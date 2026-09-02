@@ -8,3 +8,4 @@ export * from "./Sparkline.js";
 export * from "./LineChart.js";
 export * from "./BarBreakdown.js";
 export * from "./Modal.js";
+export * from "./PasswordInput.js";
