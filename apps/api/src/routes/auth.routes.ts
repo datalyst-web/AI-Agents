@@ -6,10 +6,11 @@ import { OAuth2Client } from "google-auth-library";
 import { withPlatformContext, withTenant } from "@chat-agent/db";
 import type { AppContext } from "../lib/context.js";
 import { writeAuditLog } from "../lib/audit.js";
+import { verifyTurnstileToken } from "../lib/turnstile.js";
 import { env } from "../env.js";
 
-const LoginSchema = z.object({ email: z.string().email(), password: z.string().min(8) });
-const GoogleLoginSchema = z.object({ credential: z.string().min(20) });
+const LoginSchema = z.object({ email: z.string().email(), password: z.string().min(8), turnstileToken: z.string().optional() });
+const GoogleLoginSchema = z.object({ credential: z.string().min(20), turnstileToken: z.string().optional() });
 const googleClient = env.GOOGLE_CLIENT_ID ? new OAuth2Client(env.GOOGLE_CLIENT_ID) : null;
 const SignupSchema = z.object({
   tenantName: z.string().min(1).max(120),
@@ -88,6 +89,10 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
 
   app.post("/v1/auth/login", async (request, reply) => {
     const body = LoginSchema.parse(request.body);
+    if (!(await verifyTurnstileToken(body.turnstileToken, request.ip))) {
+      reply.code(400).send({ error: "captcha_failed" });
+      return;
+    }
     // The caller's tenant isn't known until we've looked the user up by
     // email — same platform-context reasoning as signup above.
     const user = await withPlatformContext(ctx.prisma, (tx) => tx.user.findUnique({ where: { email: body.email } }));
@@ -126,6 +131,10 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       return;
     }
     const body = GoogleLoginSchema.parse(request.body);
+    if (!(await verifyTurnstileToken(body.turnstileToken, request.ip))) {
+      reply.code(400).send({ error: "captcha_failed" });
+      return;
+    }
 
     let email: string;
     try {

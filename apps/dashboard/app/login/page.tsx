@@ -11,6 +11,9 @@ import { ApiError } from "@/lib/api";
 // elsewhere in this app — must match the API's GOOGLE_CLIENT_ID exactly, since
 // the backend verifies the token's audience against its own copy of this id.
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+// Public by design (Cloudflare's own docs: the site key is meant to ship to
+// the browser) — only TURNSTILE_SECRET_KEY on the API side is sensitive.
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 declare global {
   interface Window {
@@ -26,6 +29,13 @@ declare global {
         };
       };
     };
+    turnstile?: {
+      render: (
+        container: HTMLElement,
+        options: { sitekey: string; callback: (token: string) => void; "error-callback"?: () => void; theme?: string },
+      ) => string;
+      reset: (widgetId?: string) => void;
+    };
   }
 }
 
@@ -38,18 +48,54 @@ export default function LoginPage() {
   const [googleScriptLoaded, setGoogleScriptLoaded] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement>(null);
 
+  const [turnstileScriptLoaded, setTurnstileScriptLoaded] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileContainerRef = useRef<HTMLDivElement>(null);
+  const turnstileWidgetId = useRef<string | undefined>(undefined);
+  // The Google button's own effect below must NOT re-run (re-initializing/
+  // re-rendering the button) every time the CAPTCHA token changes, so its
+  // callback reads the latest token from this ref rather than closing over
+  // the turnstileToken state value directly.
+  const turnstileTokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    turnstileTokenRef.current = turnstileToken;
+  }, [turnstileToken]);
+
+  // Burns the just-used (single-use) token and gets a fresh one queued up
+  // for the next attempt — without this, a wrong password on attempt 1
+  // would silently fail attempt 2 as well with a stale/already-spent token.
+  function resetTurnstile() {
+    setTurnstileToken(null);
+    if (window.turnstile && turnstileWidgetId.current) window.turnstile.reset(turnstileWidgetId.current);
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError("Please complete the CAPTCHA.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      await login(email, password);
+      await login(email, password, turnstileToken ?? undefined);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Login failed.");
+      resetTurnstile();
     } finally {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (!turnstileScriptLoaded || !TURNSTILE_SITE_KEY || !turnstileContainerRef.current || !window.turnstile) return;
+    turnstileWidgetId.current = window.turnstile.render(turnstileContainerRef.current, {
+      sitekey: TURNSTILE_SITE_KEY,
+      theme: "dark",
+      callback: (token) => setTurnstileToken(token),
+      "error-callback": () => setTurnstileToken(null),
+    });
+  }, [turnstileScriptLoaded]);
 
   useEffect(() => {
     if (!googleScriptLoaded || !GOOGLE_CLIENT_ID || !googleButtonRef.current || !window.google) return;
@@ -63,12 +109,17 @@ export default function LoginPage() {
       // below for the same action, so the automatic one is just noise.
       auto_select: false,
       callback: async (response) => {
+        if (TURNSTILE_SITE_KEY && !turnstileTokenRef.current) {
+          setError("Please complete the CAPTCHA.");
+          return;
+        }
         setBusy(true);
         setError(null);
         try {
-          await loginWithGoogle(response.credential);
+          await loginWithGoogle(response.credential, turnstileTokenRef.current ?? undefined);
         } catch (err) {
           setError(err instanceof ApiError ? err.message : "Google sign-in failed.");
+          resetTurnstile();
         } finally {
           setBusy(false);
         }
@@ -95,6 +146,13 @@ export default function LoginPage() {
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
       {GOOGLE_CLIENT_ID ? (
         <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onLoad={() => setGoogleScriptLoaded(true)} />
+      ) : null}
+      {TURNSTILE_SITE_KEY ? (
+        <Script
+          src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+          strategy="afterInteractive"
+          onLoad={() => setTurnstileScriptLoaded(true)}
+        />
       ) : null}
       <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-brand-gradient opacity-20 blur-3xl" />
       <div className="relative w-full max-w-sm animate-fade-up">
@@ -131,6 +189,7 @@ export default function LoginPage() {
                 </div>
                 <PasswordInput required value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
+              {TURNSTILE_SITE_KEY ? <div ref={turnstileContainerRef} className="flex justify-center pt-1" /> : null}
               {error ? <p className="text-xs text-danger">{error}</p> : null}
               <Button type="submit" disabled={busy} className="w-full">
                 {busy ? "Signing in..." : "Sign in"}

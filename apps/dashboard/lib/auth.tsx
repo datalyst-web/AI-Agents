@@ -29,8 +29,8 @@ interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
   impersonation: ImpersonationContext | null;
-  login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: (credential: string) => Promise<void>;
+  login: (email: string, password: string, turnstileToken?: string) => Promise<void>;
+  loginWithGoogle: (credential: string, turnstileToken?: string) => Promise<void>;
   acceptInvite: (token: string, displayName: string, password: string) => Promise<void>;
   logout: () => void;
   startImpersonation: (tenantId: string, tenantName: string, reason: string, durationMinutes?: number) => Promise<void>;
@@ -81,16 +81,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     document.documentElement.dataset.theme = (user?.theme ?? "DARK").toLowerCase();
   }, [user?.theme]);
 
-  async function login(email: string, password: string) {
-    const { token } = await api.login(email, password);
+  async function login(email: string, password: string, turnstileToken?: string) {
+    const { token } = await api.login(email, password, turnstileToken);
     setToken(token);
     setImpersonation(null);
     await refreshMe();
     router.push("/");
   }
 
-  async function loginWithGoogle(credential: string) {
-    const { token } = await api.googleLogin(credential);
+  async function loginWithGoogle(credential: string, turnstileToken?: string) {
+    const { token } = await api.googleLogin(credential, turnstileToken);
     setToken(token);
     setImpersonation(null);
     await refreshMe();

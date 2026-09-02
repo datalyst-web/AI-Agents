@@ -110,15 +110,15 @@ async function uploadLogo(path: string, file: File) {
 }
 
 export const api = {
-  login: (email: string, password: string) =>
+  login: (email: string, password: string, turnstileToken?: string) =>
     apiFetch<{ token: string; user: { id: string; tenantId: string; role: string } }>("/v1/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, turnstileToken }),
     }),
-  googleLogin: (credential: string) =>
+  googleLogin: (credential: string, turnstileToken?: string) =>
     apiFetch<{ token: string; user: { id: string; tenantId: string; role: string } }>("/v1/auth/google", {
       method: "POST",
-      body: JSON.stringify({ credential }),
+      body: JSON.stringify({ credential, turnstileToken }),
     }),
   forgotPassword: (email: string) =>
     apiFetch<{ message: string }>("/v1/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),

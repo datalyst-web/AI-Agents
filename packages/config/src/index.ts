@@ -121,6 +121,15 @@ export const EnvSchema = z.object({
   GOOGLE_CALENDAR_CLIENT_ID: z.string().optional(),
   GOOGLE_CALENDAR_CLIENT_SECRET: z.string().optional(),
 
+  // Cloudflare Turnstile — CAPTCHA on the login page. The site key is
+  // public (baked into the dashboard build as NEXT_PUBLIC_TURNSTILE_SITE_KEY,
+  // same pattern as NEXT_PUBLIC_GOOGLE_CLIENT_ID); only the secret key is
+  // needed here, to verify a submitted token server-side against
+  // Cloudflare's siteverify endpoint before login is allowed to proceed.
+  // Optional so local dev/CI never needs a Cloudflare account — see
+  // auth.routes.ts's verifyTurnstileToken, which no-ops when unset.
+  TURNSTILE_SECRET_KEY: z.string().optional(),
+
   API_PORT: z.coerce.number().default(4000),
   API_CORS_ORIGINS: z
     .string()
