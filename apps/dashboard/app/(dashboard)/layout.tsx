@@ -120,7 +120,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               {sidebarBrandName ?? "Chat Agent"}
             </span>
             <span className="block text-[10px] font-medium uppercase tracking-wider text-foreground/35">
-              {sidebarBrandName ? "AI Console" : isOwnStaffHome ? "Console" : "Client Console"}
+              {/* Deliberately keyed off user.brandName (the TENANT's own
+                  white-label branding, only ever present during an active
+                  impersonation) rather than sidebarBrandName above, which
+                  also falls back to the platform operator's own brand —
+                  otherwise staff's own unscoped home (no client in view)
+                  showed "AI Console" just because the platform's fallback
+                  name/logo happened to render, making it look like a real
+                  client console was already open. */}
+              {user.brandName ? "AI Console" : isOwnStaffHome ? "Console" : "Client Console"}
             </span>
           </div>
         </div>
@@ -150,27 +158,32 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="border-t border-surface-border p-3">
-          {!(isStaff && !impersonation) ? (
-            <div className="mb-2 px-2 py-1.5">
-              <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-foreground/35">
-                Theme <span className="normal-case text-foreground/25">— also sets your widget</span>
-              </div>
-              <div className="flex gap-1.5">
-                {THEMES.map((t) => (
-                  <button
-                    key={t.value}
-                    type="button"
-                    title={t.label}
-                    aria-label={`${t.label} theme`}
-                    onClick={() => void setTheme(t.value)}
-                    className={`h-6 w-6 rounded-full ${t.swatch} ring-1 ring-inset ring-black/10 transition-all ${
-                      user.theme === t.value ? "ring-2 ring-brand-400 ring-offset-2 ring-offset-surface-raised" : "hover:scale-110"
-                    }`}
-                  />
-                ))}
-              </div>
+          <div className="mb-2 px-2 py-1.5">
+            <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-foreground/35">
+              Theme{" "}
+              <span className="normal-case text-foreground/25">
+                {/* Staff's own unscoped home has no tenant/widget to affect —
+                    this is purely a local browser preference there (see
+                    setTheme()/getLocalStaffTheme() in lib/auth.tsx), so the
+                    "also sets your widget" framing would be actively wrong. */}
+                {isStaff && !impersonation ? "— this browser only" : "— also sets your widget"}
+              </span>
             </div>
-          ) : null}
+            <div className="flex gap-1.5">
+              {THEMES.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  title={t.label}
+                  aria-label={`${t.label} theme`}
+                  onClick={() => void setTheme(t.value)}
+                  className={`h-6 w-6 rounded-full ${t.swatch} ring-1 ring-inset ring-black/10 transition-all ${
+                    user.theme === t.value ? "ring-2 ring-brand-400 ring-offset-2 ring-offset-surface-raised" : "hover:scale-110"
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
           <div className="flex items-center gap-2.5 rounded-lg px-2 py-2">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-gradient text-xs font-semibold text-white">
               {user.email.slice(0, 1).toUpperCase()}

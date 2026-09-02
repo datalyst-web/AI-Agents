@@ -38,6 +38,10 @@
   --color-warning: 232 165 61;
   --color-danger: 229 72 77;
   --color-info: 74 158 255;
+  /* Second chart-series hue (LineChart's "accent" tone) — same contrast
+     problem as brand-link above, just never had a token to fix it through
+     until now (packages/ui/src/LineChart.tsx hardcoded the hex directly). */
+  --color-accent: 232 121 249;
 }
 
 [data-theme="light"] {
@@ -54,6 +58,7 @@
   --color-warning: 133 77 14; /* ~5.3:1 on white */
   --color-danger: 153 27 27; /* ~5.3:1 on white */
   --color-info: 29 78 216; /* ~5:1 on white */
+  --color-accent: 162 28 175; /* fuchsia-700 — ~5.5:1 on white */
 }
 
 html {

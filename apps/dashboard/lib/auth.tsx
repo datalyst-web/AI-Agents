@@ -40,6 +40,13 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const STAFF_THEME_STORAGE_KEY = "chat-agent:staffTheme";
+function getLocalStaffTheme(): DashboardTheme | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(STAFF_THEME_STORAGE_KEY);
+  return raw === "DARK" || raw === "LIGHT" ? raw : null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,7 +65,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // the tenant being managed, not the staff member's own (nonexistent)
         // tenant. This is the one seam that makes "same tools as a client"
         // (CLAUDE.md) work without touching any other page.
-        setUser(imp ? { ...me, tenantId: imp.tenantId } : me);
+        if (imp) {
+          setUser({ ...me, tenantId: imp.tenantId });
+          return;
+        }
+        // Staff's own unscoped home has no tenant to persist a theme
+        // preference against (the API's theme endpoint is tenant-scoped) —
+        // /me always answers "DARK" here, so fall back to whatever this
+        // browser last chose locally instead, same as
+        // getLocalStaffTheme()/setTheme() below.
+        setUser(me.tenantId ? me : { ...me, theme: getLocalStaffTheme() ?? me.theme });
       })
       .catch(() => {
         setUser(null);
@@ -141,6 +157,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function setTheme(theme: DashboardTheme) {
     if (!user) return;
     setUser({ ...user, theme }); // optimistic — the tenant's own dashboard should feel instant
+    // Staff's own unscoped home (no tenant in view) has nowhere server-side
+    // to persist this — updateTenantTheme needs a real tenantId — so it's
+    // just a per-browser preference here instead of a synced setting.
+    if (!user.tenantId) {
+      localStorage.setItem(STAFF_THEME_STORAGE_KEY, theme);
+      return;
+    }
     try {
       await api.updateTenantTheme(user.tenantId, theme);
     } catch {

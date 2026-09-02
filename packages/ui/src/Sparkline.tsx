@@ -22,7 +22,14 @@ export function Sparkline({
     return [x, y] as const;
   });
   const path = points.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-  const stroke = tone === "success" ? "#2fbf71" : tone === "danger" ? "#e5484d" : "#9db3ff";
+  // rgb(var(--color-x)) — NOT literal hex — so this tracks the same
+  // light/dark-theme-adjusted values as every other themed color (see
+  // globals.css's contrast-ratio comments on --color-success/-danger/
+  // -brand-link). A hardcoded dark-tuned hex here previously read at
+  // ~1.6-2.8:1 contrast on the light theme's near-white surface, well
+  // under WCAG AA.
+  const stroke =
+    tone === "success" ? "rgb(var(--color-success))" : tone === "danger" ? "rgb(var(--color-danger))" : "rgb(var(--color-brand-link))";
   const last = points[points.length - 1]!;
   const [lastX, lastY] = last;
 

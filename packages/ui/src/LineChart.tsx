@@ -32,7 +32,10 @@ export function LineChart({
   const padTop = 16;
   const padBottom = 24;
 
-  const stroke = tone === "accent" ? "#e879f9" : "#9db3ff";
+  // rgb(var(--color-x)) tracks the light/dark-theme-adjusted values (see
+  // globals.css) instead of a literal hex tuned only for dark theme, which
+  // read at ~1.5-2:1 contrast on the light theme's near-white surface.
+  const stroke = tone === "accent" ? "rgb(var(--color-accent))" : "rgb(var(--color-brand-link))";
   const fillId = tone === "accent" ? "chart-fill-accent" : "chart-fill-brand";
 
   const { points, min, max } = useMemo(() => {
