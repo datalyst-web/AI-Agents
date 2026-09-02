@@ -284,19 +284,41 @@ export default function AgentDetailPage() {
   // never a second/independent test conversation.
   const [floatingOpen, setFloatingOpen] = useState(false);
   const floatingScrollRef = useRef<HTMLDivElement>(null);
-  // Drag-to-move for the floating bubble, so it can be pulled off whatever
-  // it's covering while testing (session-only, no persistence — this is a
-  // testing aid, not a real widget setting). Tracked as an offset from the
-  // default bottom-right anchor rather than absolute coordinates, so it
-  // keeps working if the window resizes. dragMoved (a ref, not state) is
-  // how the click handler tells a genuine click apart from the pointerup
-  // that ends a drag — without it, every drag also toggled the panel open/closed.
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  // Drag-to-move for the floating bubble's CLOSED state only — so it can be
+  // pulled off whatever it's covering while testing (session-only, no
+  // persistence — this is a testing aid, not a real widget setting).
+  // Restricted to closed because the same transform also moves the open
+  // 30rem-tall panel; the bounds below are sized for the 56px button, and
+  // dragging that far while the taller panel is attached could push the
+  // panel's own top off-screen with no way to scroll it back (fixed +
+  // transform, not top/left). Kept out of React state entirely — mutating
+  // the wrapper's style directly during pointermove avoids forcing a full
+  // re-render of this page (charts, tables, whatever tab is active) on
+  // every move event, which is fired at pointer-move frequency.
+  const floatingWrapperRef = useRef<HTMLDivElement>(null);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
   const dragStateRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const dragMovedRef = useRef(false);
 
+  function applyDragTransform() {
+    if (floatingWrapperRef.current) {
+      floatingWrapperRef.current.style.transform = `translate(${dragOffsetRef.current.x}px, ${dragOffsetRef.current.y}px)`;
+    }
+  }
+
+  // A dragged position from one agent has no business carrying over to a
+  // different agent's page — Next's App Router can reuse this component
+  // instance across an agentId change (same route template) rather than
+  // remounting it, which would otherwise leave a stale offset in place.
+  useEffect(() => {
+    dragOffsetRef.current = { x: 0, y: 0 };
+    applyDragTransform();
+    setFloatingOpen(false);
+  }, [agentId]);
+
   function onDragPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
-    dragStateRef.current = { startX: e.clientX, startY: e.clientY, originX: dragOffset.x, originY: dragOffset.y };
+    if (floatingOpen) return; // only the closed bubble is draggable — see comment above
+    dragStateRef.current = { startX: e.clientX, startY: e.clientY, originX: dragOffsetRef.current.x, originY: dragOffsetRef.current.y };
     dragMovedRef.current = false;
     e.currentTarget.setPointerCapture(e.pointerId);
   }
@@ -308,6 +330,7 @@ export default function AgentDetailPage() {
     // A few px of jitter on a plain click shouldn't count as a drag.
     if (!dragMovedRef.current && Math.hypot(dx, dy) > 4) dragMovedRef.current = true;
     if (!dragMovedRef.current) return;
+    e.preventDefault();
     // Anchored at bottom-6 right-6, so the only directions that make sense
     // are left/up (negative offsets) — a positive offset would push it off
     // the very edge it started against. The small positive allowance (24px,
@@ -317,10 +340,11 @@ export default function AgentDetailPage() {
     // against the bubble's actual rect, which is precise enough for a drag handle.
     const minX = -(window.innerWidth - 140);
     const minY = -(window.innerHeight - 140);
-    setDragOffset({
+    dragOffsetRef.current = {
       x: Math.min(Math.max(drag.originX + dx, minX), 24),
       y: Math.min(Math.max(drag.originY + dy, minY), 24),
-    });
+    };
+    applyDragTransform();
   }
   function onDragPointerUp(e: React.PointerEvent<HTMLButtonElement>) {
     dragStateRef.current = null;
@@ -709,10 +733,7 @@ export default function AgentDetailPage() {
           widget's launcher + panel so this is a faithful preview of what a
           real customer sees once the agent goes live. */}
       {(agent.status === "LIVE" || agent.status === "TESTING") && tab !== "Test Agent" ? (
-        <div
-          className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-3"
-          style={{ transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)` }}
-        >
+        <div ref={floatingWrapperRef} className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-3">
           {floatingOpen ? (
             <div className="flex h-[30rem] w-[22rem] flex-col overflow-hidden rounded-xl3 bg-brand-gradient-soft p-px shadow-card-hover animate-fade-up">
               <div className="flex h-full flex-col overflow-hidden rounded-[calc(1.75rem-1px)] bg-surface-raised">
@@ -773,7 +794,7 @@ export default function AgentDetailPage() {
             onPointerUp={onDragPointerUp}
             aria-label={floatingOpen ? "Close test widget" : "Open test widget (drag to move)"}
             title="Drag to move"
-            className="flex h-14 w-14 cursor-grab items-center justify-center rounded-full bg-brand-gradient shadow-glow-lg transition-transform hover:scale-105 active:cursor-grabbing"
+            className="flex h-14 w-14 touch-none cursor-grab items-center justify-center rounded-full bg-brand-gradient shadow-glow-lg transition-transform hover:scale-105 active:cursor-grabbing"
           >
             {floatingOpen ? (
               <svg width="18" height="18" viewBox="0 0 14 14" fill="none">
