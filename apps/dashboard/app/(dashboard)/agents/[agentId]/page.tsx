@@ -284,6 +284,48 @@ export default function AgentDetailPage() {
   // never a second/independent test conversation.
   const [floatingOpen, setFloatingOpen] = useState(false);
   const floatingScrollRef = useRef<HTMLDivElement>(null);
+  // Drag-to-move for the floating bubble, so it can be pulled off whatever
+  // it's covering while testing (session-only, no persistence — this is a
+  // testing aid, not a real widget setting). Tracked as an offset from the
+  // default bottom-right anchor rather than absolute coordinates, so it
+  // keeps working if the window resizes. dragMoved (a ref, not state) is
+  // how the click handler tells a genuine click apart from the pointerup
+  // that ends a drag — without it, every drag also toggled the panel open/closed.
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const dragStateRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const dragMovedRef = useRef(false);
+
+  function onDragPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+    dragStateRef.current = { startX: e.clientX, startY: e.clientY, originX: dragOffset.x, originY: dragOffset.y };
+    dragMovedRef.current = false;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function onDragPointerMove(e: React.PointerEvent<HTMLButtonElement>) {
+    const drag = dragStateRef.current;
+    if (!drag) return;
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+    // A few px of jitter on a plain click shouldn't count as a drag.
+    if (!dragMovedRef.current && Math.hypot(dx, dy) > 4) dragMovedRef.current = true;
+    if (!dragMovedRef.current) return;
+    // Anchored at bottom-6 right-6, so the only directions that make sense
+    // are left/up (negative offsets) — a positive offset would push it off
+    // the very edge it started against. The small positive allowance (24px,
+    // matching that inset) just absorbs jitter back toward the start point;
+    // the negative bound leaves ~140px of margin so it can't fully vanish
+    // off the opposite edge either. Approximate rather than measured
+    // against the bubble's actual rect, which is precise enough for a drag handle.
+    const minX = -(window.innerWidth - 140);
+    const minY = -(window.innerHeight - 140);
+    setDragOffset({
+      x: Math.min(Math.max(drag.originX + dx, minX), 24),
+      y: Math.min(Math.max(drag.originY + dy, minY), 24),
+    });
+  }
+  function onDragPointerUp(e: React.PointerEvent<HTMLButtonElement>) {
+    dragStateRef.current = null;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  }
 
   useEffect(() => {
     testScrollRef.current?.scrollTo({ top: testScrollRef.current.scrollHeight, behavior: "smooth" });
@@ -667,7 +709,10 @@ export default function AgentDetailPage() {
           widget's launcher + panel so this is a faithful preview of what a
           real customer sees once the agent goes live. */}
       {(agent.status === "LIVE" || agent.status === "TESTING") && tab !== "Test Agent" ? (
-        <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-3">
+        <div
+          className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-3"
+          style={{ transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)` }}
+        >
           {floatingOpen ? (
             <div className="flex h-[30rem] w-[22rem] flex-col overflow-hidden rounded-xl3 bg-brand-gradient-soft p-px shadow-card-hover animate-fade-up">
               <div className="flex h-full flex-col overflow-hidden rounded-[calc(1.75rem-1px)] bg-surface-raised">
@@ -714,9 +759,21 @@ export default function AgentDetailPage() {
             </div>
           ) : null}
           <button
-            onClick={() => setFloatingOpen((v) => !v)}
-            aria-label={floatingOpen ? "Close test widget" : "Open test widget"}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-gradient shadow-glow-lg transition-transform hover:scale-105"
+            onClick={() => {
+              // A drag that just ended fires this same click on release —
+              // swallow it once, then re-arm for the next real click.
+              if (dragMovedRef.current) {
+                dragMovedRef.current = false;
+                return;
+              }
+              setFloatingOpen((v) => !v);
+            }}
+            onPointerDown={onDragPointerDown}
+            onPointerMove={onDragPointerMove}
+            onPointerUp={onDragPointerUp}
+            aria-label={floatingOpen ? "Close test widget" : "Open test widget (drag to move)"}
+            title="Drag to move"
+            className="flex h-14 w-14 cursor-grab items-center justify-center rounded-full bg-brand-gradient shadow-glow-lg transition-transform hover:scale-105 active:cursor-grabbing"
           >
             {floatingOpen ? (
               <svg width="18" height="18" viewBox="0 0 14 14" fill="none">
