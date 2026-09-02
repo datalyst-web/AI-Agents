@@ -182,6 +182,11 @@ export const api = {
   deactivateStaff: (staffId: string) => apiFetch(`/v1/platform/staff/${staffId}/deactivate`, { method: "POST" }),
   reactivateStaff: (staffId: string) => apiFetch(`/v1/platform/staff/${staffId}/reactivate`, { method: "POST" }),
 
+  getProviderHealth: () =>
+    apiFetch<Record<"anthropic" | "openai" | "gemini", { healthy: boolean; latencyMs?: number; error?: string; checkedAt: string }>>(
+      "/healthz/providers",
+    ),
+
   listManagedSetupQueue: () =>
     apiFetch<
       {

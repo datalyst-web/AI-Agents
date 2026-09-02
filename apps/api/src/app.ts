@@ -5,6 +5,7 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import authPlugin from "./plugins/auth.js";
+import { requirePermission } from "./lib/rbac.js";
 import { buildAppContext, type AppContext } from "./lib/context.js";
 import { env } from "./env.js";
 
@@ -94,7 +95,15 @@ export async function buildApp(ctx: AppContext = buildAppContext()) {
   await app.register(authPlugin);
 
   app.get("/healthz", async () => ({ status: "ok", timestamp: new Date().toISOString() }));
-  app.get("/healthz/providers", async () => ctx.router.healthCheckAll());
+  // Gated (unlike plain /healthz above, which stays public for load-balancer
+  // liveness checks) — this one names actual AI vendors (Anthropic/OpenAI/
+  // Gemini) in its response, which CLAUDE.md's white-label principle says
+  // should never be reachable by anyone outside the platform team.
+  app.get(
+    "/healthz/providers",
+    { preHandler: [app.authenticate, requirePermission("platform:manage_tenants")] },
+    async () => ctx.router.healthCheckAll(),
+  );
 
   await registerChatRoutes(app, ctx);
   await registerWidgetConfigRoutes(app, ctx);

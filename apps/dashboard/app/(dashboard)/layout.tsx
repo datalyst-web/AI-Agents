@@ -51,20 +51,26 @@ const CLIENT_NAV = [
   // defeat the audit trail's whole point.
   { href: "/audit-log", label: "Audit Log", icon: IconShield },
 ];
-const STAFF_NAV = [{ href: "/managed-setup", label: "Managed Setup", icon: IconStaff }];
+const STAFF_NAV_BASE = [{ href: "/managed-setup", label: "Managed Setup", icon: IconStaff }];
+// platform:manage_tenants (which the /healthz/providers endpoint behind
+// this page requires) is only ever granted to platform_admin, never
+// setup_specialist — keeping the link itself platform_admin-only avoids
+// setup_specialist staff clicking into a page that just 403s on load.
+const PLATFORM_ADMIN_NAV = [{ href: "/system-health", label: "System Health", icon: IconPulse }];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, loading, logout, impersonation, endImpersonation, setTheme } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const isStaff = user?.role === "setup_specialist" || user?.role === "platform_admin";
+  const staffNav = user?.role === "platform_admin" ? [...STAFF_NAV_BASE, ...PLATFORM_ADMIN_NAV] : STAFF_NAV_BASE;
   // A staff account with no active impersonation has no tenant to scope
   // client-facing pages to — only the Managed Setup queue makes sense.
   // A genuine client (never staff) always gets the restricted nav —
   // staff retain the full nav while impersonating, per CLAUDE.md's "staff
   // use the exact same tenant-scoped tools a client would," just not a
   // reduced version of them.
-  const nav = isStaff && !impersonation ? STAFF_NAV : impersonation ? [...STAFF_NAV, ...TENANT_NAV] : CLIENT_NAV;
+  const nav = isStaff && !impersonation ? staffNav : impersonation ? [...staffNav, ...TENANT_NAV] : CLIENT_NAV;
 
   // Below md, the sidebar is an off-canvas drawer instead of a permanent
   // column (there's no room for a fixed 256px rail next to real content on
@@ -81,7 +87,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }, [loading, user, router]);
 
   useEffect(() => {
-    if (!loading && isStaff && !impersonation && pathname !== "/managed-setup") router.push("/managed-setup");
+    if (!loading && isStaff && !impersonation && !staffNav.some((item) => item.href === pathname)) {
+      router.push("/managed-setup");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, isStaff, impersonation, pathname, router]);
 
   if (loading || !user) {
@@ -366,6 +375,13 @@ function IconStaff({ className }: { className?: string }) {
       <circle cx="10" cy="6.5" r="3" stroke="currentColor" strokeWidth="1.5" />
       <path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       <path d="M14.5 4.5c1 .3 1.5 1.2 1.5 2s-.5 1.7-1.5 2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconPulse({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none">
+      <path d="M2.5 10h3l1.8-5 3 9 1.8-5.5 1.4 3.5h3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
