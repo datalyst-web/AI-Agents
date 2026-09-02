@@ -34,7 +34,7 @@ export function Modal({
     // to reach it.
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-up" onClick={onClose} />
-      <div className="relative flex min-h-full items-center justify-center px-4 py-8">
+      <div className="relative flex min-h-full items-center justify-center px-4 py-4 sm:py-8">
         <div className="relative w-full max-w-md animate-fade-up rounded-xl3 bg-brand-gradient-soft p-px shadow-card-hover">
           {/* Fully opaque, no backdrop-blur of its own — the scrim above
               already blurs/dims the page. A translucent panel here
@@ -45,7 +45,7 @@ export function Modal({
               page, doesn't read as "solid" the way near-black does).
               A modal should look foregrounded and solid regardless of
               theme, not partially see-through. */}
-          <div className="max-h-[85vh] overflow-y-auto rounded-[calc(1.75rem-1px)] bg-surface-raised p-6">
+          <div className="max-h-[92vh] overflow-y-auto rounded-[calc(1.75rem-1px)] bg-surface-raised p-6 sm:max-h-[85vh]">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-base font-semibold tracking-tight text-foreground">{title}</h3>

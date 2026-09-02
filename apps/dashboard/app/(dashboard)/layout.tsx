@@ -122,7 +122,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         />
       ) : null}
       <aside
-        className={`glass fixed inset-y-0 left-0 z-40 flex h-screen w-64 shrink-0 flex-col border-r border-surface-border transition-transform duration-200 md:sticky md:top-0 md:translate-x-0 ${
+        className={`glass fixed inset-y-0 left-0 z-40 flex h-screen w-64 shrink-0 flex-col overflow-y-auto border-r border-surface-border transition-transform duration-200 md:sticky md:top-0 md:translate-x-0 ${
           mobileNavOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
