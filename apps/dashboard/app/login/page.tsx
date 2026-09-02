@@ -203,7 +203,11 @@ export default function LoginPage() {
                   <span className="text-xs text-white/40">or</span>
                   <div className="h-px flex-1 bg-white/10" />
                 </div>
-                <div ref={googleButtonRef} className="flex justify-center" />
+                {/* h-10 + overflow-hidden + rounded-full crop the white letterboxing Google's
+                    iframe renders around the filled_black pill button — the iframe itself
+                    reports a taller canvas than the visible button, so without a matching-height
+                    clip the white shows as a bar above/below the dark pill. */}
+                <div ref={googleButtonRef} className="flex h-10 justify-center overflow-hidden rounded-full" />
               </>
             ) : null}
           </div>
