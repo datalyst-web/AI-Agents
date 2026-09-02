@@ -97,14 +97,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   // platform operator's own brand (e.g. "Datalyst Africa") when the
   // tenant hasn't been given a custom logo/name yet, or when there's no
   // tenant in scope at all (staff's own Managed Setup view).
-  const sidebarLogoUrl = user.logoUrl ?? user.platformLogoUrl;
-  const sidebarBrandName = user.brandName ?? user.platformBrandName;
   // Staff's own home (no client in view yet) gets a fixed, neutral
   // identity — "Client Console" would be misleading here since there's
   // no client currently in scope. The moment "Manage this client" starts
   // an impersonation session, sidebarBrandName/sidebarLogoUrl switch to
   // that client's own branding (or the unbranded-client default below).
   const isOwnStaffHome = isStaff && !impersonation;
+  // The platform's own brand/logo is deliberately NOT shown here — it
+  // used to fall back to it whenever no tenant was in scope, which made
+  // staff's own unmanaged home look like a real client's console was
+  // already open before anyone clicked "Manage this client".
+  const sidebarLogoUrl = isOwnStaffHome ? null : (user.logoUrl ?? user.platformLogoUrl);
+  const sidebarBrandName = isOwnStaffHome ? null : (user.brandName ?? user.platformBrandName);
 
   return (
     <div className="flex min-h-screen">
