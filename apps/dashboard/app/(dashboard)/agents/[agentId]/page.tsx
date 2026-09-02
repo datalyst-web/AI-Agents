@@ -610,13 +610,13 @@ export default function AgentDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-y-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-semibold text-foreground">{agent.name}</h1>
           <AgentStatusBadge status={agent.status} />
           <span className="text-xs text-foreground/30">{agent.version}</span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {isStaff && ["DRAFT", "CONFIGURING", "KNOWLEDGE_PROCESSING"].includes(agent.status) ? (
             <Button onClick={startTesting}>Start Testing</Button>
           ) : null}
@@ -670,12 +670,16 @@ export default function AgentDetailPage() {
         </div>
       </Modal>
 
-      <div className="flex gap-1 border-b border-surface-border">
+      {/* overflow-x-auto + shrink-0 tabs: on a narrow viewport 5 tabs (staff)
+          don't fit un-scrolled without either wrapping (breaks the shared
+          border-bottom look) or clipping the last tab(s) off-screen with no
+          way to reach them. */}
+      <div className="flex gap-1 overflow-x-auto border-b border-surface-border">
         {TABS.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium ${tab === t ? "border-b-2 border-brand-500 text-foreground" : "text-foreground/40 hover:text-foreground/70"}`}
+            className={`shrink-0 px-4 py-2 text-sm font-medium ${tab === t ? "border-b-2 border-brand-500 text-foreground" : "text-foreground/40 hover:text-foreground/70"}`}
           >
             {t}
           </button>
@@ -735,7 +739,7 @@ export default function AgentDetailPage() {
       {(agent.status === "LIVE" || agent.status === "TESTING") && tab !== "Test Agent" ? (
         <div ref={floatingWrapperRef} className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-3">
           {floatingOpen ? (
-            <div className="flex h-[30rem] w-[22rem] flex-col overflow-hidden rounded-xl3 bg-brand-gradient-soft p-px shadow-card-hover animate-fade-up">
+            <div className="flex h-[30rem] max-h-[calc(100vh-8rem)] w-[22rem] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-xl3 bg-brand-gradient-soft p-px shadow-card-hover animate-fade-up">
               <div className="flex h-full flex-col overflow-hidden rounded-[calc(1.75rem-1px)] bg-surface-raised">
                 <div className="flex items-center justify-between border-b border-surface-border px-4 py-3">
                   <div className="flex items-center gap-2.5">
@@ -901,7 +905,7 @@ export default function AgentDetailPage() {
               <CardHeader title="Version history" subtitle="A snapshot is taken every time you publish to Live. Roll back if a change causes problems." />
               <CardBody className="divide-y divide-surface-border p-0">
                 {versions.map((v) => (
-                  <div key={v.id} className="flex items-center justify-between px-5 py-3 text-sm">
+                  <div key={v.id} className="flex flex-wrap items-center justify-between gap-y-2 px-5 py-3 text-sm">
                     <div>
                       <span className="font-medium text-foreground">{v.version}</span>
                       <span className="ml-2 text-xs text-foreground/40">{new Date(v.publishedAt).toLocaleString()}</span>
@@ -969,7 +973,7 @@ export default function AgentDetailPage() {
                 <p className="px-5 py-6 text-sm text-foreground/40">No knowledge sources yet.</p>
               ) : (
                 knowledge.map((k) => (
-                  <div key={k.id} className="flex items-center justify-between px-5 py-3 text-sm">
+                  <div key={k.id} className="flex flex-wrap items-center justify-between gap-y-2 px-5 py-3 text-sm">
                     <div className="flex items-center gap-2">
                       <span className="text-foreground">{k.originalFilename ?? k.sourceUrl ?? k.type}</span>
                       <ContentSourceTag source={k.addedBySource} />
@@ -1003,7 +1007,7 @@ export default function AgentDetailPage() {
                 <p className="px-5 py-6 text-sm text-foreground/40">No conversations yet.</p>
               ) : (
                 conversations.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between px-5 py-3 text-sm">
+                  <div key={c.id} className="flex flex-wrap items-center justify-between gap-y-2 px-5 py-3 text-sm">
                     <span className="text-foreground/70">{new Date(c.startedAt).toLocaleString()}</span>
                     <div className="flex items-center gap-3">
                       <span

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth, type DashboardTheme } from "@/lib/auth";
@@ -66,6 +66,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   // reduced version of them.
   const nav = isStaff && !impersonation ? STAFF_NAV : impersonation ? [...STAFF_NAV, ...TENANT_NAV] : CLIENT_NAV;
 
+  // Below md, the sidebar is an off-canvas drawer instead of a permanent
+  // column (there's no room for a fixed 256px rail next to real content on
+  // a phone-width viewport) — closed by default, toggled by the header's
+  // hamburger button, and auto-closed on navigation so it doesn't stay
+  // open covering the page a user just tapped through to.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
   useEffect(() => {
     if (!loading && !user) router.push("/login");
   }, [loading, user, router]);
@@ -98,7 +108,20 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      <aside className="glass sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-surface-border">
+      {/* Backdrop — mobile only, closes the drawer on tap-outside. z-30 sits
+          between the drawer (z-40) and everything else. */}
+      {mobileNavOpen ? (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden="true"
+        />
+      ) : null}
+      <aside
+        className={`glass fixed inset-y-0 left-0 z-40 flex h-screen w-64 shrink-0 flex-col border-r border-surface-border transition-transform duration-200 md:sticky md:top-0 md:translate-x-0 ${
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         <div className="flex items-center gap-2.5 px-5 py-6">
           {sidebarLogoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -200,9 +223,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       <div className="flex min-h-screen flex-1 flex-col">
         {impersonation ? (
-          <div className="sticky top-0 z-20 flex items-center justify-between gap-3 bg-warning/15 px-8 py-2 text-xs ring-1 ring-inset ring-warning/30">
+          <div className="sticky top-0 z-20 flex flex-col items-start gap-2 bg-warning/15 px-4 py-2 text-xs ring-1 ring-inset ring-warning/30 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-8">
             <span className="flex items-center gap-2 font-medium text-warning">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0">
                 <path d="M8 3l6.5 11H1.5L8 3Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
                 <path d="M8 6.5v3M8 11.5v.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
@@ -216,9 +239,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </button>
           </div>
         ) : null}
-        <header className="glass sticky top-0 z-10 flex h-16 items-center justify-between border-b border-surface-border px-8">
-          <div className="flex items-center gap-2 text-xs text-foreground/40">
-            <span className="rounded-full bg-success/10 px-2 py-1 font-medium text-success ring-1 ring-inset ring-success/25">
+        <header className="glass sticky top-0 z-10 flex h-16 items-center justify-between border-b border-surface-border px-4 sm:px-8">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileNavOpen(true)}
+              aria-label="Open menu"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-foreground/60 transition-colors hover:bg-foreground/5 hover:text-foreground md:hidden"
+            >
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+              </svg>
+            </button>
+            <span className="hidden rounded-full bg-success/10 px-2 py-1 text-xs font-medium text-success ring-1 ring-inset ring-success/25 sm:inline-block">
               ● All systems live
             </span>
           </div>
@@ -232,7 +264,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             ) : null}
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto px-8 py-8">
+        <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-8">
           <div className="mx-auto max-w-6xl animate-fade-up">{children}</div>
         </main>
       </div>

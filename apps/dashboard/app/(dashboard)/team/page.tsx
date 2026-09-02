@@ -133,7 +133,7 @@ export default function TeamPage() {
         ) : (
           <CardBody className="divide-y divide-surface-border p-0">
             {members.map((m) => (
-              <div key={m.id} className="flex items-center justify-between px-5 py-3.5 text-sm">
+              <div key={m.id} className="flex flex-wrap items-center justify-between gap-y-2 px-5 py-3.5 text-sm">
                 <div>
                   <div className="text-foreground">{m.displayName}</div>
                   <div className="text-xs text-foreground/40">{m.email}</div>
@@ -164,7 +164,7 @@ export default function TeamPage() {
           ) : (
             <CardBody className="divide-y divide-surface-border p-0">
               {invites.map((i) => (
-                <div key={i.id} className="flex items-center justify-between px-5 py-3.5 text-sm">
+                <div key={i.id} className="flex flex-wrap items-center justify-between gap-y-2 px-5 py-3.5 text-sm">
                   <div>
                     <div className="text-foreground">{i.email}</div>
                     <div className="text-xs text-foreground/40">

@@ -236,7 +236,7 @@ export default function ManagedSetupPage() {
               <p className="px-5 py-12 text-center text-sm text-foreground/40">No clients waiting on Assisted or Fully Managed setup right now.</p>
             ) : (
               queue.map((t) => (
-                <div key={t.id} className="flex items-center justify-between px-5 py-3.5 text-sm">
+                <div key={t.id} className="flex flex-col gap-3 px-5 py-3.5 text-sm sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="text-foreground">{t.name}</div>
                     <div className="mt-0.5 flex items-center gap-2">
@@ -244,7 +244,7 @@ export default function ManagedSetupPage() {
                       <Badge tone={t.subscriptionState === "ACTIVE" ? "success" : "neutral"}>{t.subscriptionState.toLowerCase()}</Badge>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => openBranding(t)}
                       className="text-xs font-medium text-foreground/40 transition-colors hover:text-foreground/70"
@@ -300,7 +300,7 @@ export default function ManagedSetupPage() {
               staff.map((s) => {
                 const isSelf = s.id === user?.id;
                 return (
-                  <div key={s.id} className={`flex items-center justify-between px-5 py-3.5 text-sm ${s.isActive ? "" : "opacity-50"}`}>
+                  <div key={s.id} className={`flex flex-col gap-2 px-5 py-3.5 text-sm sm:flex-row sm:items-center sm:justify-between ${s.isActive ? "" : "opacity-50"}`}>
                     <div>
                       <div className="text-foreground">
                         {s.displayName}
@@ -308,7 +308,7 @@ export default function ManagedSetupPage() {
                       </div>
                       <div className="text-xs text-foreground/40">{s.email}</div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <Badge tone={s.role === "platform_admin" ? "brand" : "neutral"}>{ROLE_LABEL[s.role] ?? s.role}</Badge>
                       {!s.isActive ? (
                         <Badge tone="warning">removed</Badge>

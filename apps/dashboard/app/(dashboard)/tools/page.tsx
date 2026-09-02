@@ -138,7 +138,7 @@ export default function ToolsPage() {
               </div>
             ) : (
               tools.map((tool) => (
-                <div key={tool.id} className={`flex items-center justify-between px-5 py-3.5 text-sm ${tool.enabled ? "" : "opacity-50"}`}>
+                <div key={tool.id} className={`flex flex-wrap items-center justify-between gap-y-2 px-5 py-3.5 text-sm ${tool.enabled ? "" : "opacity-50"}`}>
                   <div>
                     <div className="text-foreground">{tool.name}</div>
                     <div className="text-xs text-foreground/40">{tool.description}</div>

@@ -280,7 +280,7 @@ function BillingPageContent() {
             <p className="px-5 py-8 text-center text-sm text-foreground/40">No payments yet.</p>
           ) : (
             payments.map((p) => (
-              <div key={p.id} className="flex items-center justify-between px-5 py-3.5 text-sm">
+              <div key={p.id} className="flex flex-wrap items-center justify-between gap-y-2 px-5 py-3.5 text-sm">
                 <div>
                   <div className="text-foreground">{p.description}</div>
                   <div className="text-xs text-foreground/40">{new Date(p.createdAt).toLocaleString()}</div>

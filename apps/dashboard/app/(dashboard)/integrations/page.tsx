@@ -332,7 +332,7 @@ function IntegrationsPageContent() {
                   subtitle={cm.blurb}
                   action={active ? <Badge tone={STATUS_TONE[active.status]}>Connected</Badge> : <Badge tone="neutral">Not connected</Badge>}
                 />
-                <CardBody className="flex items-center justify-between gap-3">
+                <CardBody className="flex flex-wrap items-center justify-between gap-3">
                   <div className="text-xs text-foreground/40">
                     {active ? active.externalLabel ?? "Connected" : "—"}
                   </div>
@@ -380,7 +380,7 @@ function IntegrationsPageContent() {
                       subtitle={bm.blurb}
                       action={active ? <Badge tone="success">Connected</Badge> : <Badge tone="neutral">Not connected</Badge>}
                     />
-                    <CardBody className="flex items-center justify-between gap-3">
+                    <CardBody className="flex flex-wrap items-center justify-between gap-3">
                       <div className="text-xs text-foreground/40">{active?.label ?? "—"}</div>
                       {active ? (
                         <button

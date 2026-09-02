@@ -125,7 +125,7 @@ export default function AgentsPage() {
                 <Link
                   key={agent.id}
                   href={`/agents/${agent.id}`}
-                  className="flex items-center justify-between px-5 py-3.5 text-sm transition-colors hover:bg-foreground/[0.03]"
+                  className="flex flex-wrap items-center justify-between gap-y-2 px-5 py-3.5 text-sm transition-colors hover:bg-foreground/[0.03]"
                 >
                   <span className="flex items-center gap-3">
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-gradient-soft text-xs font-semibold text-brand-link ring-1 ring-inset ring-brand-500/20">

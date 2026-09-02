@@ -48,7 +48,7 @@ export default function AuditLogPage() {
               <p className="px-5 py-6 text-sm text-foreground/40">No activity yet.</p>
             ) : (
               entries.map((entry) => (
-                <div key={entry.id} className="flex items-center justify-between px-5 py-3 text-sm">
+                <div key={entry.id} className="flex flex-wrap items-center justify-between gap-y-2 px-5 py-3 text-sm">
                   <div className="flex items-center gap-2">
                     <span className="text-foreground">{entry.action.replace(/_/g, " ")}</span>
                     {entry.actorIsStaff ? <Badge tone="brand">AI Setup Team</Badge> : null}

@@ -183,7 +183,7 @@ export default function WorkflowsPage() {
               </div>
             ) : (
               workflows.map((w) => (
-                <div key={w.id} className={`flex items-center justify-between px-5 py-3.5 text-sm ${w.enabled ? "" : "opacity-50"}`}>
+                <div key={w.id} className={`flex flex-wrap items-center justify-between gap-y-2 px-5 py-3.5 text-sm ${w.enabled ? "" : "opacity-50"}`}>
                   <div>
                     <div className="text-foreground">{w.name}</div>
                     <div className="text-xs text-foreground/40">v{w.version}</div>
