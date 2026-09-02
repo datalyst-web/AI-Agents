@@ -65,9 +65,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // the tenant being managed, not the staff member's own (nonexistent)
         // tenant. This is the one seam that makes "same tools as a client"
         // (CLAUDE.md) work without touching any other page.
-        if (imp) {
+        // The server's own /me response never reports impersonation status
+        // through the top-level tenantId field (that's always the staff
+        // row's own — null, impersonating or not); the only server-truth
+        // signal that a tenant actually resolved is theme/branding/plan
+        // data coming back non-default. subscriptionTier is null exactly
+        // when the server found no active tenant in scope — including a
+        // client-side impersonation record (imp) that's expired, was
+        // ended from elsewhere, or was revoked server-side, but hasn't
+        // hit its own locally-cached expiresAt yet. Trusting `imp` alone
+        // here forced a stale tenantId onto every subsequent request
+        // (agents, usage, theme, ...), each rejected 403 by the real
+        // tenant-scope check — including the theme swatch silently
+        // reverting right after a click, since that PATCH failed too.
+        if (imp && me.subscriptionTier !== null) {
           setUser({ ...me, tenantId: imp.tenantId });
           return;
+        }
+        if (imp) {
+          setImpersonation(null);
+          setImpersonationState(null);
         }
         // Staff's own unscoped home has no tenant to persist a theme
         // preference against (the API's theme endpoint is tenant-scoped) —
