@@ -12,13 +12,31 @@ export async function registerConversationRoutes(app: FastifyInstance, ctx: AppC
 
   app.get("/v1/tenants/:tenantId/agents/:agentId/conversations", { preHandler: scoped }, async (request) => {
     const { agentId } = request.params as { agentId: string };
-    const { limit, outcome } = request.query as { limit?: string; outcome?: string };
+    const { limit, outcome, channel, since, until } = request.query as {
+      limit?: string;
+      outcome?: string;
+      channel?: string;
+      since?: string;
+      until?: string;
+    };
     return withTenant(ctx.prisma, request.tenantCtx!, (tx) =>
       tx.conversation.findMany({
         where: {
           tenantId: request.tenantCtx!.tenantId,
           agentId,
           outcome: outcome ? (outcome as never) : undefined,
+          channel: channel ? (channel as never) : undefined,
+          // `until` is a date picker's end-of-range day, not a timestamp —
+          // bump to the START of the NEXT day so that day's own
+          // conversations are included, not silently excluded by an
+          // implicit 00:00:00 cutoff.
+          startedAt:
+            since || until
+              ? {
+                  gte: since ? new Date(since) : undefined,
+                  lt: until ? new Date(new Date(until).getTime() + 24 * 60 * 60 * 1000) : undefined,
+                }
+              : undefined,
         },
         orderBy: { startedAt: "desc" },
         take: limit ? Number(limit) : 50,

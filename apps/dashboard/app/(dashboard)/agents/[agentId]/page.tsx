@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Card, CardHeader, CardBody, Button, AgentStatusBadge, StatTile, ContentSourceTag, LineChart, BarBreakdown, CardRowSkeleton, Modal } from "@chat-agent/ui";
+import { Card, CardHeader, CardBody, Button, Badge, AgentStatusBadge, StatTile, ContentSourceTag, LineChart, BarBreakdown, CardRowSkeleton, Modal } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
 import { api, ApiError } from "@/lib/api";
 
@@ -36,6 +36,8 @@ interface Conversation {
   id: string;
   outcome: string;
   startedAt: string;
+  channel: string;
+  businessResult: string | null;
 }
 interface Analytics {
   total: number;
@@ -261,6 +263,10 @@ export default function AgentDetailPage() {
   const [knowledge, setKnowledge] = useState<KnowledgeSource[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationsLoading, setConversationsLoading] = useState(false);
+  const [conversationOutcomeFilter, setConversationOutcomeFilter] = useState("");
+  const [conversationChannelFilter, setConversationChannelFilter] = useState("");
+  const [conversationSinceFilter, setConversationSinceFilter] = useState("");
+  const [conversationUntilFilter, setConversationUntilFilter] = useState("");
   const [resolvingConversationId, setResolvingConversationId] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [dailyAnalytics, setDailyAnalytics] = useState<DailyAnalytics[] | null>(null);
@@ -429,7 +435,12 @@ export default function AgentDetailPage() {
     if (!user) return;
     setConversationsLoading(true);
     api
-      .listConversations(user.tenantId, agentId)
+      .listConversations(user.tenantId, agentId, {
+        outcome: conversationOutcomeFilter || undefined,
+        channel: conversationChannelFilter || undefined,
+        since: conversationSinceFilter || undefined,
+        until: conversationUntilFilter || undefined,
+      })
       .then((d) => setConversations(d as Conversation[]))
       .catch(() => setConversations([]))
       .finally(() => setConversationsLoading(false));
@@ -450,6 +461,13 @@ export default function AgentDetailPage() {
   }
 
   useEffect(refreshAgent, [user, agentId]);
+  // Separate from the tab-switch effect below so changing a filter
+  // re-fetches immediately without needing to leave and re-enter the
+  // Conversations tab.
+  useEffect(() => {
+    if (user && tab === "Conversations") refreshConversations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationOutcomeFilter, conversationChannelFilter, conversationSinceFilter, conversationUntilFilter]);
   useEffect(() => {
     if (!user) return;
     if (tab === "Knowledge") refreshKnowledge();
@@ -999,6 +1017,59 @@ export default function AgentDetailPage() {
       {tab === "Conversations" ? (
         <Card>
           <CardHeader title="Recent conversations" subtitle="Outcome tracked per CLAUDE.md's Conversation Analytics & Quality section." />
+          <div className="flex flex-wrap items-center gap-2 border-b border-surface-border px-5 py-3">
+            <select
+              value={conversationOutcomeFilter}
+              onChange={(e) => setConversationOutcomeFilter(e.target.value)}
+              className="rounded-lg border border-foreground/10 bg-foreground/5 px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-brand-400"
+            >
+              <option value="" className="bg-surface-overlay text-foreground">All statuses</option>
+              <option value="IN_PROGRESS" className="bg-surface-overlay text-foreground">In progress</option>
+              <option value="RESOLVED" className="bg-surface-overlay text-foreground">Resolved</option>
+              <option value="ESCALATED_TO_HUMAN" className="bg-surface-overlay text-foreground">Escalated</option>
+              <option value="ABANDONED" className="bg-surface-overlay text-foreground">Abandoned</option>
+            </select>
+            <select
+              value={conversationChannelFilter}
+              onChange={(e) => setConversationChannelFilter(e.target.value)}
+              className="rounded-lg border border-foreground/10 bg-foreground/5 px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-brand-400"
+            >
+              <option value="" className="bg-surface-overlay text-foreground">All channels</option>
+              <option value="WIDGET" className="bg-surface-overlay text-foreground">Widget</option>
+              <option value="STANDALONE_URL" className="bg-surface-overlay text-foreground">Standalone link</option>
+              <option value="API" className="bg-surface-overlay text-foreground">API</option>
+              <option value="TELEGRAM" className="bg-surface-overlay text-foreground">Telegram</option>
+              <option value="WHATSAPP" className="bg-surface-overlay text-foreground">WhatsApp</option>
+              <option value="FACEBOOK_MESSENGER" className="bg-surface-overlay text-foreground">Messenger</option>
+              <option value="INSTAGRAM" className="bg-surface-overlay text-foreground">Instagram</option>
+            </select>
+            <input
+              type="date"
+              value={conversationSinceFilter}
+              onChange={(e) => setConversationSinceFilter(e.target.value)}
+              className="rounded-lg border border-foreground/10 bg-foreground/5 px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-brand-400"
+            />
+            <span className="text-xs text-foreground/30">to</span>
+            <input
+              type="date"
+              value={conversationUntilFilter}
+              onChange={(e) => setConversationUntilFilter(e.target.value)}
+              className="rounded-lg border border-foreground/10 bg-foreground/5 px-2.5 py-1.5 text-xs text-foreground outline-none focus:border-brand-400"
+            />
+            {conversationOutcomeFilter || conversationChannelFilter || conversationSinceFilter || conversationUntilFilter ? (
+              <button
+                onClick={() => {
+                  setConversationOutcomeFilter("");
+                  setConversationChannelFilter("");
+                  setConversationSinceFilter("");
+                  setConversationUntilFilter("");
+                }}
+                className="text-xs font-medium text-foreground/40 hover:text-foreground/70"
+              >
+                Clear filters
+              </button>
+            ) : null}
+          </div>
           {conversationsLoading ? (
             <CardRowSkeleton rows={4} />
           ) : (
@@ -1008,7 +1079,11 @@ export default function AgentDetailPage() {
               ) : (
                 conversations.map((c) => (
                   <div key={c.id} className="flex flex-wrap items-center justify-between gap-y-2 px-5 py-3 text-sm">
-                    <span className="text-foreground/70">{new Date(c.startedAt).toLocaleString()}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-foreground/70">{new Date(c.startedAt).toLocaleString()}</span>
+                      <Badge tone="neutral">{c.channel.replace(/_/g, " ").toLowerCase()}</Badge>
+                      {c.businessResult ? <Badge tone="brand">{c.businessResult.replace(/_/g, " ").toLowerCase()}</Badge> : null}
+                    </div>
                     <div className="flex items-center gap-3">
                       <span
                         className={`text-xs font-medium ${

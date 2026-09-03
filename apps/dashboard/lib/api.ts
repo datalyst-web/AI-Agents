@@ -248,7 +248,19 @@ export const api = {
   deleteKnowledge: (tenantId: string, knowledgeSourceId: string) =>
     apiFetch(`/v1/tenants/${tenantId}/knowledge/${knowledgeSourceId}`, { method: "DELETE" }),
 
-  listConversations: (tenantId: string, agentId: string) => apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/conversations`),
+  listConversations: (
+    tenantId: string,
+    agentId: string,
+    filters?: { outcome?: string; channel?: string; since?: string; until?: string },
+  ) => {
+    const params = new URLSearchParams();
+    if (filters?.outcome) params.set("outcome", filters.outcome);
+    if (filters?.channel) params.set("channel", filters.channel);
+    if (filters?.since) params.set("since", filters.since);
+    if (filters?.until) params.set("until", filters.until);
+    const qs = params.toString();
+    return apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/conversations${qs ? `?${qs}` : ""}`);
+  },
   getConversation: (tenantId: string, conversationId: string) => apiFetch(`/v1/tenants/${tenantId}/conversations/${conversationId}`),
   resolveConversation: (tenantId: string, conversationId: string) =>
     apiFetch(`/v1/tenants/${tenantId}/conversations/${conversationId}/resolve`, { method: "POST" }),
