@@ -248,6 +248,17 @@ export const api = {
   deleteKnowledge: (tenantId: string, knowledgeSourceId: string) =>
     apiFetch(`/v1/tenants/${tenantId}/knowledge/${knowledgeSourceId}`, { method: "DELETE" }),
 
+  listLeads: (tenantId: string) =>
+    apiFetch<
+      {
+        id: string;
+        startedAt: string;
+        channel: string;
+        outcome: string;
+        businessResult: string;
+        agent: { name: string };
+      }[]
+    >(`/v1/tenants/${tenantId}/leads`),
   listConversations: (
     tenantId: string,
     agentId: string,

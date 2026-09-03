@@ -26,6 +26,7 @@ const PLAN_LABEL: Record<"STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE", string> 
 const TENANT_NAV = [
   { href: "/", label: "Overview", icon: IconGrid },
   { href: "/agents", label: "Agents", icon: IconBot },
+  { href: "/leads", label: "Leads", icon: IconLead },
   { href: "/tools", label: "Tools & Integrations", icon: IconPlug },
   // Deployment channels (Telegram/WhatsApp/Messenger/Instagram) — unlike
   // Tools above, connecting these needs the CLIENT's own external
@@ -41,6 +42,7 @@ const TENANT_NAV = [
 const CLIENT_NAV = [
   { href: "/", label: "Overview", icon: IconGrid },
   { href: "/agents", label: "Agents", icon: IconBot },
+  { href: "/leads", label: "Leads", icon: IconLead },
   { href: "/integrations", label: "Integrations", icon: IconChannels },
   { href: "/approvals", label: "Approvals", icon: IconCheck },
   { href: "/billing", label: "Billing & Usage", icon: IconCard },
@@ -375,6 +377,15 @@ function IconStaff({ className }: { className?: string }) {
       <circle cx="10" cy="6.5" r="3" stroke="currentColor" strokeWidth="1.5" />
       <path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       <path d="M14.5 4.5c1 .3 1.5 1.2 1.5 2s-.5 1.7-1.5 2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconLead({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none">
+      <rect x="3" y="4.5" width="14" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="7.5" cy="9" r="1.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M5.5 12.5c.5-1.2 1.4-1.8 2-1.8s1.5.6 2 1.8M11.5 8h4M11.5 11h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   );
 }

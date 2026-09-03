@@ -44,6 +44,25 @@ export async function registerConversationRoutes(app: FastifyInstance, ctx: AppC
     );
   });
 
+  /**
+   * Cross-agent lead/business-result list — every conversation with a
+   * businessResult set (lead qualified, sale, ticket created, ...),
+   * regardless of which agent it belongs to. The per-agent conversations
+   * endpoint above can't answer "show me every lead across my whole
+   * business," only one agent at a time.
+   */
+  app.get("/v1/tenants/:tenantId/leads", { preHandler: scoped }, async (request) => {
+    const { limit } = request.query as { limit?: string };
+    return withTenant(ctx.prisma, request.tenantCtx!, (tx) =>
+      tx.conversation.findMany({
+        where: { tenantId: request.tenantCtx!.tenantId, businessResult: { not: null } },
+        include: { agent: { select: { name: true } } },
+        orderBy: { startedAt: "desc" },
+        take: limit ? Number(limit) : 200,
+      }),
+    );
+  });
+
   app.get("/v1/tenants/:tenantId/conversations/:conversationId", { preHandler: scoped }, async (request) => {
     const { conversationId } = request.params as { conversationId: string };
     return withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
