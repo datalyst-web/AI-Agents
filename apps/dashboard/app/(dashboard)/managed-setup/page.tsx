@@ -5,6 +5,7 @@ import { Card, CardBody, CardHeader, Badge, Button, Modal, CardRowSkeleton } fro
 import { useAuth } from "@/lib/auth";
 import { api, ApiError, API_BASE } from "@/lib/api";
 
+type AgentStatus = "DRAFT" | "CONFIGURING" | "KNOWLEDGE_PROCESSING" | "TESTING" | "APPROVED" | "LIVE";
 interface QueueTenant {
   id: string;
   name: string;
@@ -13,6 +14,7 @@ interface QueueTenant {
   updatedAt: string;
   brandName: string | null;
   logoUrl: string | null;
+  agents: { id: string; name: string; status: AgentStatus }[];
 }
 interface StaffAccount {
   id: string;
@@ -25,6 +27,26 @@ interface StaffAccount {
 const TIER_LABEL: Record<string, string> = {
   ASSISTED_SETUP: "Assisted setup",
   FULLY_MANAGED: "Fully managed",
+};
+// Earliest-first — a client with agents at multiple stages is summarized
+// by whichever is furthest from done, since that's the one that actually
+// needs staff attention next.
+const AGENT_STATUS_ORDER: AgentStatus[] = ["DRAFT", "CONFIGURING", "KNOWLEDGE_PROCESSING", "TESTING", "APPROVED", "LIVE"];
+const AGENT_STATUS_LABEL: Record<AgentStatus, string> = {
+  DRAFT: "Draft",
+  CONFIGURING: "Configuring",
+  KNOWLEDGE_PROCESSING: "Processing knowledge",
+  TESTING: "In testing",
+  APPROVED: "Approved",
+  LIVE: "Live",
+};
+const AGENT_STATUS_TONE: Record<AgentStatus, "neutral" | "warning" | "info" | "success"> = {
+  DRAFT: "neutral",
+  CONFIGURING: "warning",
+  KNOWLEDGE_PROCESSING: "warning",
+  TESTING: "info",
+  APPROVED: "info",
+  LIVE: "success",
 };
 const ROLE_LABEL: Record<string, string> = {
   setup_specialist: "Setup specialist",
@@ -242,6 +264,7 @@ export default function ManagedSetupPage() {
                     <div className="mt-0.5 flex items-center gap-2">
                       <Badge tone="brand">{TIER_LABEL[t.managedSetupTier] ?? t.managedSetupTier}</Badge>
                       <Badge tone={t.subscriptionState === "ACTIVE" ? "success" : "neutral"}>{t.subscriptionState.toLowerCase()}</Badge>
+                      <AgentPipelineBadge agents={t.agents} />
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -547,5 +570,22 @@ export default function ManagedSetupPage() {
         </form>
       </Modal>
     </div>
+  );
+}
+
+/**
+ * Onboarding-pipeline visibility at a glance — which stage a managed
+ * client's own agent(s) are actually at, without opening every tenant
+ * individually. Summarized to whichever agent is furthest from LIVE,
+ * since that's the one blocking this client from actually going live.
+ */
+function AgentPipelineBadge({ agents }: { agents: { id: string; name: string; status: AgentStatus }[] }) {
+  if (agents.length === 0) return <Badge tone="neutral">No agent yet</Badge>;
+  const earliest = agents.reduce((a, b) => (AGENT_STATUS_ORDER.indexOf(a.status) <= AGENT_STATUS_ORDER.indexOf(b.status) ? a : b));
+  return (
+    <Badge tone={AGENT_STATUS_TONE[earliest.status]}>
+      {AGENT_STATUS_LABEL[earliest.status]}
+      {agents.length > 1 ? ` (${agents.length} agents)` : ""}
+    </Badge>
   );
 }

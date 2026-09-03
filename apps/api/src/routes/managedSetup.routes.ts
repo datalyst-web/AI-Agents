@@ -85,15 +85,38 @@ export async function registerManagedSetupRoutes(app: FastifyInstance, ctx: AppC
       reply.code(403).send({ error: "forbidden" });
       return;
     }
-    const tenants = await withPlatformContext(ctx.prisma, (tx) =>
-      tx.tenant.findMany({ where: { managedSetupTier: { in: ["ASSISTED_SETUP", "FULLY_MANAGED"] } }, orderBy: { updatedAt: "asc" } }),
-    );
+    const [tenants, agents] = await withPlatformContext(ctx.prisma, async (tx) => {
+      const tenants = await tx.tenant.findMany({
+        where: { managedSetupTier: { in: ["ASSISTED_SETUP", "FULLY_MANAGED"] } },
+        orderBy: { updatedAt: "asc" },
+      });
+      // Onboarding-pipeline visibility (CLAUDE.md Managed Setup Service) —
+      // which stage each managed client's own agent(s) are actually at,
+      // not just the tenant-level tier/subscription badges the queue
+      // already showed. A staff member picking up their queue needs to
+      // see "still on DRAFT" vs "sitting in TESTING waiting on client
+      // approval" without opening every single tenant first.
+      const agents = await tx.agent.findMany({
+        where: { tenantId: { in: tenants.map((t) => t.id) } },
+        select: { tenantId: true, id: true, name: true, status: true },
+      });
+      return [tenants, agents] as const;
+    });
+
+    const agentsByTenant = new Map<string, typeof agents>();
+    for (const agent of agents) {
+      const list = agentsByTenant.get(agent.tenantId) ?? [];
+      list.push(agent);
+      agentsByTenant.set(agent.tenantId, list);
+    }
+
     // logoObjectKey is an internal S3 key — never leak it, expose the
     // servable route instead (same transform as GET /v1/tenants/:tenantId).
     reply.send(
       tenants.map(({ logoObjectKey, ...rest }) => ({
         ...rest,
         logoUrl: logoObjectKey ? `/v1/tenants/${rest.id}/branding/logo` : null,
+        agents: (agentsByTenant.get(rest.id) ?? []).map(({ tenantId: _tenantId, ...a }) => a),
       })),
     );
   });

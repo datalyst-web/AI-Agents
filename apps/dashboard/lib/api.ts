@@ -197,6 +197,7 @@ export const api = {
         updatedAt: string;
         brandName: string | null;
         logoUrl: string | null;
+        agents: { id: string; name: string; status: "DRAFT" | "CONFIGURING" | "KNOWLEDGE_PROCESSING" | "TESTING" | "APPROVED" | "LIVE" }[];
       }[]
     >(
       "/v1/managed-setup/queue",
