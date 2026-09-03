@@ -263,6 +263,45 @@ export async function registerConversationRoutes(app: FastifyInstance, ctx: AppC
             ? ended.reduce((sum, c) => sum + (c.endedAt!.getTime() - c.startedAt.getTime()) / 1000, 0) / ended.length
             : null;
 
+        // Avg response time — how long a customer waits for the agent's
+        // first reply after each of their messages, not overall
+        // conversation length (avgDurationSeconds above already covers
+        // that). Capped to the 200 most recent conversations' messages —
+        // this endpoint has no existing pagination/window on the
+        // conversations query itself, and pulling every message ever for a
+        // long-lived agent isn't worth the extra latency here just to
+        // compute an average that recent activity already represents well.
+        const recentConversationIds = conversations
+          .slice()
+          .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())
+          .slice(0, 200)
+          .map((c) => c.id);
+        const responseMessages =
+          recentConversationIds.length > 0
+            ? await tx.message.findMany({
+                where: { conversationId: { in: recentConversationIds }, role: { in: ["customer", "agent"] } },
+                orderBy: [{ conversationId: "asc" }, { createdAt: "asc" }],
+                select: { conversationId: true, role: true, createdAt: true },
+              })
+            : [];
+        const responseDeltasMs: number[] = [];
+        let pendingCustomerMessageAt: Date | null = null;
+        let pendingConversationId: string | null = null;
+        for (const m of responseMessages) {
+          if (m.conversationId !== pendingConversationId) {
+            pendingConversationId = m.conversationId;
+            pendingCustomerMessageAt = null;
+          }
+          if (m.role === "customer") {
+            pendingCustomerMessageAt = m.createdAt;
+          } else if (m.role === "agent" && pendingCustomerMessageAt) {
+            responseDeltasMs.push(m.createdAt.getTime() - pendingCustomerMessageAt.getTime());
+            pendingCustomerMessageAt = null;
+          }
+        }
+        const avgResponseSeconds =
+          responseDeltasMs.length > 0 ? responseDeltasMs.reduce((a, b) => a + b, 0) / responseDeltasMs.length / 1000 : null;
+
         return {
           total,
           byOutcome,
@@ -276,6 +315,7 @@ export async function registerConversationRoutes(app: FastifyInstance, ctx: AppC
           handoffRate,
           avgMessagesPerConversation,
           avgDurationSeconds,
+          avgResponseSeconds,
         };
       });
     },

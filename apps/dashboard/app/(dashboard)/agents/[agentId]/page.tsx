@@ -52,6 +52,7 @@ interface Analytics {
   handoffRate: number;
   avgMessagesPerConversation: number;
   avgDurationSeconds: number | null;
+  avgResponseSeconds: number | null;
 }
 interface DailyAnalytics {
   date: string;
@@ -110,6 +111,15 @@ function formatDuration(totalSeconds: number | null): string {
   if (minutes < 1) return "<1m";
   if (minutes < 60) return `${minutes}m`;
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+// formatDuration rounds to whole minutes, collapsing anything under 60s to
+// a useless "<1m" — response time is almost always single-digit seconds
+// for an AI reply, so it needs its own sub-minute-precision formatting.
+function formatResponseTime(totalSeconds: number | null): string {
+  if (totalSeconds === null) return "—";
+  if (totalSeconds < 60) return `${totalSeconds.toFixed(1)}s`;
+  return `${Math.round(totalSeconds / 60)}m`;
 }
 
 function CopyField({ value }: { value: string }) {
@@ -1142,6 +1152,7 @@ export default function AgentDetailPage() {
               <StatTile label="Avg sentiment" value={analytics.avgSentiment.toFixed(2)} delayMs={200} />
               <StatTile label="Avg messages / conversation" value={analytics.avgMessagesPerConversation.toFixed(1)} delayMs={240} />
               <StatTile label="Avg conversation length" value={formatDuration(analytics.avgDurationSeconds)} delayMs={280} />
+              <StatTile label="Avg response time" value={formatResponseTime(analytics.avgResponseSeconds)} delayMs={320} />
             </div>
 
             <Card>
@@ -1270,6 +1281,7 @@ export default function AgentDetailPage() {
             <StatTile label="Avg sentiment" value="—" />
             <StatTile label="Avg messages / conversation" value="—" />
             <StatTile label="Avg conversation length" value="—" />
+            <StatTile label="Avg response time" value="—" />
           </div>
         )
       ) : null}
