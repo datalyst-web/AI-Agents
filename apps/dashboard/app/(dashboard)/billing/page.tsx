@@ -13,6 +13,7 @@ interface UsageSummary {
   overageTokens: number;
   estimatedOverageUsd: number;
   byProvider: Record<string, { inputTokens: number; outputTokens: number; requests: number }>;
+  limits: { includedTokensPerMonth: number; hardCapTokensPerMonth: number | null } | null;
 }
 interface DailyUsage {
   date: string;
@@ -86,7 +87,7 @@ function BillingPageContent() {
       .getUsageSummary(user.tenantId)
       .then((d) => setUsage(d as UsageSummary))
       .catch((err) => {
-        setUsage({ totalInputTokens: 0, totalOutputTokens: 0, totalTokens: 0, overageTokens: 0, estimatedOverageUsd: 0, byProvider: {} });
+        setUsage({ totalInputTokens: 0, totalOutputTokens: 0, totalTokens: 0, overageTokens: 0, estimatedOverageUsd: 0, byProvider: {}, limits: null });
         setError(err instanceof ApiError ? err.message : "Could not load usage.");
       });
     api
@@ -174,6 +175,8 @@ function BillingPageContent() {
       </div>
       {returnNotice ? <p className={`text-xs text-${returnNotice.tone}`}>{returnNotice.text}</p> : null}
       {error ? <p className="text-xs text-danger">{error}</p> : null}
+
+      {usage?.limits ? <UsageLimitAlert usage={usage} limits={usage.limits} /> : null}
 
       <Card>
         <CardHeader
@@ -362,4 +365,43 @@ function BillingPageContent() {
       </Modal>
     </div>
   );
+}
+
+/**
+ * Proactive warning before overage charges actually land, not just the
+ * after-the-fact "Overage tokens" stat tile further down this page — a
+ * tenant should see this coming with enough runway to upgrade, not
+ * discover it on next month's bill.
+ */
+function UsageLimitAlert({
+  usage,
+  limits,
+}: {
+  usage: UsageSummary;
+  limits: { includedTokensPerMonth: number; hardCapTokensPerMonth: number | null };
+}) {
+  if (limits.includedTokensPerMonth <= 0) return null;
+  const pct = usage.totalTokens / limits.includedTokensPerMonth;
+  if (pct < 0.8) return null;
+
+  const overCap = limits.hardCapTokensPerMonth !== null && usage.totalTokens >= limits.hardCapTokensPerMonth;
+  const overIncluded = pct >= 1;
+  const message = overCap
+    ? "You've hit your plan's hard usage cap this month — new requests may be blocked until next month or you upgrade."
+    : overIncluded
+      ? `You're ${Math.round((pct - 1) * 100)}% over your plan's included usage this month — overage charges are accruing.`
+      : `You've used ${Math.round(pct * 100)}% of your plan's included usage this month.`;
+
+  // Full literal class strings, not string-interpolated (`bg-${tone}/10`)
+  // — Tailwind's build-time scanner can't see through a template literal,
+  // so a dynamic class name here would silently render unstyled in
+  // production even though it looks correct in source.
+  const TONE_CLASSES = {
+    danger: "bg-danger/10 text-danger ring-danger/25",
+    warning: "bg-warning/10 text-warning ring-warning/25",
+    info: "bg-info/10 text-info ring-info/25",
+  } as const;
+  const toneClasses = TONE_CLASSES[overCap ? "danger" : overIncluded ? "warning" : "info"];
+
+  return <div className={`rounded-xl3 px-5 py-3.5 text-sm font-medium ring-1 ring-inset ${toneClasses}`}>{message}</div>;
 }
