@@ -63,6 +63,79 @@ export async function registerConversationRoutes(app: FastifyInstance, ctx: AppC
     );
   });
 
+  // No LLM output carries a fixed "I don't know" marker — the guardrail
+  // policy (PREFER_UNKNOWN_OVER_INVENTED_FACT_CONFIRM_BEFORE_ACTING, see
+  // shared-types/agent.ts) only instructs the model to say so in its own
+  // words, so this is a heuristic phrase match, not an exact signal. Good
+  // enough for a "here's roughly what your KB is missing" report — CLAUDE.md
+  // calls this "gold for improving the KB" — not a claim of perfect recall.
+  const UNCERTAINTY_PHRASES = [
+    "i don't know",
+    "i do not know",
+    "i'm not sure",
+    "i am not sure",
+    "i don't have that information",
+    "i don't have access to",
+    "i can't verify",
+    "i cannot verify",
+    "i'm unable to",
+    "i am unable to",
+    "i don't have information",
+    "unfortunately, i don't",
+    "i wasn't able to find",
+  ];
+
+  /**
+   * "Couldn't answer" gap report — every customer question that was
+   * followed by an agent reply matching one of the phrases above, newest
+   * first. Correlated in-memory (fetch every message in the matched
+   * conversations once, not one query per match) since the matched set is
+   * naturally small — an agent that's actually working shouldn't have many.
+   */
+  app.get("/v1/tenants/:tenantId/agents/:agentId/gap-report", { preHandler: scoped }, async (request) => {
+    const { agentId } = request.params as { agentId: string };
+    const { limit } = request.query as { limit?: string };
+
+    return withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
+      const uncertainReplies = await tx.message.findMany({
+        where: {
+          tenantId: request.tenantCtx!.tenantId,
+          agentId,
+          role: "agent",
+          OR: UNCERTAINTY_PHRASES.map((phrase) => ({ content: { contains: phrase, mode: "insensitive" as const } })),
+        },
+        orderBy: { createdAt: "desc" },
+        take: limit ? Number(limit) : 100,
+      });
+      if (uncertainReplies.length === 0) return [];
+
+      const conversationIds = [...new Set(uncertainReplies.map((m) => m.conversationId))];
+      const allMessages = await tx.message.findMany({
+        where: { conversationId: { in: conversationIds }, role: { in: ["customer", "agent"] } },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, conversationId: true, role: true, content: true, createdAt: true },
+      });
+      const byConversation = new Map<string, typeof allMessages>();
+      for (const m of allMessages) {
+        const list = byConversation.get(m.conversationId) ?? [];
+        list.push(m);
+        byConversation.set(m.conversationId, list);
+      }
+
+      return uncertainReplies.map((reply) => {
+        const thread = byConversation.get(reply.conversationId) ?? [];
+        const replyIndex = thread.findIndex((m) => m.id === reply.id);
+        const precedingQuestion = [...thread.slice(0, replyIndex)].reverse().find((m) => m.role === "customer");
+        return {
+          conversationId: reply.conversationId,
+          askedAt: precedingQuestion?.createdAt ?? reply.createdAt,
+          question: precedingQuestion?.content ?? null,
+          agentReply: reply.content,
+        };
+      });
+    });
+  });
+
   app.get("/v1/tenants/:tenantId/conversations/:conversationId", { preHandler: scoped }, async (request) => {
     const { conversationId } = request.params as { conversationId: string };
     return withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {

@@ -270,6 +270,9 @@ export default function AgentDetailPage() {
   const [resolvingConversationId, setResolvingConversationId] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [dailyAnalytics, setDailyAnalytics] = useState<DailyAnalytics[] | null>(null);
+  const [gapReport, setGapReport] = useState<{ conversationId: string; askedAt: string; question: string | null; agentReply: string }[] | null>(
+    null,
+  );
   const [versions, setVersions] = useState<VersionSnapshot[]>([]);
   const [rollingBackTo, setRollingBackTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -486,6 +489,10 @@ export default function AgentDetailPage() {
         .getAnalyticsDaily(user.tenantId, agentId, 14)
         .then(setDailyAnalytics)
         .catch(() => setDailyAnalytics([]));
+      api
+        .getGapReport(user.tenantId, agentId)
+        .then(setGapReport)
+        .catch(() => setGapReport([]));
     }
   }, [tab, user, agentId]);
 
@@ -1226,6 +1233,32 @@ export default function AgentDetailPage() {
                 </CardBody>
               </Card>
             </div>
+
+            <Card>
+              <CardHeader
+                title="Couldn't answer"
+                subtitle="Questions the agent responded to with uncertainty — the gaps most worth adding to your knowledge base."
+              />
+              {gapReport === null ? (
+                <CardRowSkeleton rows={3} />
+              ) : gapReport.length === 0 ? (
+                <CardBody>
+                  <p className="py-4 text-center text-sm text-foreground/40">
+                    No uncertain responses in the last 100 — nice knowledge base coverage.
+                  </p>
+                </CardBody>
+              ) : (
+                <CardBody className="divide-y divide-surface-border p-0">
+                  {gapReport.map((g, i) => (
+                    <div key={`${g.conversationId}-${i}`} className="px-5 py-3.5 text-sm">
+                      <div className="text-xs text-foreground/30">{new Date(g.askedAt).toLocaleString()}</div>
+                      {g.question ? <div className="mt-1 text-foreground">{g.question}</div> : null}
+                      <div className="mt-1 text-xs text-foreground/50">{g.agentReply}</div>
+                    </div>
+                  ))}
+                </CardBody>
+              )}
+            </Card>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
