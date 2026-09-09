@@ -253,7 +253,11 @@ function ThreadPanel({
           <div ref={bottomRef} />
         </div>
         {error ? <p className="text-xs text-danger">{error}</p> : null}
-        {item.humanTakeoverActive ? (
+        {item.channel !== "WIDGET" ? (
+          <p className="text-xs text-warning">
+            This conversation is on {item.channel.replace(/_/g, " ").toLowerCase()} — taking over still pauses the AI, but this platform has no way to deliver a typed reply back out to that channel yet (only the website widget polls for staff replies). Use {item.channel.replace(/_/g, " ").toLowerCase()} directly to respond to this customer.
+          </p>
+        ) : item.humanTakeoverActive ? (
           <form onSubmit={sendReply} className="flex gap-2">
             <input
               value={reply}
