@@ -92,6 +92,11 @@ export interface AgentTurnResult {
   toolInvocations: ToolInvocationRecord[];
   handoffTriggered: boolean;
   handoffSummary?: HandoffSummary;
+  /** True while a staff member has taken this conversation over (see the
+   *  early-return branch below) — tells the caller (chat.routes.ts, and
+   *  ultimately the widget) to start polling for new staff messages
+   *  instead of treating `reply` as the actual answer. */
+  humanTakeoverActive?: boolean;
 }
 
 interface StoredPendingToolCall {
@@ -228,6 +233,38 @@ export async function processCustomerMessage(
             sentimentTrend: [],
           },
         });
+
+    // ---- Live human takeover ------------------------------------------------
+    // A staff member has taken this specific conversation over (see
+    // conversations.routes.ts's takeover/release endpoints) — record the
+    // customer's message and stop here entirely. No retrieval, no tool
+    // registry, no model call: a human is driving now, not the AI, and
+    // this is the one deliberate exception to "every customer message
+    // gets an AI-generated reply" elsewhere in this function. `reply` is a
+    // fixed, honest placeholder (never a fabricated answer) — the actual
+    // human reply arrives as its own "staff"-role message the widget picks
+    // up by polling while humanTakeoverActive is true (see
+    // apps/widget/src/widget.ts).
+    if (conversation.humanTakeoverActive) {
+      await tx.message.create({
+        data: {
+          id: randomUUID(),
+          tenantId: input.tenantId,
+          agentId: input.agentId,
+          conversationId: conversation.id,
+          role: "customer",
+          content: input.customerMessage,
+          sentimentScore: scoreSentiment(input.customerMessage),
+        },
+      });
+      return {
+        conversationId: conversation.id,
+        reply: "A team member is handling this conversation and will reply here shortly.",
+        toolInvocations: [],
+        handoffTriggered: false,
+        humanTakeoverActive: true,
+      };
+    }
 
     const history = await tx.message.findMany({
       where: { conversationId: conversation.id },

@@ -14,6 +14,7 @@ interface QueueTenant {
   updatedAt: string;
   brandName: string | null;
   logoUrl: string | null;
+  dataResidencyRegion: string | null;
   agents: { id: string; name: string; status: AgentStatus }[];
 }
 interface StaffAccount {
@@ -70,6 +71,11 @@ export default function ManagedSetupPage() {
   const [uploadingClientLogo, setUploadingClientLogo] = useState(false);
   const [clientBrandingError, setClientBrandingError] = useState<string | null>(null);
   const clientLogoInputRef = useRef<HTMLInputElement>(null);
+  const [presets, setPresets] = useState<{ id: string; name: string; brandName: string }[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState("");
+  const [applyingPreset, setApplyingPreset] = useState(false);
+  const [dataResidency, setDataResidency] = useState("");
+  const [savingResidency, setSavingResidency] = useState(false);
 
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [newTenantName, setNewTenantName] = useState("");
@@ -91,6 +97,7 @@ export default function ManagedSetupPage() {
     if (!user) return;
     api.listManagedSetupQueue().then(setQueue).catch((err) => setError(err instanceof ApiError ? err.message : "Could not load the queue."));
     api.listStaff().then(setStaff).catch(() => setStaff([]));
+    api.listBrandingPresets().then(setPresets).catch(() => setPresets([]));
   }
   useEffect(refresh, [user]);
 
@@ -158,6 +165,38 @@ export default function ManagedSetupPage() {
     setClientBrandName(t.brandName ?? "");
     setClientLogoUrl(t.logoUrl);
     setClientBrandingError(null);
+    setSelectedPresetId("");
+    setDataResidency(t.dataResidencyRegion ?? "");
+  }
+
+  async function applyPreset() {
+    if (!brandingTarget || !selectedPresetId) return;
+    setApplyingPreset(true);
+    setClientBrandingError(null);
+    try {
+      await api.applyBrandingPreset(brandingTarget.id, selectedPresetId);
+      const preset = presets.find((p) => p.id === selectedPresetId);
+      if (preset) setClientBrandName(preset.brandName);
+      refresh();
+    } catch (err) {
+      setClientBrandingError(err instanceof ApiError ? err.message : "Could not apply that preset.");
+    } finally {
+      setApplyingPreset(false);
+    }
+  }
+
+  async function saveDataResidency() {
+    if (!brandingTarget) return;
+    setSavingResidency(true);
+    setClientBrandingError(null);
+    try {
+      await api.updateDataResidency(brandingTarget.id, dataResidency.trim() || null);
+      refresh();
+    } catch (err) {
+      setClientBrandingError(err instanceof ApiError ? err.message : "Could not save data residency.");
+    } finally {
+      setSavingResidency(false);
+    }
   }
 
   async function saveClientBrandName() {
@@ -431,6 +470,45 @@ export default function ManagedSetupPage() {
               />
               <Button type="button" disabled={savingClientBrand} onClick={saveClientBrandName}>
                 {savingClientBrand ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          </div>
+          {presets.length > 0 ? (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-foreground/60">Apply a branding preset</label>
+              <div className="flex gap-2">
+                <select
+                  value={selectedPresetId}
+                  onChange={(e) => setSelectedPresetId(e.target.value)}
+                  className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-500"
+                >
+                  <option value="" className="bg-surface-overlay text-foreground">Select a preset…</option>
+                  {presets.map((p) => (
+                    <option key={p.id} value={p.id} className="bg-surface-overlay text-foreground">
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                <Button type="button" variant="secondary" disabled={!selectedPresetId || applyingPreset} onClick={applyPreset}>
+                  {applyingPreset ? "Applying…" : "Apply"}
+                </Button>
+              </div>
+              <p className="mt-1 text-xs text-foreground/40">Overwrites this client&apos;s name and logo with the preset&apos;s.</p>
+            </div>
+          ) : null}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-foreground/60">
+              Data residency <span className="text-foreground/30">— disclosure only, doesn&apos;t relocate data</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                value={dataResidency}
+                onChange={(e) => setDataResidency(e.target.value)}
+                placeholder="e.g. EU, US — as agreed with this client"
+                className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-500"
+              />
+              <Button type="button" variant="secondary" disabled={savingResidency} onClick={saveDataResidency}>
+                {savingResidency ? "Saving…" : "Save"}
               </Button>
             </div>
           </div>

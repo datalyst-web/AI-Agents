@@ -150,6 +150,10 @@ export const api = {
       logoUrl: string | null;
       platformBrandName: string | null;
       platformLogoUrl: string | null;
+      notifyEscalationEmail: boolean;
+      notifyEscalationSms: boolean;
+      notifyEscalationPush: boolean;
+      phoneNumber: string | null;
     }>("/v1/auth/me"),
   updateTenantTheme: (tenantId: string, theme: "DARK" | "LIGHT") =>
     apiFetch(`/v1/tenants/${tenantId}/theme`, { method: "PATCH", body: JSON.stringify({ theme }) }),
@@ -197,6 +201,7 @@ export const api = {
         updatedAt: string;
         brandName: string | null;
         logoUrl: string | null;
+        dataResidencyRegion: string | null;
         agents: { id: string; name: string; status: "DRAFT" | "CONFIGURING" | "KNOWLEDGE_PROCESSING" | "TESTING" | "APPROVED" | "LIVE" }[];
       }[]
     >(
@@ -408,4 +413,152 @@ export const api = {
     apiFetch(`/v1/tenants/${tenantId}/team/invites/${inviteId}`, { method: "DELETE" }),
   removeTeamMember: (tenantId: string, userId: string) =>
     apiFetch(`/v1/tenants/${tenantId}/team/members/${userId}`, { method: "DELETE" }),
+
+  // --- Live inbox / human takeover ---
+  getLiveInbox: (tenantId: string) =>
+    apiFetch<
+      {
+        id: string;
+        agentId: string;
+        agentName: string;
+        channel: string;
+        startedAt: string;
+        handoffRequested: boolean;
+        humanTakeoverActive: boolean;
+        takenOverByUserId: string | null;
+        lastMessage: { role: string; content: string; createdAt: string } | null;
+      }[]
+    >(`/v1/tenants/${tenantId}/live-inbox`),
+  takeoverConversation: (tenantId: string, conversationId: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/conversations/${conversationId}/takeover`, { method: "POST" }),
+  releaseConversation: (tenantId: string, conversationId: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/conversations/${conversationId}/release`, { method: "POST" }),
+  sendStaffReply: (tenantId: string, conversationId: string, message: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/conversations/${conversationId}/staff-reply`, {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    }),
+  getConversationMessages: (tenantId: string, conversationId: string) =>
+    apiFetch<{ id: string; role: string; content: string; createdAt: string }[]>(
+      `/v1/tenants/${tenantId}/conversations/${conversationId}/messages`,
+    ),
+
+  // --- Notification preferences (self-service) ---
+  updateNotificationPreferences: (body: {
+    notifyEscalationEmail?: boolean;
+    notifyEscalationSms?: boolean;
+    notifyEscalationPush?: boolean;
+    phoneNumber?: string | null;
+  }) =>
+    apiFetch<{ notifyEscalationEmail: boolean; notifyEscalationSms: boolean; notifyEscalationPush: boolean; phoneNumber: string | null }>(
+      "/v1/auth/me/notification-preferences",
+      { method: "PATCH", body: JSON.stringify(body) },
+    ),
+
+  // --- Data residency (staff-only, disclosure) ---
+  updateDataResidency: (tenantId: string, dataResidencyRegion: string | null) =>
+    apiFetch(`/v1/platform/tenants/${tenantId}/data-residency`, {
+      method: "PATCH",
+      body: JSON.stringify({ dataResidencyRegion }),
+    }),
+
+  // --- Support tickets ---
+  listSupportTickets: (tenantId: string) =>
+    apiFetch<
+      { id: string; subject: string; description: string; priority: string; status: string; createdAt: string; resolvedAt: string | null }[]
+    >(`/v1/tenants/${tenantId}/support-tickets`),
+  createSupportTicket: (tenantId: string, body: { subject: string; description: string; priority?: "LOW" | "NORMAL" | "HIGH" | "URGENT" }) =>
+    apiFetch(`/v1/tenants/${tenantId}/support-tickets`, { method: "POST", body: JSON.stringify(body) }),
+  listAllSupportTickets: () =>
+    apiFetch<
+      {
+        id: string;
+        tenantId: string;
+        tenant: { name: string };
+        subject: string;
+        description: string;
+        priority: string;
+        status: string;
+        createdAt: string;
+        resolvedAt: string | null;
+      }[]
+    >("/v1/platform/support-tickets"),
+  updateSupportTicketStatus: (id: string, status: "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED") =>
+    apiFetch(`/v1/platform/support-tickets/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+
+  // --- Security flags (prompt injection triage) ---
+  listSecurityFlags: (reviewed?: boolean) =>
+    apiFetch<
+      {
+        id: string;
+        tenantId: string;
+        tenant: { name: string };
+        matchedPhrase: string;
+        content: string;
+        flaggedAt: string;
+        reviewed: boolean;
+        reviewedAt: string | null;
+      }[]
+    >(`/v1/platform/security-flags${reviewed !== undefined ? `?reviewed=${reviewed}` : ""}`),
+  markSecurityFlagReviewed: (id: string) =>
+    apiFetch(`/v1/platform/security-flags/${id}`, { method: "PATCH", body: JSON.stringify({ reviewed: true }) }),
+
+  // --- Incidents ---
+  listIncidents: () =>
+    apiFetch<
+      { id: string; title: string; description: string; severity: string; status: string; startedAt: string; resolvedAt: string | null }[]
+    >("/v1/platform/incidents"),
+  createIncident: (body: { title: string; description: string; severity?: "MINOR" | "MAJOR" | "CRITICAL" }) =>
+    apiFetch("/v1/platform/incidents", { method: "POST", body: JSON.stringify(body) }),
+  updateIncidentStatus: (id: string, status: "OPEN" | "MONITORING" | "RESOLVED") =>
+    apiFetch(`/v1/platform/incidents/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+
+  // --- Feature flags ---
+  listFeatureFlags: () =>
+    apiFetch<
+      { id: string; key: string; name: string; description: string; enabledTiers: string[] }[]
+    >("/v1/platform/feature-flags"),
+  createFeatureFlag: (body: { key: string; name: string; description?: string; enabledTiers?: string[] }) =>
+    apiFetch("/v1/platform/feature-flags", { method: "POST", body: JSON.stringify(body) }),
+  updateFeatureFlag: (id: string, body: { name?: string; description?: string; enabledTiers?: string[] }) =>
+    apiFetch(`/v1/platform/feature-flags/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteFeatureFlag: (id: string) => apiFetch(`/v1/platform/feature-flags/${id}`, { method: "DELETE" }),
+
+  // --- Prompt templates ---
+  listPromptTemplates: () =>
+    apiFetch<
+      { id: string; name: string; description: string; systemInstructions: string; guardrailPolicy: string; isDefault: boolean }[]
+    >("/v1/platform/prompt-templates"),
+  createPromptTemplate: (body: { name: string; description?: string; systemInstructions: string; guardrailPolicy?: string; isDefault?: boolean }) =>
+    apiFetch("/v1/platform/prompt-templates", { method: "POST", body: JSON.stringify(body) }),
+  updatePromptTemplate: (id: string, body: Partial<{ name: string; description: string; systemInstructions: string; guardrailPolicy: string; isDefault: boolean }>) =>
+    apiFetch(`/v1/platform/prompt-templates/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deletePromptTemplate: (id: string) => apiFetch(`/v1/platform/prompt-templates/${id}`, { method: "DELETE" }),
+
+  // --- Branding presets ---
+  listBrandingPresets: () =>
+    apiFetch<{ id: string; name: string; brandName: string; logoUrl: string | null }[]>("/v1/platform/branding-presets"),
+  createBrandingPreset: (name: string, brandName: string) =>
+    apiFetch<{ id: string }>("/v1/platform/branding-presets", { method: "POST", body: JSON.stringify({ name, brandName }) }),
+  uploadBrandingPresetLogo: (id: string, file: File) => uploadLogo(`/v1/platform/branding-presets/${id}/logo`, file),
+  deleteBrandingPreset: (id: string) => apiFetch(`/v1/platform/branding-presets/${id}`, { method: "DELETE" }),
+  applyBrandingPreset: (tenantId: string, presetId: string) =>
+    apiFetch(`/v1/platform/tenants/${tenantId}/branding/apply-preset`, { method: "POST", body: JSON.stringify({ presetId }) }),
+
+  // --- Platform analytics ---
+  getPlatformBusinessAnalytics: () =>
+    apiFetch<{
+      totalTenants: number;
+      mrr: number;
+      churnRate: number;
+      byTier: Record<string, number>;
+      byState: Record<string, number>;
+    }>("/v1/platform/analytics/business"),
+  getPlatformUsageAnalytics: (days = 30) =>
+    apiFetch<{
+      windowDays: number;
+      totalTokens: number;
+      totalCostUsd: number;
+      byProvider: Record<string, { inputTokens: number; outputTokens: number; requests: number; estimatedCostUsd: number }>;
+    }>(`/v1/platform/analytics/usage?days=${days}`),
 };

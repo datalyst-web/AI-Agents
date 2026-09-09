@@ -94,6 +94,7 @@ interface ChatResponse {
   reply: string;
   pendingConfirmation?: PendingConfirmation;
   handoffTriggered: boolean;
+  humanTakeoverActive?: boolean;
 }
 
 (function bootstrap() {
@@ -362,9 +363,52 @@ interface ChatResponse {
       persist();
       if (data.reply) appendMessage("agent", data.reply);
       if (data.pendingConfirmation) showConfirmation(data.pendingConfirmation);
+      if (data.humanTakeoverActive) startTakeoverPolling();
+      else stopTakeoverPolling();
     } catch {
       typing.remove();
       appendMessage("agent", "Sorry, I'm having trouble responding right now. Please try again shortly.");
+    }
+  }
+
+  // While a staff member has taken this conversation over, their replies
+  // arrive as ordinary messages on the server with no way for this widget
+  // to be pushed to (no websocket/SSE channel exists) — polling the same
+  // messages endpoint the widget already has is the only way to surface
+  // them without a bigger realtime infrastructure change. Scoped to only
+  // run while takeover is actually active, not on every conversation.
+  let takeoverPollTimer: ReturnType<typeof setInterval> | undefined;
+  let lastSeenMessageId: string | undefined;
+  function startTakeoverPolling() {
+    if (takeoverPollTimer) return;
+    takeoverPollTimer = setInterval(pollForStaffMessages, 4000);
+  }
+  function stopTakeoverPolling() {
+    clearInterval(takeoverPollTimer);
+    takeoverPollTimer = undefined;
+  }
+  async function pollForStaffMessages() {
+    if (!conversationId || !config) return;
+    try {
+      const resp = await fetch(`${apiBase}/v1/chat/${agentId}/conversations/${conversationId}/messages`, {
+        headers: { authorization: `Bearer ${config.widgetToken}` },
+      });
+      if (!resp.ok) return;
+      const messages = (await resp.json()) as { id: string; role: string; content: string }[];
+      if (lastSeenMessageId === undefined) {
+        // First poll after takeover starts — establish the baseline
+        // without re-appending the entire history that's already shown.
+        lastSeenMessageId = messages[messages.length - 1]?.id;
+        return;
+      }
+      const lastSeenIndex = messages.findIndex((m) => m.id === lastSeenMessageId);
+      const newOnes = lastSeenIndex >= 0 ? messages.slice(lastSeenIndex + 1) : [];
+      for (const m of newOnes) {
+        if (m.role === "staff" || m.role === "agent") appendMessage("agent", m.content);
+      }
+      if (messages.length > 0) lastSeenMessageId = messages[messages.length - 1]!.id;
+    } catch {
+      // A single failed poll isn't worth surfacing — the next interval retries.
     }
   }
 

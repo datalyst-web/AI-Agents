@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { withTenant } from "@chat-agent/db";
 import { fireWorkflowTrigger } from "@chat-agent/workflow-engine";
@@ -62,6 +64,113 @@ export async function registerConversationRoutes(app: FastifyInstance, ctx: AppC
       }),
     );
   });
+
+  /**
+   * Live conversation inbox — every currently-open conversation across all
+   * of a tenant's agents, most recently active first, so a team member can
+   * see what's happening right now without picking one agent at a time.
+   */
+  app.get("/v1/tenants/:tenantId/live-inbox", { preHandler: scoped }, async (request) => {
+    return withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
+      const conversations = await tx.conversation.findMany({
+        where: { tenantId: request.tenantCtx!.tenantId, outcome: "IN_PROGRESS" },
+        include: { agent: { select: { name: true } }, messages: { orderBy: { createdAt: "desc" }, take: 1 } },
+        orderBy: { startedAt: "desc" },
+        take: 100,
+      });
+      // Sort by most recent MESSAGE, not conversation start — a
+      // conversation that started an hour ago but just got a new message
+      // is more "live" than one that started 5 minutes ago and has gone
+      // quiet since.
+      return conversations
+        .map((c) => ({
+          id: c.id,
+          agentId: c.agentId,
+          agentName: c.agent.name,
+          channel: c.channel,
+          startedAt: c.startedAt,
+          handoffRequested: c.handoffRequested,
+          humanTakeoverActive: c.humanTakeoverActive,
+          takenOverByUserId: c.takenOverByUserId,
+          lastMessage: c.messages[0] ? { role: c.messages[0].role, content: c.messages[0].content, createdAt: c.messages[0].createdAt } : null,
+        }))
+        .sort((a, b) => (b.lastMessage?.createdAt ?? b.startedAt).getTime() - (a.lastMessage?.createdAt ?? a.startedAt).getTime());
+    });
+  });
+
+  const takeoverScoped = [...scoped, requirePermission("conversation:write")];
+
+  app.post("/v1/tenants/:tenantId/conversations/:conversationId/takeover", { preHandler: takeoverScoped }, async (request, reply) => {
+    const { conversationId } = request.params as { conversationId: string };
+    const conversation = await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
+      const updated = await tx.conversation.update({
+        where: { id: conversationId },
+        data: { humanTakeoverActive: true, takenOverByUserId: request.authUser!.sub, takenOverAt: new Date() },
+      });
+      await writeAuditLog(tx, request.tenantCtx!, {
+        actorUserId: request.authUser!.sub,
+        agentId: updated.agentId,
+        action: "conversation_taken_over",
+        metadata: { conversationId },
+      });
+      return updated;
+    });
+    reply.send(conversation);
+  });
+
+  app.post("/v1/tenants/:tenantId/conversations/:conversationId/release", { preHandler: takeoverScoped }, async (request, reply) => {
+    const { conversationId } = request.params as { conversationId: string };
+    const conversation = await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
+      const updated = await tx.conversation.update({
+        where: { id: conversationId },
+        data: { humanTakeoverActive: false, takenOverByUserId: null, takenOverAt: null },
+      });
+      await writeAuditLog(tx, request.tenantCtx!, {
+        actorUserId: request.authUser!.sub,
+        agentId: updated.agentId,
+        action: "conversation_released_to_ai",
+        metadata: { conversationId },
+      });
+      return updated;
+    });
+    reply.send(conversation);
+  });
+
+  /**
+   * A team member's own message into a live-takeover conversation — role
+   * "staff", not "agent" (never pretend a human's reply came from the AI)
+   * — CLAUDE.md anti-hallucination applied to who's actually talking.
+   * Requires humanTakeoverActive; sending here without taking over first
+   * would otherwise race with the AI still generating its own replies.
+   */
+  app.post(
+    "/v1/tenants/:tenantId/conversations/:conversationId/staff-reply",
+    { preHandler: takeoverScoped },
+    async (request, reply) => {
+      const { conversationId } = request.params as { conversationId: string };
+      const { message } = z.object({ message: z.string().min(1).max(4000) }).parse(request.body);
+      const conversation = await withTenant(ctx.prisma, request.tenantCtx!, (tx) =>
+        tx.conversation.findFirstOrThrow({ where: { id: conversationId, tenantId: request.tenantCtx!.tenantId } }),
+      );
+      if (!conversation.humanTakeoverActive) {
+        reply.code(409).send({ error: "not_taken_over", message: "Take this conversation over before replying directly." });
+        return;
+      }
+      const created = await withTenant(ctx.prisma, request.tenantCtx!, (tx) =>
+        tx.message.create({
+          data: {
+            id: randomUUID(),
+            tenantId: request.tenantCtx!.tenantId,
+            agentId: conversation.agentId,
+            conversationId,
+            role: "staff",
+            content: message,
+          },
+        }),
+      );
+      reply.send(created);
+    },
+  );
 
   // No LLM output carries a fixed "I don't know" marker — the guardrail
   // policy (PREFER_UNKNOWN_OVER_INVENTED_FACT_CONFIRM_BEFORE_ACTING, see

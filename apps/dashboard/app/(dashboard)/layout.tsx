@@ -25,6 +25,7 @@ const PLAN_LABEL: Record<"STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE", string> 
 // Setup Service.
 const TENANT_NAV = [
   { href: "/", label: "Overview", icon: IconGrid },
+  { href: "/live-inbox", label: "Live Inbox", icon: IconInbox },
   { href: "/agents", label: "Agents", icon: IconBot },
   { href: "/leads", label: "Leads", icon: IconLead },
   { href: "/tools", label: "Tools & Integrations", icon: IconPlug },
@@ -37,28 +38,44 @@ const TENANT_NAV = [
   { href: "/approvals", label: "Approvals", icon: IconCheck },
   { href: "/billing", label: "Billing & Usage", icon: IconCard },
   { href: "/team", label: "Team", icon: IconUsers },
+  { href: "/support", label: "Support", icon: IconTicket },
+  { href: "/notifications", label: "Notifications", icon: IconBell },
   { href: "/audit-log", label: "Audit Log", icon: IconShield },
 ];
 const CLIENT_NAV = [
   { href: "/", label: "Overview", icon: IconGrid },
+  { href: "/live-inbox", label: "Live Inbox", icon: IconInbox },
   { href: "/agents", label: "Agents", icon: IconBot },
   { href: "/leads", label: "Leads", icon: IconLead },
   { href: "/integrations", label: "Integrations", icon: IconChannels },
   { href: "/approvals", label: "Approvals", icon: IconCheck },
   { href: "/billing", label: "Billing & Usage", icon: IconCard },
   { href: "/team", label: "Team", icon: IconUsers },
+  { href: "/support", label: "Support", icon: IconTicket },
+  { href: "/notifications", label: "Notifications", icon: IconBell },
   // Kept for clients on purpose (not an "AI console") — CLAUDE.md requires
   // staff actions on a client's behalf stay visible to that client
   // ("never ambiguity about who configured what"); hiding it would
   // defeat the audit trail's whole point.
   { href: "/audit-log", label: "Audit Log", icon: IconShield },
 ];
-const STAFF_NAV_BASE = [{ href: "/managed-setup", label: "Managed Setup", icon: IconStaff }];
+const STAFF_NAV_BASE = [
+  { href: "/managed-setup", label: "Managed Setup", icon: IconStaff },
+  { href: "/support-queue", label: "Support Queue", icon: IconTicket },
+  { href: "/security-flags", label: "Security Flags", icon: IconAlert },
+  { href: "/incidents", label: "Incident Log", icon: IconFire },
+  { href: "/prompt-templates", label: "Prompt Templates", icon: IconTemplate },
+  { href: "/branding-presets", label: "Branding Presets", icon: IconPalette },
+];
 // platform:manage_tenants (which the /healthz/providers endpoint behind
 // this page requires) is only ever granted to platform_admin, never
 // setup_specialist — keeping the link itself platform_admin-only avoids
 // setup_specialist staff clicking into a page that just 403s on load.
-const PLATFORM_ADMIN_NAV = [{ href: "/system-health", label: "System Health", icon: IconPulse }];
+const PLATFORM_ADMIN_NAV = [
+  { href: "/system-health", label: "System Health", icon: IconPulse },
+  { href: "/platform-analytics", label: "Platform Analytics", icon: IconChart },
+  { href: "/feature-flags", label: "Feature Flags", icon: IconFlag },
+];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, loading, logout, impersonation, endImpersonation, setTheme } = useAuth();
@@ -393,6 +410,95 @@ function IconPulse({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 20 20" fill="none">
       <path d="M2.5 10h3l1.8-5 3 9 1.8-5.5 1.4 3.5h3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function IconInbox({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none">
+      <path d="M4 4.5h12l2 6.5v5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 2 16v-5l2-6.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M2 11h4.5l1 2h5l1-2H18" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function IconTicket({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none">
+      <path
+        d="M3 8a1.5 1.5 0 0 0 0-3V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v1a1.5 1.5 0 0 0 0 3v.01a1.5 1.5 0 0 0 0 3V15a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-1a1.5 1.5 0 0 0 0-3V8Z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <path d="M8 3.5v13" stroke="currentColor" strokeWidth="1.3" strokeDasharray="1.5 1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconBell({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none">
+      <path d="M6 8a4 4 0 0 1 8 0v3.5l1.5 2.5h-11L6 11.5V8Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M8.2 16a1.8 1.8 0 0 0 3.6 0" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconAlert({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none">
+      <path d="M8.8 3.5a1.4 1.4 0 0 1 2.4 0l6 10.4a1.4 1.4 0 0 1-1.2 2.1H4a1.4 1.4 0 0 1-1.2-2.1l6-10.4Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M10 8v3.2M10 13.8v.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconFire({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none">
+      <path
+        d="M10 2.5s3.5 3 3.5 6.5a3.5 3.5 0 0 1-7 0c0-1 .4-1.7 .8-2.3-.3 1.6.6 2.3 1.4 2.3-.4-2.5 1.3-3.8 1.3-6.5Z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <path d="M6.5 12.5a3.5 3.5 0 0 0 7 0" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconTemplate({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none">
+      <rect x="3" y="3.5" width="14" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M3 8h14M8 8v8.5" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  );
+}
+function IconPalette({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none">
+      <path
+        d="M10 3a7 7 0 1 0 0 14c.9 0 1.6-.7 1.6-1.5 0-.4-.15-.75-.4-1-.25-.25-.4-.6-.4-1 0-.8.7-1.5 1.5-1.5H14a3 3 0 0 0 3-3c0-3.3-3.1-6-7-6Z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <circle cx="6.7" cy="8.5" r="0.9" fill="currentColor" />
+      <circle cx="9.5" cy="6.2" r="0.9" fill="currentColor" />
+      <circle cx="12.7" cy="7.3" r="0.9" fill="currentColor" />
+    </svg>
+  );
+}
+function IconChart({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none">
+      <path d="M3 16.5V3M3 16.5h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M5.5 13.5v-3M9 13.5v-6M12.5 13.5v-4.5M16 13.5V6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconFlag({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="none">
+      <path d="M5 3v14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M5 4h9l-2.2 3L14 10H5" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
     </svg>
   );
 }
