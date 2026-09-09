@@ -109,6 +109,15 @@ model Tenant {
   pendingHumanApprovals     PendingHumanApproval[]
   channelConnections        ChannelConnection[]
   teamInvites                TeamInvite[]
+  supportTickets            SupportTicket[]
+  promptInjectionFlags      PromptInjectionFlag[]
+  // Informational/disclosure only — this platform runs from a single
+  // region today, so setting this does NOT physically relocate a
+  // tenant's data. It exists so staff can record and see a client's
+  // stated regulatory requirement (e.g. "client says EU-only") ahead of
+  // real multi-region infra ever existing, rather than that requirement
+  // living only in an email thread somewhere.
+  dataResidencyRegion       String?           @map("data_residency_region")
 
   @@map("tenants")
   @@schema("chat")
@@ -143,6 +152,19 @@ model User {
   /// redeems it, same reasoning as never storing a plaintext password.
   passwordResetTokenHash String?   @map("password_reset_token_hash")
   passwordResetExpiresAt DateTime? @map("password_reset_expires_at")
+
+  /// Escalation notification preferences. Only email is actually wired to
+  /// send anything today (SMTP already exists — see packages/email); SMS
+  /// and push need a real provider (Twilio, FCM/APNs) this platform
+  /// doesn't have credentials for yet. The SMS/push columns and
+  /// phoneNumber still exist so the preference itself can be captured and
+  /// shown as "coming soon" rather than the UI pretending the toggle
+  /// isn't there at all — but the dashboard disables those two switches
+  /// rather than let someone enable a channel that silently never fires.
+  notifyEscalationEmail Boolean @default(true) @map("notify_escalation_email")
+  notifyEscalationSms   Boolean @default(false) @map("notify_escalation_sms")
+  notifyEscalationPush  Boolean @default(false) @map("notify_escalation_push")
+  phoneNumber           String? @map("phone_number")
 
   impersonationSessionsAsStaff StaffImpersonationSession[] @relation("StaffUser")
 
@@ -429,6 +451,20 @@ model Conversation {
   /// periodic sweep never re-fires it on every pass while the conversation
   /// sits silent between the no-reply and abandoned thresholds.
   noReplyNotifiedAt  DateTime?            @map("no_reply_notified_at")
+  /// 1-5, set by the customer via the widget after the conversation ends —
+  /// never inferred from sentiment or fabricated, only a real customer
+  /// submission (CLAUDE.md anti-hallucination applied to our own metrics).
+  csatScore          Int?                 @map("csat_score")
+  csatComment        String?              @map("csat_comment")
+  /// Live human-takeover (agentLoop.ts skips AI generation for this
+  /// conversation while set) — staff sends messages as role "staff"
+  /// instead. takenOverByUserId is a staff user id but deliberately not a
+  /// DB relation to User: cross-schema/staff rows aren't tenant-scoped and
+  /// this table is RLS-enforced by tenant_id, so a real FK here would
+  /// require a withPlatformContext join just to read a conversation.
+  humanTakeoverActive Boolean             @default(false) @map("human_takeover_active")
+  takenOverByUserId   String?             @map("taken_over_by_user_id") @db.Uuid
+  takenOverAt         DateTime?           @map("taken_over_at")
 
   messages Message[]
 
@@ -937,5 +973,159 @@ model ChannelConnection {
   @@unique([channel, externalId])
   @@index([tenantId])
   @@map("channel_connections")
+  @@schema("chat")
+}
+
+// ---------------------------------------------------------------------------
+// Support tickets, security flagging, incidents, feature flags, templates,
+// branding presets
+// ---------------------------------------------------------------------------
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+
+  @@schema("chat")
+}
+enum SupportTicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+
+  @@schema("chat")
+}
+
+/// A client's own request to the platform team (not to be confused with
+/// the "Ticketing" tool category an AGENT uses to create tickets in a
+/// CLIENT's own external helpdesk — this is the client contacting US).
+model SupportTicket {
+  id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String                 @map("tenant_id") @db.Uuid
+  tenant           Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subject          String
+  description      String
+  status           SupportTicketStatus    @default(OPEN)
+  priority         SupportTicketPriority  @default(NORMAL)
+  createdByUserId  String                 @map("created_by_user_id") @db.Uuid
+  // Staff user id — not a DB relation, same reasoning as
+  // Conversation.takenOverByUserId above (staff rows aren't tenant-scoped).
+  assignedToStaffUserId String?           @map("assigned_to_staff_user_id") @db.Uuid
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+  resolvedAt       DateTime?              @map("resolved_at")
+
+  @@index([tenantId])
+  @@map("support_tickets")
+  @@schema("chat")
+}
+
+/// Heuristic flags on customer messages matching known prompt-injection/
+/// jailbreak phrasing (see wordpressConnect-style heuristic already used
+/// for the gap report) — a detection aid for staff review, never an
+/// automatic block, since false positives on a legitimate customer
+/// message are far worse than a staff member spending a minute reviewing
+/// one that turned out to be nothing.
+model PromptInjectionFlag {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId        String   @map("agent_id") @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  messageId      String   @map("message_id") @db.Uuid
+  matchedPhrase  String   @map("matched_phrase")
+  content        String
+  flaggedAt      DateTime @default(now()) @map("flagged_at")
+  reviewed       Boolean  @default(false)
+  reviewedByUserId String? @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt     DateTime? @map("reviewed_at")
+
+  @@index([tenantId])
+  @@map("prompt_injection_flags")
+  @@schema("chat")
+}
+
+enum IncidentSeverity {
+  MINOR
+  MAJOR
+  CRITICAL
+
+  @@schema("chat")
+}
+enum IncidentStatus {
+  OPEN
+  MONITORING
+  RESOLVED
+
+  @@schema("chat")
+}
+
+/// Platform-level (not tenant-scoped — an AI provider outage or infra
+/// incident affects the whole platform, not one client) — deliberately
+/// NOT RLS-covered like the tenant tables above, since it never carries
+/// tenant_id in the first place. Staff-only, gated the same way
+/// System Health is (platform:manage_tenants).
+model IncidentLogEntry {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title           String
+  description     String
+  severity        IncidentSeverity @default(MINOR)
+  status          IncidentStatus   @default(OPEN)
+  createdByUserId String?          @map("created_by_user_id") @db.Uuid
+  startedAt       DateTime         @default(now()) @map("started_at")
+  resolvedAt      DateTime?        @map("resolved_at")
+
+  @@map("incident_log_entries")
+  @@schema("chat")
+}
+
+/// Platform-level, not tenant-scoped — a feature flag is a platform
+/// operator decision about what a given plan tier can access, not
+/// something any individual tenant configures.
+model FeatureFlag {
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key           String             @unique
+  name          String
+  description   String
+  enabledTiers  SubscriptionTier[] @map("enabled_tiers")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  @@map("feature_flags")
+  @@schema("chat")
+}
+
+/// Starting-point templates staff apply when configuring a new client's
+/// agent under Managed Setup — never auto-applied without a staff member
+/// choosing one (CLAUDE.md: staff configure through the same tools a
+/// client would, deliberately, not a silent default).
+model PromptTemplate {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                   String
+  description            String
+  systemInstructions     String   @map("system_instructions")
+  guardrailPolicy        String   @default("PREFER_UNKNOWN_OVER_INVENTED_FACT_CONFIRM_BEFORE_ACTING") @map("guardrail_policy")
+  isDefault              Boolean  @default(false) @map("is_default")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  @@map("prompt_templates")
+  @@schema("chat")
+}
+
+/// A reusable white-label identity (name + logo) staff can apply to a
+/// tenant in one click instead of re-uploading the same client's assets
+/// by hand every time — e.g. an agency reseller's own consistent brand
+/// across many of their own sub-clients.
+model BrandingPreset {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String
+  brandName     String   @map("brand_name")
+  logoObjectKey String?  @map("logo_object_key")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("branding_presets")
   @@schema("chat")
 }
