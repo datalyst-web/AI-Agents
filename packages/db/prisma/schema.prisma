@@ -440,6 +440,10 @@ model Conversation {
   sentimentTrend     Float[]              @map("sentiment_trend")
   handoffRequested   Boolean              @default(false) @map("handoff_requested")
   handoffSummary     Json?                @map("handoff_summary")
+  /// Set once escalationNotificationSweep has emailed every opted-in team
+  /// member for this handoff, so the periodic sweep never re-notifies on
+  /// every pass while the conversation just sits escalated.
+  handoffNotifiedAt  DateTime?            @map("handoff_notified_at")
   /// A confirmation-gated tool call awaiting the customer's yes/no, keyed
   /// by a server-generated id (never the model's tool_use id, which isn't
   /// stable across turns) — see engine/agentLoop.ts. Cleared once resolved

@@ -26,6 +26,28 @@ import { env } from "../env.js";
 export const EMBEDDING_MODEL = "text-embedding-3-small";
 const MAX_TOOL_ITERATIONS = 4;
 
+/** See the PromptInjectionFlag check further down — a heuristic detection aid, not exhaustive. */
+const INJECTION_PHRASES = [
+  "ignore previous instructions",
+  "ignore all previous instructions",
+  "ignore the above",
+  "disregard your instructions",
+  "disregard previous instructions",
+  "you are now",
+  "new instructions:",
+  "system prompt",
+  "reveal your prompt",
+  "reveal your system",
+  "print your instructions",
+  "act as if you have no restrictions",
+  "jailbreak",
+  "do anything now",
+  "developer mode",
+  "you must ignore",
+  "forget your previous instructions",
+  "bypass your guidelines",
+];
+
 /**
  * Sentinel actorUserId for audit entries produced by the agent loop itself
  * (a cross-conversation memory write during a live conversation — no human
@@ -592,7 +614,7 @@ export async function processCustomerMessage(
     }
 
     // ---- RESPOND / RECORD ---------------------------------------------------
-    await tx.message.create({
+    const customerMessageRow = await tx.message.create({
       data: {
         id: randomUUID(),
         tenantId: input.tenantId,
@@ -603,6 +625,27 @@ export async function processCustomerMessage(
         sentimentScore,
       },
     });
+
+    // Heuristic prompt-injection/jailbreak flagging — a detection aid for
+    // staff review, never an automatic block: a false positive on a real
+    // customer message is far worse than a staff member spending a minute
+    // reviewing one that turned out to be nothing. Same reasoning/pattern
+    // as the "human/agent/representative" handoff check above — a simple
+    // phrase match, not a claim of catching every attempt.
+    const matchedInjectionPhrase = INJECTION_PHRASES.find((phrase) => input.customerMessage.toLowerCase().includes(phrase));
+    if (matchedInjectionPhrase) {
+      await tx.promptInjectionFlag.create({
+        data: {
+          id: randomUUID(),
+          tenantId: input.tenantId,
+          agentId: input.agentId,
+          conversationId: conversation.id,
+          messageId: customerMessageRow.id,
+          matchedPhrase: matchedInjectionPhrase,
+          content: input.customerMessage,
+        },
+      });
+    }
 
     await tx.message.create({
       data: {

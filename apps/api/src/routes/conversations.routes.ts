@@ -245,6 +245,14 @@ export async function registerConversationRoutes(app: FastifyInstance, ctx: AppC
         const allSentiment = conversations.flatMap((c) => c.sentimentTrend);
         const avgSentiment = allSentiment.reduce((a, b) => a + b, 0) / Math.max(1, allSentiment.length);
 
+        // Real customer submissions only (see chat.routes.ts's csat
+        // endpoint) — most conversations will have no score at all, since
+        // rating is optional, so this is an average of whoever actually
+        // rated, not every conversation.
+        const csatScores = conversations.map((c) => c.csatScore).filter((s): s is number => s !== null);
+        const avgCsatScore = csatScores.length > 0 ? csatScores.reduce((a, b) => a + b, 0) / csatScores.length : null;
+        const csatResponseCount = csatScores.length;
+
         // Rates are of TOTAL conversations (including still-IN_PROGRESS
         // ones) rather than only ended ones — an agent that never resolves
         // anything should show a low resolution rate, not an artificially
@@ -316,6 +324,8 @@ export async function registerConversationRoutes(app: FastifyInstance, ctx: AppC
           avgMessagesPerConversation,
           avgDurationSeconds,
           avgResponseSeconds,
+          avgCsatScore,
+          csatResponseCount,
         };
       });
     },

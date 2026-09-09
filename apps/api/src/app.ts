@@ -53,6 +53,13 @@ import { registerApprovalRoutes } from "./routes/approvals.routes.js";
 import { registerAuditRoutes } from "./routes/audit.routes.js";
 import { registerTeamRoutes } from "./routes/team.routes.js";
 import { registerWordpressConnectRoutes } from "./routes/wordpressConnect.routes.js";
+import { registerFeatureFlagRoutes } from "./routes/featureFlags.routes.js";
+import { registerPromptTemplateRoutes } from "./routes/promptTemplates.routes.js";
+import { registerBrandingPresetRoutes } from "./routes/brandingPresets.routes.js";
+import { registerIncidentRoutes } from "./routes/incidents.routes.js";
+import { registerSupportTicketRoutes } from "./routes/supportTickets.routes.js";
+import { registerSecurityFlagRoutes } from "./routes/securityFlags.routes.js";
+import { registerPlatformAnalyticsRoutes } from "./routes/platformAnalytics.routes.js";
 import { registerMemoryRoutes, registerPublicMemoryRoutes } from "./routes/memory.routes.js";
 import { registerPaynowBillingRoutes } from "./routes/paynowBilling.routes.js";
 
@@ -125,6 +132,13 @@ export async function buildApp(ctx: AppContext = buildAppContext()) {
   await registerAuditRoutes(app, ctx);
   await registerTeamRoutes(app, ctx);
   await registerWordpressConnectRoutes(app, ctx);
+  await registerFeatureFlagRoutes(app, ctx);
+  await registerPromptTemplateRoutes(app, ctx);
+  await registerBrandingPresetRoutes(app, ctx);
+  await registerIncidentRoutes(app, ctx);
+  await registerSupportTicketRoutes(app, ctx);
+  await registerSecurityFlagRoutes(app, ctx);
+  await registerPlatformAnalyticsRoutes(app, ctx);
   await registerMemoryRoutes(app, ctx);
   await registerPaynowBillingRoutes(app, ctx); // includes a server-to-server webhook — CORS is moot there, no browser involved
 

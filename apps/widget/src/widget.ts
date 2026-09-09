@@ -110,12 +110,14 @@ interface ChatResponse {
   const stored = JSON.parse(localStorage.getItem(storageKey) ?? "{}") as {
     conversationId?: string;
     sessionCookie?: string;
+    csatSubmittedFor?: string;
   };
   const sessionCookie = stored.sessionCookie ?? crypto.randomUUID();
   let conversationId = stored.conversationId;
+  let csatSubmittedFor = stored.csatSubmittedFor;
 
   function persist() {
-    localStorage.setItem(storageKey, JSON.stringify({ conversationId, sessionCookie }));
+    localStorage.setItem(storageKey, JSON.stringify({ conversationId, sessionCookie, csatSubmittedFor }));
   }
 
   const host = document.createElement("div");
@@ -152,6 +154,13 @@ interface ChatResponse {
       </div>
       <div class="messages"></div>
       <div class="confirmation" hidden></div>
+      <div class="csat" hidden>
+        <div class="csat-text">How did we do?</div>
+        <div class="csat-stars">
+          ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="csat-star" data-score="${n}" aria-label="${n} star${n === 1 ? "" : "s"}">★</button>`).join("")}
+        </div>
+        <button type="button" class="csat-skip">Skip</button>
+      </div>
       <form class="composer">
         <input type="text" placeholder="Type a message…" autocomplete="off" />
         <button type="submit" aria-label="Send" disabled>
@@ -167,6 +176,9 @@ interface ChatResponse {
   const closeBtn = shadow.querySelector<HTMLButtonElement>(".close")!;
   const messagesEl = shadow.querySelector<HTMLElement>(".messages")!;
   const confirmationEl = shadow.querySelector<HTMLElement>(".confirmation")!;
+  const csatEl = shadow.querySelector<HTMLElement>(".csat")!;
+  const csatStars = shadow.querySelectorAll<HTMLButtonElement>(".csat-star");
+  const csatSkipBtn = shadow.querySelector<HTMLButtonElement>(".csat-skip")!;
   const form = shadow.querySelector<HTMLFormElement>(".composer")!;
   const input = shadow.querySelector<HTMLInputElement>("input")!;
   const sendBtn = shadow.querySelector<HTMLButtonElement>(".composer button")!;
@@ -225,8 +237,48 @@ interface ChatResponse {
     }
   }
 
+  // Once per real conversation (not per open/close cycle), shown at close
+  // time rather than mid-chat so it never interrupts an active exchange —
+  // matches the "how did we do" pattern most chat widgets use.
+  function maybeShowCsat(): boolean {
+    if (!conversationId || csatSubmittedFor === conversationId || !csatEl.hidden) return false;
+    csatEl.hidden = false;
+    csatStars.forEach((s) => s.classList.remove("filled"));
+    return true;
+  }
+
+  async function submitCsat(score: number | null) {
+    csatEl.hidden = true;
+    if (score !== null && conversationId && config) {
+      csatSubmittedFor = conversationId;
+      persist();
+      try {
+        await fetch(`${apiBase}/v1/chat/${agentId}/conversations/${conversationId}/csat`, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${config.widgetToken}` },
+          body: JSON.stringify({ score }),
+        });
+      } catch {
+        // Best-effort — a failed rating submission shouldn't block closing the widget.
+      }
+    }
+    toggle(false);
+  }
+
+  csatStars.forEach((star) => {
+    star.addEventListener("mouseenter", () => {
+      const score = Number(star.dataset.score);
+      csatStars.forEach((s) => s.classList.toggle("filled", Number(s.dataset.score) <= score));
+    });
+    star.addEventListener("click", () => void submitCsat(Number(star.dataset.score)));
+  });
+  csatEl.addEventListener("mouseleave", () => csatStars.forEach((s) => s.classList.remove("filled")));
+  csatSkipBtn.addEventListener("click", () => void submitCsat(null));
+
   launcher.addEventListener("click", () => toggle(!opened));
-  closeBtn.addEventListener("click", () => toggle(false));
+  closeBtn.addEventListener("click", () => {
+    if (!maybeShowCsat()) toggle(false);
+  });
 
   // A few "come say hi" sonar pulses shortly after the launcher's own
   // entrance pop (see the .launcher rule, which plays on mount with no JS
@@ -426,6 +478,13 @@ interface ChatResponse {
       .confirmation-actions button:active { transform: scale(0.97); }
       .confirmation-actions .confirm { background: #2fbf71; color: white; }
       .confirmation-actions .cancel { background: var(--input-bg); color: var(--bubble-agent-text); }
+
+      .csat { padding: 14px 16px; border-top: 1px solid var(--composer-border); background: var(--composer-bg); text-align: center; animation: fadeInUp 0.2s ease both; }
+      .csat-text { color: var(--text-primary); font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+      .csat-stars { display: flex; justify-content: center; gap: 4px; margin-bottom: 6px; }
+      .csat-star { background: none; border: none; cursor: pointer; font-size: 22px; line-height: 1; color: var(--input-border); padding: 2px; transition: color 0.12s, transform 0.12s; }
+      .csat-star:hover, .csat-star.filled { color: #f5a623; transform: scale(1.12); }
+      .csat-skip { background: none; border: none; cursor: pointer; font-size: 11px; color: var(--text-secondary); text-decoration: underline; }
 
       .composer { display: flex; gap: 8px; padding: 13px; border-top: 1px solid var(--composer-border); background: var(--composer-bg); }
       .composer input { flex: 1; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 11px;

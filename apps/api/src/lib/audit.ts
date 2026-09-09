@@ -29,7 +29,8 @@ type ExtendedAuditAction =
   | "billing_payment_confirmed"
   | "password_reset_requested"
   | "password_reset_completed"
-  | "team_invite_revoked";
+  | "team_invite_revoked"
+  | "tenant_data_residency_updated";
 
 /**
  * The only sanctioned way to write an AuditLogEntry. Every staff action on

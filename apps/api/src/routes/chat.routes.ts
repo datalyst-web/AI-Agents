@@ -93,4 +93,30 @@ export async function registerChatRoutes(app: FastifyInstance, ctx: AppContext) 
     );
     reply.send(messages);
   });
+
+  /**
+   * Customer-submitted satisfaction rating — never inferred from
+   * sentiment or fabricated, only a real submission from the widget
+   * (CLAUDE.md anti-hallucination applied to our own metrics). Same
+   * widget-token auth as the rest of this file; no permission tier beyond
+   * that since it's the customer's own conversation, not staff/tenant
+   * data.
+   */
+  app.post("/v1/chat/:agentId/conversations/:conversationId/csat", async (request, reply) => {
+    const { agentId, conversationId } = request.params as { agentId: string; conversationId: string };
+    const bearer = request.headers.authorization?.replace(/^Bearer\s+/i, "");
+    const claim = bearer ? verifyWidgetToken(bearer) : undefined;
+    if (!claim || claim.agentId !== agentId) {
+      reply.code(401).send({ error: "invalid_or_missing_widget_token" });
+      return;
+    }
+    const body = z.object({ score: z.number().int().min(1).max(5), comment: z.string().max(1000).optional() }).parse(request.body);
+    await withTenant(ctx.prisma, { tenantId: claim.tenantId }, (tx) =>
+      tx.conversation.updateMany({
+        where: { id: conversationId, tenantId: claim.tenantId, agentId },
+        data: { csatScore: body.score, csatComment: body.comment },
+      }),
+    );
+    reply.code(204).send();
+  });
 }

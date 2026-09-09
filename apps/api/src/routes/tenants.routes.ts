@@ -223,6 +223,34 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
     },
   );
 
+  /**
+   * Informational/disclosure only — this platform runs from a single
+   * region today, so setting this does NOT physically relocate a
+   * tenant's data (see Tenant.dataResidencyRegion's own schema comment).
+   * Staff-only, same reasoning as branding above: a client's stated
+   * regulatory requirement should be recorded by whoever is actually
+   * talking to that client, not self-serve.
+   */
+  app.patch(
+    "/v1/platform/tenants/:tenantId/data-residency",
+    { preHandler: [app.authenticate, requireStaff()] },
+    async (request, reply) => {
+      const { tenantId } = request.params as { tenantId: string };
+      const { dataResidencyRegion } = z.object({ dataResidencyRegion: z.string().trim().max(80).nullable() }).parse(request.body);
+      const updated = await withPlatformContext(ctx.prisma, (tx) =>
+        tx.tenant.update({ where: { id: tenantId }, data: { dataResidencyRegion } }),
+      );
+      await withTenant(ctx.prisma, { tenantId }, (tx) =>
+        writeAuditLog(tx, { tenantId }, {
+          actorUserId: request.authUser!.sub,
+          action: "tenant_data_residency_updated",
+          metadata: { dataResidencyRegion },
+        }),
+      );
+      reply.send(updated);
+    },
+  );
+
   app.post(
     "/v1/platform/tenants/:tenantId/branding/logo",
     { preHandler: [app.authenticate, requireStaff()] },

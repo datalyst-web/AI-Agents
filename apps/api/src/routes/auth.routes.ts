@@ -377,6 +377,34 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       logoUrl,
       platformBrandName: platformSettings?.brandName ?? null,
       platformLogoUrl: platformSettings?.logoObjectKey ? "/v1/platform/branding/logo" : null,
+      notifyEscalationEmail: user.notifyEscalationEmail,
+      notifyEscalationSms: user.notifyEscalationSms,
+      notifyEscalationPush: user.notifyEscalationPush,
+      phoneNumber: user.phoneNumber,
+    });
+  });
+
+  /**
+   * Self-service — any authenticated user sets their own escalation
+   * notification preferences. SMS/push are accepted and stored but never
+   * actually sent (see escalationNotificationSweep.ts's own comment) —
+   * only email is real today.
+   */
+  app.patch("/v1/auth/me/notification-preferences", { preHandler: app.authenticate }, async (request, reply) => {
+    const body = z
+      .object({
+        notifyEscalationEmail: z.boolean().optional(),
+        notifyEscalationSms: z.boolean().optional(),
+        notifyEscalationPush: z.boolean().optional(),
+        phoneNumber: z.string().trim().max(32).nullable().optional(),
+      })
+      .parse(request.body);
+    const updated = await withPlatformContext(ctx.prisma, (tx) => tx.user.update({ where: { id: request.authUser!.sub }, data: body }));
+    reply.send({
+      notifyEscalationEmail: updated.notifyEscalationEmail,
+      notifyEscalationSms: updated.notifyEscalationSms,
+      notifyEscalationPush: updated.notifyEscalationPush,
+      phoneNumber: updated.phoneNumber,
     });
   });
 }
