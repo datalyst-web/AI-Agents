@@ -75,6 +75,23 @@ export const EnvSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   SMTP_FROM_ADDRESS: z.string().optional(),
+
+  // Platform transactional SMS (escalation alerts) — see
+  // packages/sms. Left unset in dev/test, where the Noop provider logs
+  // instead of sending; production needs all three for real delivery via
+  // Twilio's REST API.
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_FROM_NUMBER: z.string().optional(),
+
+  // Web Push (escalation alerts to a browser/device, no vendor account
+  // needed — a VAPID key pair the platform generates and owns). Left
+  // unset in dev/test; production needs both for real delivery. Generate
+  // with: node -e "console.log(require('web-push').generateVAPIDKeys())"
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().default("mailto:support@datalystafrica.com"),
+
   DASHBOARD_BASE_URL: z.string().default("http://localhost:3000"),
   // This service's own public URL — needed to register outbound webhooks
   // with third-party channel providers (Telegram's setWebhook, etc.),

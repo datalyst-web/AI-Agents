@@ -22,6 +22,8 @@
     "@chat-agent/queue": "workspace:*",
     "@chat-agent/storage": "workspace:*",
     "@chat-agent/email": "workspace:*",
+    "@chat-agent/sms": "workspace:*",
+    "@chat-agent/push": "workspace:*",
     "pino": "^9.5.0",
     "ioredis": "^5.4.1",
     "@sentry/node": "^10.73.0"

@@ -194,9 +194,14 @@ function ThreadPanel({
     setSending(true);
     setError(null);
     try {
-      await api.sendStaffReply(user.tenantId, item.id, reply.trim());
+      const result = await api.sendStaffReply(user.tenantId, item.id, reply.trim());
       setReply("");
       refresh();
+      // The message is always recorded either way — this is specifically
+      // about whether it also reached the customer out on Telegram/
+      // WhatsApp/Messenger/Instagram (a real API call, which can fail:
+      // token revoked, channel disconnected, no delivery address on file).
+      if (result.externalDeliveryError) setError(`Recorded, but not delivered: ${result.externalDeliveryError}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not send that reply.");
     } finally {
@@ -208,7 +213,7 @@ function ThreadPanel({
     <Card>
       <CardHeader
         title={`Conversation — ${item.agentName}`}
-        subtitle={item.humanTakeoverActive ? "You're replying as a human" : "Take over below to reply directly"}
+        subtitle={`${item.channel.replace(/_/g, " ").toLowerCase()} — ${item.humanTakeoverActive ? "you're replying as a human" : "take over below to reply directly"}`}
         action={
           <div className="flex items-center gap-2">
             {item.humanTakeoverActive ? (
@@ -253,11 +258,7 @@ function ThreadPanel({
           <div ref={bottomRef} />
         </div>
         {error ? <p className="text-xs text-danger">{error}</p> : null}
-        {item.channel !== "WIDGET" ? (
-          <p className="text-xs text-warning">
-            This conversation is on {item.channel.replace(/_/g, " ").toLowerCase()} — taking over still pauses the AI, but this platform has no way to deliver a typed reply back out to that channel yet (only the website widget polls for staff replies). Use {item.channel.replace(/_/g, " ").toLowerCase()} directly to respond to this customer.
-          </p>
-        ) : item.humanTakeoverActive ? (
+        {item.humanTakeoverActive ? (
           <form onSubmit={sendReply} className="flex gap-2">
             <input
               value={reply}

@@ -7,6 +7,7 @@ import { withPlatformContext, withTenant } from "@chat-agent/db";
 import type { AppContext } from "../lib/context.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { verifyTurnstileToken } from "../lib/turnstile.js";
+import { recordSubscriptionStateChange } from "../lib/subscriptionHistory.js";
 import { env } from "../env.js";
 
 const LoginSchema = z.object({ email: z.string().email(), password: z.string().min(8), turnstileToken: z.string().optional() });
@@ -80,6 +81,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
           displayName: body.tenantName,
         },
       });
+      await recordSubscriptionStateChange(tx, tenant.id, null, "TRIAL");
       return { tenant, user };
     });
 
@@ -386,9 +388,10 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
 
   /**
    * Self-service — any authenticated user sets their own escalation
-   * notification preferences. SMS/push are accepted and stored but never
-   * actually sent (see escalationNotificationSweep.ts's own comment) —
-   * only email is real today.
+   * notification preferences. All three channels are wired to a real
+   * provider now (see escalationNotificationSweep.ts) — email via SMTP,
+   * SMS via Twilio, push via Web Push — each falling back to a logging
+   * no-op if that channel's env vars aren't configured on this deployment.
    */
   app.patch("/v1/auth/me/notification-preferences", { preHandler: app.authenticate }, async (request, reply) => {
     const body = z
@@ -406,5 +409,34 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       notifyEscalationPush: updated.notifyEscalationPush,
       phoneNumber: updated.phoneNumber,
     });
+  });
+
+  /** The dashboard needs this to call PushManager.subscribe() — a public key, never a secret. Null when push isn't configured on this deployment, so the UI can hide the "enable" button instead of failing. */
+  app.get("/v1/auth/me/push-public-key", { preHandler: app.authenticate }, async (_request, reply) => {
+    reply.send({ publicKey: env.VAPID_PUBLIC_KEY ?? null });
+  });
+
+  /** Registers this browser/device for Web Push. Upserted by endpoint so re-subscribing (e.g. after clearing site data) never duplicates a row. */
+  app.post("/v1/auth/me/push-subscription", { preHandler: app.authenticate }, async (request, reply) => {
+    const body = z
+      .object({ endpoint: z.string().url(), keys: z.object({ p256dh: z.string().min(1), auth: z.string().min(1) }) })
+      .parse(request.body);
+    await withPlatformContext(ctx.prisma, (tx) =>
+      tx.pushSubscription.upsert({
+        where: { endpoint: body.endpoint },
+        update: { userId: request.authUser!.sub, p256dh: body.keys.p256dh, auth: body.keys.auth },
+        create: { id: randomUUID(), userId: request.authUser!.sub, endpoint: body.endpoint, p256dh: body.keys.p256dh, auth: body.keys.auth },
+      }),
+    );
+    reply.code(204).send();
+  });
+
+  /** Unregisters this browser/device — called when the user disables push, or the service worker reports the subscription as gone. */
+  app.delete("/v1/auth/me/push-subscription", { preHandler: app.authenticate }, async (request, reply) => {
+    const body = z.object({ endpoint: z.string().url() }).parse(request.body);
+    await withPlatformContext(ctx.prisma, (tx) =>
+      tx.pushSubscription.deleteMany({ where: { endpoint: body.endpoint, userId: request.authUser!.sub } }),
+    );
+    reply.code(204).send();
   });
 }

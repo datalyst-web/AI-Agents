@@ -9,6 +9,7 @@ interface Business {
   totalTenants: number;
   mrr: number;
   churnRate: number;
+  churnWindowDays: number;
   byTier: Record<string, number>;
   byState: Record<string, number>;
 }
@@ -57,7 +58,11 @@ export default function PlatformAnalyticsPage() {
           <>
             <StatTile label="MRR" value={`$${business.mrr.toLocaleString()}`} />
             <StatTile label="Total tenants" value={business.totalTenants} />
-            <StatTile label="Churn rate" value={`${(business.churnRate * 100).toFixed(1)}%`} deltaTone={business.churnRate > 0.1 ? "negative" : "neutral"} />
+            <StatTile
+              label={`Churn rate (${business.churnWindowDays}d)`}
+              value={`${(business.churnRate * 100).toFixed(1)}%`}
+              deltaTone={business.churnRate > 0.1 ? "negative" : "neutral"}
+            />
           </>
         )}
       </div>

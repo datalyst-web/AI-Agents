@@ -8,6 +8,7 @@ import type { AppContext } from "../lib/context.js";
 import { requirePermission, resolveTenantContext, requireTenantMatch, requireStaff } from "../lib/rbac.js";
 import { verifyActiveImpersonation } from "../lib/impersonation.js";
 import { writeAuditLog } from "../lib/audit.js";
+import { recordSubscriptionStateChange } from "../lib/subscriptionHistory.js";
 
 const UpdateTenantSchema = z.object({
   subscriptionState: SubscriptionStateSchema.optional(),
@@ -44,9 +45,12 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
     async (request, reply) => {
       const { tenantId } = request.params as { tenantId: string };
       const body = UpdateTenantSchema.parse(request.body);
-      const updated = await withPlatformContext(ctx.prisma, (tx) =>
-        tx.tenant.update({ where: { id: tenantId }, data: body }),
-      );
+      const updated = await withPlatformContext(ctx.prisma, async (tx) => {
+        const before = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { subscriptionState: true } });
+        const updated = await tx.tenant.update({ where: { id: tenantId }, data: body });
+        if (body.subscriptionState) await recordSubscriptionStateChange(tx, tenantId, before.subscriptionState, body.subscriptionState);
+        return updated;
+      });
       reply.send(updated);
     },
   );
@@ -99,6 +103,7 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
             displayName: body.tenantName,
           },
         });
+        await recordSubscriptionStateChange(tx, tenant.id, null, "ACTIVE");
         return tenant;
       });
       await withTenant(ctx.prisma, { tenantId: tenant.id }, (tx) =>
@@ -124,9 +129,12 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
     { preHandler: [app.authenticate, requireStaff()] },
     async (request, reply) => {
       const { tenantId } = request.params as { tenantId: string };
-      const updated = await withPlatformContext(ctx.prisma, (tx) =>
-        tx.tenant.update({ where: { id: tenantId }, data: { subscriptionState: "CANCELLED" } }),
-      );
+      const updated = await withPlatformContext(ctx.prisma, async (tx) => {
+        const before = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { subscriptionState: true } });
+        const updated = await tx.tenant.update({ where: { id: tenantId }, data: { subscriptionState: "CANCELLED" } });
+        await recordSubscriptionStateChange(tx, tenantId, before.subscriptionState, "CANCELLED");
+        return updated;
+      });
       await withTenant(ctx.prisma, { tenantId }, (tx) =>
         writeAuditLog(tx, { tenantId }, { actorUserId: request.authUser!.sub, action: "tenant_cancelled_by_staff" }),
       );
@@ -139,9 +147,12 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
     { preHandler: [app.authenticate, requireStaff()] },
     async (request, reply) => {
       const { tenantId } = request.params as { tenantId: string };
-      const updated = await withPlatformContext(ctx.prisma, (tx) =>
-        tx.tenant.update({ where: { id: tenantId }, data: { subscriptionState: "ACTIVE" } }),
-      );
+      const updated = await withPlatformContext(ctx.prisma, async (tx) => {
+        const before = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { subscriptionState: true } });
+        const updated = await tx.tenant.update({ where: { id: tenantId }, data: { subscriptionState: "ACTIVE" } });
+        await recordSubscriptionStateChange(tx, tenantId, before.subscriptionState, "ACTIVE");
+        return updated;
+      });
       await withTenant(ctx.prisma, { tenantId }, (tx) =>
         writeAuditLog(tx, { tenantId }, { actorUserId: request.authUser!.sub, action: "tenant_reactivated_by_staff" }),
       );

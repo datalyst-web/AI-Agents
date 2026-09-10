@@ -18,7 +18,16 @@ import { fireWorkflowTrigger } from "@chat-agent/workflow-engine";
 import { buildToolRegistryForAgent } from "./toolRegistryForAgent.js";
 import { scoreSentiment, shouldEscalateOnSentiment } from "./sentiment.js";
 import { writeAuditLog } from "../lib/audit.js";
+import { encryptChannelCredential } from "../lib/channelCrypto.js";
 import { env } from "../env.js";
+
+// Identifier types whose raw value is the destination for an outbound
+// message (a Telegram chat_id, a WhatsApp/Messenger/Instagram sender id) —
+// unlike email/authenticated_account/widget_session_cookie, a human
+// "takeover" reply typed later (not inline in an inbound webhook, where
+// the raw id is free) has no other way to know where to send it. See
+// CustomerIdentity.encryptedExternalHandle's own schema comment.
+const CHANNEL_IDENTIFIER_TYPES = new Set(["telegram_chat_id", "whatsapp_phone_number", "facebook_psid", "instagram_igsid"]);
 
 // Exported so apps/api/src/routes/approvals.routes.ts can build the same
 // tenant-scoped ToolRegistry (via buildToolRegistryForAgent) when a staff
@@ -212,6 +221,12 @@ export async function processCustomerMessage(
         identifierValue: input.customerIdentifier.value,
       });
       customerIdentityId = identity.id;
+      if (CHANNEL_IDENTIFIER_TYPES.has(input.customerIdentifier.type)) {
+        await tx.customerIdentity.update({
+          where: { id: identity.id },
+          data: { encryptedExternalHandle: encryptChannelCredential(input.customerIdentifier.value) },
+        });
+      }
       priorFacts = await getCrossConversationFacts(tx, {
         tenantId: input.tenantId,
         agentId: input.agentId,

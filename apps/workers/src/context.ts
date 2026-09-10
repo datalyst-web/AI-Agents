@@ -5,6 +5,8 @@ import { createSecretsProvider, DbSecretsProvider, type SecretsProvider } from "
 import { createQueueClient, type QueueClient } from "@chat-agent/queue";
 import { ObjectStore } from "@chat-agent/storage";
 import { createEmailProviderFromEnv, type EmailProvider } from "@chat-agent/email";
+import { createSmsProviderFromEnv, type SmsProvider } from "@chat-agent/sms";
+import { createPushProviderFromEnv, type PushProvider } from "@chat-agent/push";
 import { env } from "./env.js";
 
 /** Mirrors apps/api/src/lib/context.ts — same construction logic, separate process. */
@@ -15,6 +17,8 @@ export interface WorkerContext {
   queue: QueueClient;
   objectStore: ObjectStore;
   email: EmailProvider;
+  sms: SmsProvider;
+  push: PushProvider;
   /** Raw client for lib/lock.ts's cross-replica sweep lock — separate from the queue's internal Redis usage. */
   redis: Redis;
 }
@@ -69,6 +73,16 @@ export function buildWorkerContext(): WorkerContext {
     SMTP_PASSWORD: env.SMTP_PASSWORD,
     SMTP_FROM_ADDRESS: env.SMTP_FROM_ADDRESS,
   });
+  const sms = createSmsProviderFromEnv({
+    TWILIO_ACCOUNT_SID: env.TWILIO_ACCOUNT_SID,
+    TWILIO_AUTH_TOKEN: env.TWILIO_AUTH_TOKEN,
+    TWILIO_FROM_NUMBER: env.TWILIO_FROM_NUMBER,
+  });
+  const push = createPushProviderFromEnv({
+    VAPID_PUBLIC_KEY: env.VAPID_PUBLIC_KEY,
+    VAPID_PRIVATE_KEY: env.VAPID_PRIVATE_KEY,
+    VAPID_SUBJECT: env.VAPID_SUBJECT,
+  });
 
-  return { prisma, router, secrets, queue, objectStore, email, redis };
+  return { prisma, router, secrets, queue, objectStore, email, sms, push, redis };
 }

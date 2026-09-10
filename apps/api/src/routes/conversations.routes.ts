@@ -7,7 +7,11 @@ import type { AppContext } from "../lib/context.js";
 import { requireTenantMatch, requirePermission } from "../lib/rbac.js";
 import { verifyActiveImpersonation } from "../lib/impersonation.js";
 import { writeAuditLog } from "../lib/audit.js";
+import { sendOutboundChannelMessage } from "../lib/channelSend.js";
 import { env } from "../env.js";
+
+const EXTERNAL_CHANNELS = new Set(["TELEGRAM", "WHATSAPP", "FACEBOOK_MESSENGER", "INSTAGRAM"]);
+type ExternalChannel = "TELEGRAM" | "WHATSAPP" | "FACEBOOK_MESSENGER" | "INSTAGRAM";
 
 export async function registerConversationRoutes(app: FastifyInstance, ctx: AppContext) {
   const scoped = [app.authenticate, requireTenantMatch(), verifyActiveImpersonation(ctx.prisma), requirePermission("conversation:read")];
@@ -168,7 +172,44 @@ export async function registerConversationRoutes(app: FastifyInstance, ctx: AppC
           },
         }),
       );
-      reply.send(created);
+
+      // Widget conversations are picked up by the widget's own polling
+      // (see apps/widget/src/widget.ts) — nothing to dispatch here. Every
+      // other channel needs an actual outbound API call, since there's no
+      // other way for the reply to reach that customer.
+      let externalDeliveryError: string | undefined;
+      if (EXTERNAL_CHANNELS.has(conversation.channel)) {
+        try {
+          if (!conversation.customerIdentityId) throw new Error("This conversation has no linked customer identity to reply to.");
+          const [identity, connection] = await withTenant(ctx.prisma, request.tenantCtx!, (tx) =>
+            Promise.all([
+              tx.customerIdentity.findUniqueOrThrow({ where: { id: conversation.customerIdentityId! } }),
+              tx.channelConnection.findFirst({
+                where: {
+                  tenantId: request.tenantCtx!.tenantId,
+                  agentId: conversation.agentId,
+                  channel: conversation.channel as ExternalChannel,
+                  status: "CONNECTED",
+                },
+              }),
+            ]),
+          );
+          if (!identity.encryptedExternalHandle) throw new Error("No delivery address on file for this customer.");
+          if (!connection?.encryptedCredential) throw new Error("This channel is no longer connected.");
+          await sendOutboundChannelMessage({
+            channel: conversation.channel as ExternalChannel,
+            externalId: connection.externalId,
+            encryptedCredential: connection.encryptedCredential,
+            encryptedHandle: identity.encryptedExternalHandle,
+            message,
+          });
+        } catch (err) {
+          request.log.warn(err, "failed to deliver staff reply to external channel");
+          externalDeliveryError = err instanceof Error ? err.message : "Could not deliver this reply to the customer.";
+        }
+      }
+
+      reply.send({ ...created, externalDeliveryError });
     },
   );
 

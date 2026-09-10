@@ -434,7 +434,7 @@ export const api = {
   releaseConversation: (tenantId: string, conversationId: string) =>
     apiFetch(`/v1/tenants/${tenantId}/conversations/${conversationId}/release`, { method: "POST" }),
   sendStaffReply: (tenantId: string, conversationId: string, message: string) =>
-    apiFetch(`/v1/tenants/${tenantId}/conversations/${conversationId}/staff-reply`, {
+    apiFetch<{ id: string; externalDeliveryError?: string }>(`/v1/tenants/${tenantId}/conversations/${conversationId}/staff-reply`, {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
@@ -454,6 +454,11 @@ export const api = {
       "/v1/auth/me/notification-preferences",
       { method: "PATCH", body: JSON.stringify(body) },
     ),
+  getPushPublicKey: () => apiFetch<{ publicKey: string | null }>("/v1/auth/me/push-public-key"),
+  savePushSubscription: (subscription: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
+    apiFetch("/v1/auth/me/push-subscription", { method: "POST", body: JSON.stringify(subscription) }),
+  deletePushSubscription: (endpoint: string) =>
+    apiFetch("/v1/auth/me/push-subscription", { method: "DELETE", body: JSON.stringify({ endpoint }) }),
 
   // --- Data residency (staff-only, disclosure) ---
   updateDataResidency: (tenantId: string, dataResidencyRegion: string | null) =>
@@ -546,14 +551,15 @@ export const api = {
     apiFetch(`/v1/platform/tenants/${tenantId}/branding/apply-preset`, { method: "POST", body: JSON.stringify({ presetId }) }),
 
   // --- Platform analytics ---
-  getPlatformBusinessAnalytics: () =>
+  getPlatformBusinessAnalytics: (churnWindowDays = 30) =>
     apiFetch<{
       totalTenants: number;
       mrr: number;
       churnRate: number;
+      churnWindowDays: number;
       byTier: Record<string, number>;
       byState: Record<string, number>;
-    }>("/v1/platform/analytics/business"),
+    }>(`/v1/platform/analytics/business?churnWindowDays=${churnWindowDays}`),
   getPlatformUsageAnalytics: (days = 30) =>
     apiFetch<{
       windowDays: number;

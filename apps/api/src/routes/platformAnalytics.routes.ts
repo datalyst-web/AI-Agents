@@ -16,9 +16,20 @@ const PLAN_PRICE_USD: Record<string, number> = { STARTER: 49, GROWTH: 149, SCALE
 export async function registerPlatformAnalyticsRoutes(app: FastifyInstance, ctx: AppContext) {
   const scoped = [app.authenticate, requirePermission("platform:manage_tenants")];
 
-  app.get("/v1/platform/analytics/business", { preHandler: scoped }, async () => {
-    const tenants = await withPlatformContext(ctx.prisma, (tx) =>
-      tx.tenant.findMany({ select: { subscriptionTier: true, subscriptionState: true, createdAt: true } }),
+  app.get("/v1/platform/analytics/business", { preHandler: scoped }, async (request) => {
+    const { churnWindowDays } = request.query as { churnWindowDays?: string };
+    const windowDays = Math.min(365, Math.max(1, Number(churnWindowDays) || 30));
+    const since = new Date();
+    since.setDate(since.getDate() - windowDays);
+
+    const [tenants, changes] = await withPlatformContext(ctx.prisma, (tx) =>
+      Promise.all([
+        tx.tenant.findMany({ select: { id: true, subscriptionTier: true, subscriptionState: true, createdAt: true } }),
+        tx.subscriptionStateChange.findMany({
+          orderBy: { changedAt: "asc" },
+          select: { tenantId: true, toState: true, changedAt: true },
+        }),
+      ]),
     );
 
     const byTier: Record<string, number> = {};
@@ -33,15 +44,45 @@ export async function registerPlatformAnalyticsRoutes(app: FastifyInstance, ctx:
       if (t.subscriptionState === "ACTIVE") mrr += PLAN_PRICE_USD[t.subscriptionTier] ?? 0;
     }
 
-    // Simple month-over-month churn: tenants that are CANCELLED right now,
-    // as a fraction of everyone ever seen. A true cohort-based churn rate
-    // needs a subscription-state history table this schema doesn't have
-    // yet — this is the honest approximation available from current state.
-    const total = tenants.length;
-    const cancelled = byState.CANCELLED ?? 0;
-    const churnRate = total > 0 ? cancelled / total : 0;
+    // Real cohort-based churn, computed from SubscriptionStateChange
+    // (subscriptionHistory.ts) instead of a current-state snapshot:
+    // ACTIVE tenants as of `since` who transitioned to CANCELLED at some
+    // point between `since` and now, divided by how many were ACTIVE as
+    // of `since` in the first place. For a tenant with no recorded change
+    // at or before `since` (either it's newer than the window, or it
+    // predates this history table entirely), fall back to its earliest
+    // known state as a proxy for "what it was doing back then" — the only
+    // information available for tenants that existed before this table
+    // was introduced.
+    const changesByTenant = new Map<string, { toState: string; changedAt: Date }[]>();
+    for (const c of changes) {
+      const list = changesByTenant.get(c.tenantId) ?? [];
+      list.push(c);
+      changesByTenant.set(c.tenantId, list);
+    }
+    function stateAsOf(tenantId: string, currentState: string, createdAt: Date, cutoff: Date): string | undefined {
+      const list = changesByTenant.get(tenantId) ?? [];
+      let atCutoff: string | undefined;
+      for (const c of list) {
+        if (c.changedAt <= cutoff) atCutoff = c.toState;
+        else break;
+      }
+      if (atCutoff !== undefined) return atCutoff;
+      if (createdAt > cutoff) return undefined; // didn't exist yet as of cutoff
+      return list[0]?.toState ?? currentState; // predates tracking — best available proxy
+    }
+    let activeAtStart = 0;
+    let churnedInWindow = 0;
+    for (const t of tenants) {
+      const wasActive = stateAsOf(t.id, t.subscriptionState, t.createdAt, since) === "ACTIVE";
+      if (!wasActive) continue;
+      activeAtStart += 1;
+      const cancelledInWindow = (changesByTenant.get(t.id) ?? []).some((c) => c.toState === "CANCELLED" && c.changedAt > since);
+      if (cancelledInWindow) churnedInWindow += 1;
+    }
+    const churnRate = activeAtStart > 0 ? churnedInWindow / activeAtStart : 0;
 
-    return { totalTenants: total, mrr, churnRate, byTier, byState };
+    return { totalTenants: tenants.length, mrr, churnRate, churnWindowDays: windowDays, byTier, byState };
   });
 
   /** Aggregate token usage + cost across every tenant, broken down by AI provider — for comparing cost/volume across Anthropic/OpenAI/Gemini. */

@@ -111,6 +111,7 @@ model Tenant {
   teamInvites                TeamInvite[]
   supportTickets            SupportTicket[]
   promptInjectionFlags      PromptInjectionFlag[]
+  subscriptionStateChanges  SubscriptionStateChange[]
   // Informational/disclosure only — this platform runs from a single
   // region today, so setting this does NOT physically relocate a
   // tenant's data. It exists so staff can record and see a client's
@@ -153,14 +154,13 @@ model User {
   passwordResetTokenHash String?   @map("password_reset_token_hash")
   passwordResetExpiresAt DateTime? @map("password_reset_expires_at")
 
-  /// Escalation notification preferences. Only email is actually wired to
-  /// send anything today (SMTP already exists — see packages/email); SMS
-  /// and push need a real provider (Twilio, FCM/APNs) this platform
-  /// doesn't have credentials for yet. The SMS/push columns and
-  /// phoneNumber still exist so the preference itself can be captured and
-  /// shown as "coming soon" rather than the UI pretending the toggle
-  /// isn't there at all — but the dashboard disables those two switches
-  /// rather than let someone enable a channel that silently never fires.
+  /// Escalation notification preferences — all three now wired to a real
+  /// provider (see packages/email, packages/sms, packages/push): email via
+  /// SMTP, SMS via Twilio (falls back to a logging no-op if
+  /// TWILIO_* env vars are unset), push via Web Push using a
+  /// platform-owned VAPID key pair (falls back to a logging no-op if
+  /// VAPID_* env vars are unset) — this is a per-deployment configuration
+  /// question, not a missing feature.
   notifyEscalationEmail Boolean @default(true) @map("notify_escalation_email")
   notifyEscalationSms   Boolean @default(false) @map("notify_escalation_sms")
   notifyEscalationPush  Boolean @default(false) @map("notify_escalation_push")
@@ -518,6 +518,17 @@ model CustomerIdentity {
   agentId         String   @map("agent_id") @db.Uuid
   identifierType  String   @map("identifier_type") // authenticated_account | email | widget_session_cookie
   identifierHash  String   @map("identifier_hash") // hashed at rest, never the raw email/cookie
+  // AES-256-GCM encrypted (reversible), NOT hashed — set only for the four
+  // channel-derived identifier types (telegram_chat_id,
+  // whatsapp_phone_number, facebook_psid, instagram_igsid). identifierHash
+  // above can't be reversed by design, but a human "takeover" reply typed
+  // later (not inline in an inbound webhook, where the raw id is available
+  // for free) has no other way to know where to send it. Encrypted with
+  // the same key/util as channel credentials (apps/api/src/lib/
+  // channelCrypto.ts) and decrypted only to place that one outbound call —
+  // never returned to any client. Left null for email/authenticated_account/
+  // widget_session_cookie, which don't need outbound delivery this way.
+  encryptedExternalHandle String? @map("encrypted_external_handle")
   createdAt       DateTime @default(now()) @map("created_at")
 
   conversations       Conversation[]
@@ -1002,6 +1013,26 @@ enum SupportTicketPriority {
   @@schema("chat")
 }
 
+/// Every subscriptionState transition, timestamped — lets platform
+/// analytics compute a real cohort-based churn rate (was cancelled ÷ total
+/// as of NOW over a real time WINDOW) instead of the current-snapshot
+/// approximation (cancelled ÷ total right now, no time dimension at all).
+/// Written alongside every Tenant.subscriptionState update, never derived
+/// after the fact.
+model SubscriptionStateChange {
+  id        String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String             @map("tenant_id") @db.Uuid
+  tenant    Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fromState SubscriptionState? @map("from_state")
+  toState   SubscriptionState  @map("to_state")
+  changedAt DateTime           @default(now()) @map("changed_at")
+
+  @@index([tenantId])
+  @@index([changedAt])
+  @@map("subscription_state_changes")
+  @@schema("chat")
+}
+
 /// A client's own request to the platform team (not to be confused with
 /// the "Ticketing" tool category an AGENT uses to create tickets in a
 /// CLIENT's own external helpdesk — this is the client contacting US).
@@ -1131,5 +1162,27 @@ model BrandingPreset {
   createdAt     DateTime @default(now()) @map("created_at")
 
   @@map("branding_presets")
+  @@schema("chat")
+}
+
+/// A browser/device registered for Web Push (see packages/push) so
+/// escalationNotificationSweep can deliver a real push notification when a
+/// user has notifyEscalationPush on — not tenant-scoped like most models
+/// here (a platform staff user has no tenantId at all), same reasoning as
+/// FeatureFlag/PromptTemplate/BrandingPreset above; access is instead
+/// self-service, scoped to the caller's own userId in the route (see
+/// auth.routes.ts), not RLS.
+model PushSubscription {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // Staff/tenant user id — not a DB relation, same reasoning as
+  // Conversation.takenOverByUserId elsewhere (not every user is tenant-scoped).
+  userId    String   @map("user_id") @db.Uuid
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("push_subscriptions")
   @@schema("chat")
 }

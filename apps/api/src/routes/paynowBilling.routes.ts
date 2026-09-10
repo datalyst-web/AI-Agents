@@ -6,6 +6,7 @@ import type { AppContext } from "../lib/context.js";
 import { requireTenantMatch, requirePermission } from "../lib/rbac.js";
 import { verifyActiveImpersonation } from "../lib/impersonation.js";
 import { writeAuditLog } from "../lib/audit.js";
+import { recordSubscriptionStateChange } from "../lib/subscriptionHistory.js";
 import { initiateWebPayment, initiateMobilePayment, verifyAndParseStatusUpdate, isPaidStatus } from "../lib/paynow.js";
 import { env } from "../env.js";
 
@@ -258,10 +259,15 @@ export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: App
               },
             });
             if (payment.subscriptionTier) {
+              const before = await tenantTx.tenant.findUniqueOrThrow({
+                where: { id: payment.tenantId },
+                select: { subscriptionState: true },
+              });
               await tenantTx.tenant.update({
                 where: { id: payment.tenantId },
                 data: { subscriptionState: "ACTIVE", subscriptionTier: payment.subscriptionTier },
               });
+              await recordSubscriptionStateChange(tenantTx, payment.tenantId, before.subscriptionState, "ACTIVE");
             }
             await writeAuditLog(tenantTx, { tenantId: payment.tenantId }, {
               actorUserId: SYSTEM_PAYNOW_ACTOR_ID,

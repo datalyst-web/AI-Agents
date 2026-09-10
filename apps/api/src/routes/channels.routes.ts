@@ -7,48 +7,11 @@ import { requireTenantMatch, requirePermission } from "../lib/rbac.js";
 import { verifyActiveImpersonation } from "../lib/impersonation.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { encryptChannelCredential, decryptChannelCredential } from "../lib/channelCrypto.js";
+import { telegramCall, graphApiGet, graphApiSend } from "../lib/channelSend.js";
 import { processCustomerMessage } from "../engine/agentLoop.js";
 import { env } from "../env.js";
 
 const ConnectTelegramSchema = z.object({ botToken: z.string().min(20) });
-
-const TELEGRAM_API = "https://api.telegram.org";
-
-async function telegramCall(botToken: string, method: string, body?: Record<string, unknown>) {
-  const resp = await fetch(`${TELEGRAM_API}/bot${botToken}/${method}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body ?? {}),
-  });
-  const data = (await resp.json()) as { ok: boolean; result?: unknown; description?: string };
-  if (!data.ok) throw new Error(data.description ?? `Telegram API call to ${method} failed.`);
-  return data.result;
-}
-
-// WhatsApp/Messenger/Instagram all run through one Meta App and one Graph
-// API surface (see META_APP_SECRET's comment in packages/config) — a single
-// pinned API version keeps every call in this file consistent.
-const GRAPH_API = "https://graph.facebook.com/v19.0";
-
-async function graphApiGet(accessToken: string, path: string, fields: string) {
-  const resp = await fetch(`${GRAPH_API}/${path}?fields=${encodeURIComponent(fields)}`, {
-    headers: { authorization: `Bearer ${accessToken}` },
-  });
-  const data = (await resp.json()) as Record<string, unknown> & { error?: { message?: string } };
-  if (!resp.ok || data.error) throw new Error(data.error?.message ?? `Meta Graph API rejected this credential.`);
-  return data;
-}
-
-async function graphApiSend(accessToken: string, path: string, body: Record<string, unknown>) {
-  const resp = await fetch(`${GRAPH_API}/${path}`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = (await resp.json()) as Record<string, unknown> & { error?: { message?: string } };
-  if (!resp.ok || data.error) throw new Error(data.error?.message ?? "Meta Graph API send failed.");
-  return data;
-}
 
 const ConnectMetaChannelSchema = z.object({
   // WhatsApp: the Cloud API phone_number_id. Messenger: the Page id.
