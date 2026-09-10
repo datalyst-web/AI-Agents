@@ -119,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(token);
     setImpersonation(null);
     await refreshMe();
-    router.push("/");
+    router.push("/overview");
   }
 
   async function loginWithGoogle(credential: string, turnstileToken?: string) {
@@ -127,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(token);
     setImpersonation(null);
     await refreshMe();
-    router.push("/");
+    router.push("/overview");
   }
 
   async function acceptInvite(inviteToken: string, displayName: string, password: string) {
@@ -135,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(token);
     setImpersonation(null);
     await refreshMe();
-    router.push("/");
+    router.push("/overview");
   }
 
   function logout() {
@@ -151,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(result.token);
     setImpersonation({ tenantId: result.tenantId, tenantName, sessionId: result.sessionId, expiresAt: result.expiresAt });
     await refreshMe();
-    router.push("/");
+    router.push("/overview");
   }
 
   async function endImpersonation() {

@@ -24,7 +24,7 @@ const PLAN_LABEL: Record<"STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE", string> 
 // everything, clients only test/approve/view. See CLAUDE.md Managed
 // Setup Service.
 const TENANT_NAV = [
-  { href: "/", label: "Overview", icon: IconGrid },
+  { href: "/overview", label: "Overview", icon: IconGrid },
   { href: "/live-inbox", label: "Live Inbox", icon: IconInbox },
   { href: "/agents", label: "Agents", icon: IconBot },
   { href: "/leads", label: "Leads", icon: IconLead },
@@ -43,7 +43,7 @@ const TENANT_NAV = [
   { href: "/audit-log", label: "Audit Log", icon: IconShield },
 ];
 const CLIENT_NAV = [
-  { href: "/", label: "Overview", icon: IconGrid },
+  { href: "/overview", label: "Overview", icon: IconGrid },
   { href: "/live-inbox", label: "Live Inbox", icon: IconInbox },
   { href: "/agents", label: "Agents", icon: IconBot },
   { href: "/leads", label: "Leads", icon: IconLead },

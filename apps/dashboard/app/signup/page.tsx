@@ -21,7 +21,7 @@ export default function SignupPage() {
     try {
       const { token } = await api.signup(tenantName, email, password);
       setToken(token);
-      router.push("/");
+      router.push("/overview");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Signup failed.");
     } finally {
@@ -73,6 +73,17 @@ export default function SignupPage() {
             <Button type="submit" disabled={busy} className="w-full">
               {busy ? "Creating account..." : "Create account"}
             </Button>
+            <p className="text-center text-[11px] leading-relaxed text-white/35">
+              By creating an account you agree to our{" "}
+              <Link href="/terms" className="text-white/55 underline underline-offset-2 hover:text-white/80">
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link href="/privacy" className="text-white/55 underline underline-offset-2 hover:text-white/80">
+                Privacy Policy
+              </Link>
+              .
+            </p>
           </form>
         </div>
         <p className="mt-5 text-center text-xs text-white/40">
