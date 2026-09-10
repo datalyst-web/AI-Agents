@@ -8,7 +8,7 @@ import type { AppContext } from "../lib/context.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { verifyTurnstileToken } from "../lib/turnstile.js";
 import { recordSubscriptionStateChange } from "../lib/subscriptionHistory.js";
-import { provisionUsageLimits } from "../lib/planLimits.js";
+import { provisionUsageLimits, trialEndDate } from "../lib/planLimits.js";
 import { env } from "../env.js";
 
 const LoginSchema = z.object({ email: z.string().email(), password: z.string().min(8), turnstileToken: z.string().optional() });
@@ -69,7 +69,11 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
           slug: `${slug}-${randomUUID().slice(0, 6)}`,
           subscriptionState: "TRIAL",
           subscriptionTier: "STARTER",
-          managedSetupTier: "SELF_SERVE",
+          // Every client is set up by our team (see CLAUDE.md Managed
+          // Setup Service) — a self-signup is the start of that process,
+          // not someone opting to configure it themselves.
+          managedSetupTier: "FULLY_MANAGED",
+          trialEndsAt: trialEndDate(),
         },
       });
       const user = await tx.user.create({
@@ -342,7 +346,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
     // withTenant(effectiveTenantId) and throw.
     const user = await withPlatformContext(ctx.prisma, (tx) => tx.user.findUniqueOrThrow({ where: { id: authUser.sub } }));
 
-    const { theme, subscriptionTier, subscriptionState, brandName, logoUrl } = effectiveTenantId
+    const { theme, subscriptionTier, subscriptionState, brandName, logoUrl, trialEndsAt } = effectiveTenantId
       ? await withTenant(ctx.prisma, { tenantId: effectiveTenantId }, async (tx) => {
           const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: effectiveTenantId! } });
           return {
@@ -351,6 +355,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
             subscriptionState: tenant.subscriptionState,
             brandName: tenant.brandName,
             logoUrl: tenant.logoObjectKey ? `/v1/tenants/${tenant.id}/branding/logo` : null,
+            trialEndsAt: tenant.trialEndsAt,
           };
         })
       : {
@@ -362,6 +367,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
           subscriptionState: null,
           brandName: null,
           logoUrl: null,
+          trialEndsAt: null,
         };
     // Platform operator's own brand — always fetched regardless of tenant
     // scope, since it's the fallback the dashboard sidebar falls back to
@@ -379,6 +385,11 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       subscriptionState,
       brandName,
       logoUrl,
+      trialEndsAt,
+      trialDaysRemaining:
+        trialEndsAt && subscriptionState === "TRIAL"
+          ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+          : null,
       platformBrandName: platformSettings?.brandName ?? null,
       platformLogoUrl: platformSettings?.logoObjectKey ? "/v1/platform/branding/logo" : null,
       notifyEscalationEmail: user.notifyEscalationEmail,

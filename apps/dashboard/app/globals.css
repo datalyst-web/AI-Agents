@@ -84,6 +84,38 @@ body {
   background-image: none;
 }
 
+/* The elevation shadows in the UI preset are tuned for a near-black
+   surface — 40-60% black is what reads as "lifted" there. Over a near-white
+   surface the same values read as a grey smudge rather than elevation, so
+   light theme gets a tighter, much softer set (and the brand glow loses its
+   heavy drop, keeping just the coloured ring). Overriding the utility
+   classes here rather than making every shadow a CSS variable in the
+   preset keeps the change contained to the one thing that's actually
+   theme-dependent. */
+[data-theme="light"] .shadow-card {
+  box-shadow:
+    0 1px 2px rgba(15, 19, 48, 0.04),
+    0 4px 12px -4px rgba(15, 19, 48, 0.08);
+}
+[data-theme="light"] .shadow-card-hover,
+[data-theme="light"] .hover\:shadow-card-hover:hover {
+  box-shadow:
+    0 1px 2px rgba(15, 19, 48, 0.05),
+    0 12px 28px -8px rgba(15, 19, 48, 0.14),
+    0 0 0 1px rgba(15, 19, 48, 0.04);
+}
+[data-theme="light"] .shadow-glow {
+  box-shadow:
+    0 0 0 1px rgba(74, 94, 245, 0.16),
+    0 6px 18px -6px rgba(74, 94, 245, 0.28);
+}
+[data-theme="light"] .shadow-glow-lg,
+[data-theme="light"] .hover\:shadow-glow-lg:hover {
+  box-shadow:
+    0 0 0 1px rgba(74, 94, 245, 0.2),
+    0 12px 30px -8px rgba(74, 94, 245, 0.3);
+}
+
 ::selection {
   background: theme("colors.brand.500 / 35%");
   color: white;

@@ -266,7 +266,10 @@ export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: App
               });
               await tenantTx.tenant.update({
                 where: { id: payment.tenantId },
-                data: { subscriptionState: "ACTIVE", subscriptionTier: payment.subscriptionTier },
+                // trialEndsAt is cleared, not left to lapse — otherwise
+                // trialExpirySweep would still see a past date on a tenant
+                // that has since paid.
+                data: { subscriptionState: "ACTIVE", subscriptionTier: payment.subscriptionTier, trialEndsAt: null },
               });
               await recordSubscriptionStateChange(tenantTx, payment.tenantId, before.subscriptionState, "ACTIVE");
               // The paid plan's allowance replaces whatever trial/lower-tier

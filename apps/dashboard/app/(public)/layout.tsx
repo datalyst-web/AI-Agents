@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { PublicThemeToggle } from "@/components/PublicThemeToggle";
 
 /**
  * Shared chrome for the public content pages (guide, terms, privacy) —
@@ -27,6 +28,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
             <Link href="/privacy" className="transition-colors hover:text-foreground/80">
               Privacy
             </Link>
+            <PublicThemeToggle />
           </div>
         </div>
       </header>

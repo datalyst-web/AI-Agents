@@ -297,7 +297,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
         <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-8">
-          <div className="mx-auto max-w-6xl animate-fade-up">{children}</div>
+          <div className="mx-auto max-w-6xl animate-fade-up">
+            <TrialBanner daysRemaining={user?.trialDaysRemaining ?? null} state={user?.subscriptionState ?? null} />
+            {children}
+          </div>
         </main>
       </div>
     </div>
@@ -500,5 +503,36 @@ function IconFlag({ className }: { className?: string }) {
       <path d="M5 3v14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       <path d="M5 4h9l-2.2 3L14 10H5" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+/**
+ * Free-trial countdown. Shown only while the tenant is actually trialling,
+ * and only in the last week — a banner that's permanently there stops being
+ * read. Turns urgent in the final three days, matching when
+ * trialExpirySweep sends its reminder email.
+ */
+function TrialBanner({ daysRemaining, state }: { daysRemaining: number | null; state: string | null }) {
+  if (state !== "TRIAL" || daysRemaining === null || daysRemaining > 7) return null;
+  const urgent = daysRemaining <= 3;
+  return (
+    <div
+      className={`mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl2 px-5 py-3.5 text-sm ring-1 ring-inset ${
+        urgent ? "bg-danger/10 text-danger ring-danger/25" : "bg-info/10 text-info ring-info/25"
+      }`}
+    >
+      <span className="font-medium">
+        {daysRemaining === 0
+          ? "Your free trial ends today."
+          : `Your free trial ends in ${daysRemaining} ${daysRemaining === 1 ? "day" : "days"}.`}{" "}
+        <span className="font-normal opacity-80">Choose a plan to keep your agent answering — nothing you&apos;ve set up is lost.</span>
+      </span>
+      <Link
+        href="/billing"
+        className="rounded-lg bg-current/15 px-3.5 py-1.5 text-xs font-semibold underline-offset-2 hover:underline"
+      >
+        View plans
+      </Link>
+    </div>
   );
 }

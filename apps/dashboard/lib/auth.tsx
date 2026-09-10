@@ -17,6 +17,8 @@ interface AuthUser {
   theme: DashboardTheme;
   subscriptionTier: "STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE" | null;
   subscriptionState: "ACTIVE" | "TRIAL" | "PAST_DUE" | "SUSPENDED" | "CANCELLED" | null;
+  /** Whole days left on a free trial, or null when not trialling. Drives the countdown banner in the dashboard layout. */
+  trialDaysRemaining: number | null;
   /** Staff-set white-label console name/logo — see tenants.routes.ts branding endpoints. Null until staff set them. */
   brandName: string | null;
   logoUrl: string | null;

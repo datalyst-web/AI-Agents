@@ -76,6 +76,12 @@ model Tenant {
   slug                 String            @unique
   subscriptionState    SubscriptionState @default(TRIAL)
   subscriptionTier     SubscriptionTier  @default(STARTER)
+  /// When a TRIAL tenant's free period ends. Set at signup (see
+  /// auth.routes.ts) and cleared once they convert to a paid plan.
+  /// trialExpirySweep suspends the tenant once this passes — suspend,
+  /// never delete (CLAUDE.md Client Lifecycle), so converting later
+  /// restores everything they built during the trial.
+  trialEndsAt          DateTime?         @map("trial_ends_at")
   managedSetupTier     ManagedSetupTier  @default(SELF_SERVE)
   delegatesAutoPublish Boolean           @default(false)
   dataRetentionDays    Int               @default(365)

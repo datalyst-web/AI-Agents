@@ -51,6 +51,17 @@ const PLAN_ALLOWANCES: Record<SubscriptionTier, PlanAllowance> = {
 };
 
 /**
+ * How long a free trial runs before trialExpirySweep suspends it. The one
+ * place this number lives — the signup route, the dashboard's countdown
+ * banner and the marketing page all trace back here.
+ */
+export const TRIAL_DAYS = 14;
+
+export function trialEndDate(from = new Date()): Date {
+  return new Date(from.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+}
+
+/**
  * A trial gets a much smaller allowance than the paid plan it's trialling,
  * and is hard-capped at exactly that allowance — a trial should stop when
  * it's used up rather than quietly accrue overage nobody agreed to pay.

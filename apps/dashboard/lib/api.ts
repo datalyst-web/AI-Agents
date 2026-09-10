@@ -146,6 +146,8 @@ export const api = {
       theme: "DARK" | "LIGHT";
       subscriptionTier: "STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE" | null;
       subscriptionState: "ACTIVE" | "TRIAL" | "PAST_DUE" | "SUSPENDED" | "CANCELLED" | null;
+      trialEndsAt: string | null;
+      trialDaysRemaining: number | null;
       brandName: string | null;
       logoUrl: string | null;
       platformBrandName: string | null;

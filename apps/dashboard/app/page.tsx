@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { PublicThemeToggle } from "@/components/PublicThemeToggle";
 
 /**
  * The public marketing page — the only route a prospect sees before
@@ -20,13 +21,13 @@ const BRAND = "Datalyst AI";
 export const metadata: Metadata = {
   title: `${BRAND} — AI digital employees for your business`,
   description:
-    "An AI assistant that answers customer questions from your own documents, qualifies leads, books appointments, and hands off to your team with full context. Built for you, or configured yourself.",
+    "An AI assistant that answers customer questions from your own documents, qualifies leads, books appointments, and hands off to your team with full context. Our team builds and configures it for you.",
 };
 
 const CAPABILITIES: { title: string; body: string }[] = [
   {
     title: "Answers from your business, not the internet",
-    body: "Upload your documents or point it at your website. Prices, policies, hours and product details come from your knowledge base — updated any time, with no redeploy.",
+    body: "Send us your documents and your website and we turn them into its knowledge base. Prices, policies, hours and product details come from there — and we keep it updated as your business changes.",
   },
   {
     title: "Qualifies and scores leads",
@@ -87,7 +88,7 @@ const PLANS: {
     cadence: "/month",
     blurb: "One agent on your website, for a business testing the water.",
     included: ["500 conversations/month", "500,000 AI tokens/month", "Website widget + shareable link", "Knowledge base from your docs & site", "Email escalation alerts"],
-    cta: "Start free trial",
+    cta: "Start 14-day free trial",
     href: "/signup",
   },
   {
@@ -103,7 +104,7 @@ const PLANS: {
       "Lead scoring + analytics",
       "SMS and push alerts",
     ],
-    cta: "Start free trial",
+    cta: "Start 14-day free trial",
     href: "/signup",
     featured: true,
   },
@@ -120,7 +121,7 @@ const PLANS: {
       "Workflow automation",
       "Live inbox with human takeover",
     ],
-    cta: "Start free trial",
+    cta: "Start 14-day free trial",
     href: "/signup",
   },
   {
@@ -138,7 +139,7 @@ const STEPS: { step: string; title: string; body: string }[] = [
   {
     step: "01",
     title: "Tell us about your business",
-    body: "Send us your documents, your website, your price list — whatever you already have. Or upload it yourself if you'd rather drive.",
+    body: "Send us your documents, your website, your price list — whatever you already have. That is genuinely the whole ask on your side.",
   },
   {
     step: "02",
@@ -197,6 +198,7 @@ export default function LandingPage() {
             </Link>
           </nav>
           <div className="flex items-center gap-3">
+            <PublicThemeToggle />
             <Link href="/login" className="text-sm font-medium text-foreground/70 transition-colors hover:text-foreground">
               Sign in
             </Link>
@@ -215,7 +217,7 @@ export default function LandingPage() {
           <div className="mx-auto max-w-3xl text-center">
             <div className="inline-flex items-center gap-2 rounded-full bg-foreground/[0.06] px-3.5 py-1.5 text-xs font-medium text-foreground/70 ring-1 ring-inset ring-surface-border">
               <span className="h-1.5 w-1.5 rounded-full bg-success" />
-              Built for you, or configured yourself
+              We build it. You approve it. It goes live.
             </div>
             <h1 className="mt-6 text-4xl font-semibold leading-[1.08] tracking-tightest text-foreground sm:text-6xl">
               An AI employee that actually knows your business
@@ -229,7 +231,7 @@ export default function LandingPage() {
                 href="/signup"
                 className="w-full rounded-xl bg-brand-gradient px-6 py-3 text-sm font-semibold text-white shadow-glow transition-shadow hover:shadow-glow-lg sm:w-auto"
               >
-                Start your free trial
+                Start your 14-day free trial
               </Link>
               <a
                 href="#how-it-works"
@@ -238,7 +240,7 @@ export default function LandingPage() {
                 See how it works
               </a>
             </div>
-            <p className="mt-5 text-xs text-foreground/40">No card required to start. We can build your agent for you.</p>
+            <p className="mt-5 text-xs text-foreground/40">14-day free trial. No card required. We build your agent for you.</p>
           </div>
 
           <div className="mt-16 flex flex-wrap items-center justify-center gap-2.5">
@@ -277,8 +279,8 @@ export default function LandingPage() {
         <Section id="how-it-works" className="py-20">
           <SectionHeading
             eyebrow="How it works"
-            title="You don't have to figure it out yourself"
-            body="Most businesses don't have time to assemble a knowledge base or write agent instructions. That's the part we do for you — using the exact same tools you'd use, so nothing is hidden from you."
+            title="You don't configure anything"
+            body="Assembling a knowledge base, writing agent instructions and wiring up integrations is our job, not yours. Our team does all of it inside your account — every action logged and visible to you — and hands it over for you to test and approve."
           />
           <div className="mt-14 grid gap-6 md:grid-cols-3">
             {STEPS.map((item) => (
@@ -317,7 +319,7 @@ export default function LandingPage() {
           <SectionHeading
             eyebrow="Pricing"
             title="Straightforward monthly plans"
-            body="Every plan includes a monthly usage allowance. Go over it and you're billed a per-token overage rate — you'll see exactly where you stand in your dashboard, never a surprise invoice."
+            body="Setup and configuration by our team is included in every plan. Each plan comes with a monthly usage allowance; go over it and you're billed a per-token overage rate, with exactly where you stand visible in your dashboard — never a surprise invoice."
           />
           <div className="mt-14 grid gap-5 lg:grid-cols-4">
             {PLANS.map((plan) => (
@@ -364,8 +366,8 @@ export default function LandingPage() {
             ))}
           </div>
           <p className="mt-8 text-center text-xs text-foreground/40">
-            Managed setup — where our team builds your knowledge base and agent for you — is quoted separately, as a one-off or an
-            ongoing upkeep service.
+            Every plan starts with a 14-day free trial, and every plan includes our team building and configuring your agent for
+            you. Ongoing knowledge-base upkeep is included on Scale and Enterprise, and available as an add-on below that.
           </p>
         </Section>
       </div>
@@ -376,15 +378,15 @@ export default function LandingPage() {
             Put it in front of your customers this week
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-foreground/60">
-            Start a free trial and try it on your own content, or tell us about your business and we&apos;ll build the first
-            version for you.
+            Tell us about your business and we&apos;ll build your first agent during your 14-day free trial. You review it, you
+            approve it, and only then does it talk to a customer.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               href="/signup"
               className="w-full rounded-xl bg-brand-gradient px-6 py-3 text-sm font-semibold text-white shadow-glow transition-shadow hover:shadow-glow-lg sm:w-auto"
             >
-              Start free trial
+              Start 14-day free trial
             </Link>
             <Link
               href="/login"
