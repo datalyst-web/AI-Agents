@@ -7,6 +7,7 @@ import { requireTenantMatch, requirePermission } from "../lib/rbac.js";
 import { verifyActiveImpersonation } from "../lib/impersonation.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { recordSubscriptionStateChange } from "../lib/subscriptionHistory.js";
+import { provisionUsageLimits } from "../lib/planLimits.js";
 import { initiateWebPayment, initiateMobilePayment, verifyAndParseStatusUpdate, isPaidStatus } from "../lib/paynow.js";
 import { env } from "../env.js";
 
@@ -268,6 +269,10 @@ export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: App
                 data: { subscriptionState: "ACTIVE", subscriptionTier: payment.subscriptionTier },
               });
               await recordSubscriptionStateChange(tenantTx, payment.tenantId, before.subscriptionState, "ACTIVE");
+              // The paid plan's allowance replaces whatever trial/lower-tier
+              // limits were in place — this is the moment the client starts
+              // getting what they actually paid for.
+              await provisionUsageLimits(tenantTx, payment.tenantId, payment.subscriptionTier, "ACTIVE");
             }
             await writeAuditLog(tenantTx, { tenantId: payment.tenantId }, {
               actorUserId: SYSTEM_PAYNOW_ACTOR_ID,

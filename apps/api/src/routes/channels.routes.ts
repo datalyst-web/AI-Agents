@@ -8,6 +8,7 @@ import { verifyActiveImpersonation } from "../lib/impersonation.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { encryptChannelCredential, decryptChannelCredential } from "../lib/channelCrypto.js";
 import { telegramCall, graphApiGet, graphApiSend } from "../lib/channelSend.js";
+import { checkUsageAllowance } from "../lib/usageEnforcement.js";
 import { processCustomerMessage } from "../engine/agentLoop.js";
 import { env } from "../env.js";
 
@@ -295,6 +296,15 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
       return;
     }
 
+    // Same plan hard cap the widget path enforces (see chat.routes.ts) —
+    // ack the webhook so the provider stops retrying, but do no model work.
+    const allowance = await checkUsageAllowance(ctx.prisma, connection.tenantId);
+    if (allowance.overHardCap) {
+      request.log.warn({ tenantId: connection.tenantId, tokensUsed: allowance.tokensUsed }, "tenant over usage hard cap — dropping Telegram update");
+      reply.code(200).send({ ok: true });
+      return;
+    }
+
     const botToken = decryptChannelCredential(connection.encryptedCredential);
     const update = request.body as {
       message?: { chat: { id: number }; text?: string };
@@ -516,6 +526,11 @@ async function handleMetaInboundMessage(
     }),
   );
   if (!connection || !connection.encryptedCredential) return;
+
+  // Same plan hard cap the widget and Telegram paths enforce — stop before
+  // any model call rather than run up an unbounded provider bill.
+  const allowance = await checkUsageAllowance(ctx.prisma, connection.tenantId);
+  if (allowance.overHardCap) return;
 
   const accessToken = decryptChannelCredential(connection.encryptedCredential);
   const result = await processCustomerMessage(ctx, {

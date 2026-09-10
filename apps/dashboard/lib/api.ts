@@ -394,7 +394,25 @@ export const api = {
       body: JSON.stringify({ tier, phone, method }),
     }),
 
-  getUsageSummary: (tenantId: string) => apiFetch(`/v1/tenants/${tenantId}/usage/summary`),
+  getUsageSummary: (tenantId: string) =>
+    apiFetch<{
+      periodStart: string;
+      totalInputTokens: number;
+      totalOutputTokens: number;
+      totalTokens: number;
+      byProvider: Record<string, { inputTokens: number; outputTokens: number; requests: number }>;
+      limits: {
+        includedConversationsPerMonth: number;
+        includedTokensPerMonth: number;
+        overageRatePerThousandTokensUsd: string;
+        hardCapTokensPerMonth: number | null;
+      } | null;
+      overageTokens: number;
+      estimatedOverageUsd: number;
+      percentOfIncludedUsed: number | null;
+      hardCapTokens: number | null;
+      overHardCap: boolean;
+    }>(`/v1/tenants/${tenantId}/usage/summary`),
   getUsageDaily: (tenantId: string, days = 14) =>
     apiFetch<{ date: string; inputTokens: number; outputTokens: number; totalTokens: number }[]>(
       `/v1/tenants/${tenantId}/usage/daily?days=${days}`,

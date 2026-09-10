@@ -14,6 +14,7 @@ interface UsageSummary {
   estimatedOverageUsd: number;
   byProvider: Record<string, { inputTokens: number; outputTokens: number; requests: number }>;
   limits: { includedTokensPerMonth: number; hardCapTokensPerMonth: number | null } | null;
+  hardCapTokens: number | null;
 }
 interface DailyUsage {
   date: string;
@@ -87,7 +88,16 @@ function BillingPageContent() {
       .getUsageSummary(user.tenantId)
       .then((d) => setUsage(d as UsageSummary))
       .catch((err) => {
-        setUsage({ totalInputTokens: 0, totalOutputTokens: 0, totalTokens: 0, overageTokens: 0, estimatedOverageUsd: 0, byProvider: {}, limits: null });
+        setUsage({
+          totalInputTokens: 0,
+          totalOutputTokens: 0,
+          totalTokens: 0,
+          overageTokens: 0,
+          estimatedOverageUsd: 0,
+          byProvider: {},
+          limits: null,
+          hardCapTokens: null,
+        });
         setError(err instanceof ApiError ? err.message : "Could not load usage.");
       });
     api
@@ -224,10 +234,18 @@ function BillingPageContent() {
 
       {usage ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <StatTile label="Input tokens" value={usage.totalInputTokens.toLocaleString()} />
-          <StatTile label="Output tokens" value={usage.totalOutputTokens.toLocaleString()} />
+          <StatTile
+            label="Tokens used this month"
+            value={usage.totalTokens.toLocaleString()}
+            delta={usage.limits ? `of ${usage.limits.includedTokensPerMonth.toLocaleString()} included` : undefined}
+          />
           <StatTile label="Overage tokens" value={usage.overageTokens.toLocaleString()} deltaTone={usage.overageTokens > 0 ? "negative" : "neutral"} />
           <StatTile label="Est. overage cost" value={`$${usage.estimatedOverageUsd.toFixed(2)}`} />
+          <StatTile
+            label="Hard cap"
+            value={usage.hardCapTokens ? usage.hardCapTokens.toLocaleString() : "None"}
+            delta={usage.hardCapTokens ? "agents pause here" : "negotiated plan"}
+          />
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -387,7 +405,7 @@ function UsageLimitAlert({
   const overCap = limits.hardCapTokensPerMonth !== null && usage.totalTokens >= limits.hardCapTokensPerMonth;
   const overIncluded = pct >= 1;
   const message = overCap
-    ? "You've hit your plan's hard usage cap this month — new requests may be blocked until next month or you upgrade."
+    ? "You've hit your plan's hard usage cap — your agents have stopped answering until next month, or until you upgrade."
     : overIncluded
       ? `You're ${Math.round((pct - 1) * 100)}% over your plan's included usage this month — overage charges are accruing.`
       : `You've used ${Math.round(pct * 100)}% of your plan's included usage this month.`;

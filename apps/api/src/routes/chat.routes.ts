@@ -4,6 +4,7 @@ import { withTenant } from "@chat-agent/db";
 import type { AppContext } from "../lib/context.js";
 import { processCustomerMessage } from "../engine/agentLoop.js";
 import { verifyWidgetToken } from "../lib/widgetToken.js";
+import { checkUsageAllowance } from "../lib/usageEnforcement.js";
 
 const SendMessageSchema = z.object({
   conversationId: z.string().uuid().optional(),
@@ -46,6 +47,21 @@ export async function registerChatRoutes(app: FastifyInstance, ctx: AppContext) 
     const tenant = await withTenant(ctx.prisma, { tenantId: claim.tenantId }, (tx) => tx.tenant.findUniqueOrThrow({ where: { id: claim.tenantId } }));
     if (tenant.subscriptionState === "SUSPENDED" || tenant.subscriptionState === "CANCELLED") {
       // Never delete data on expiry — route to a graceful fallback instead (CLAUDE.md Client Lifecycle).
+      reply.code(503).send({
+        error: "agent_unavailable",
+        message: "This assistant is temporarily unavailable. Please contact the business directly.",
+      });
+      return;
+    }
+
+    // Stop before any model call once this tenant is past its plan's hard
+    // cap, so a runaway month can't run up an unbounded provider bill. The
+    // customer-facing wording deliberately never mentions quotas or
+    // billing — that's the business's private matter, not their
+    // customer's (CLAUDE.md white-label safety).
+    const allowance = await checkUsageAllowance(ctx.prisma, claim.tenantId);
+    if (allowance.overHardCap) {
+      request.log.warn({ tenantId: claim.tenantId, tokensUsed: allowance.tokensUsed }, "tenant over usage hard cap — refusing message");
       reply.code(503).send({
         error: "agent_unavailable",
         message: "This assistant is temporarily unavailable. Please contact the business directly.",

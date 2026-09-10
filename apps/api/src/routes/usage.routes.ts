@@ -3,6 +3,7 @@ import { withTenant } from "@chat-agent/db";
 import type { AppContext } from "../lib/context.js";
 import { requireTenantMatch, requirePermission } from "../lib/rbac.js";
 import { verifyActiveImpersonation } from "../lib/impersonation.js";
+import { currentPeriodStart } from "../lib/usageEnforcement.js";
 
 /** Backs the included-usage -> limit -> overage billing logic (CLAUDE.md "Usage & Cost Tracking"). */
 export async function registerUsageRoutes(app: FastifyInstance, ctx: AppContext) {
@@ -10,8 +11,10 @@ export async function registerUsageRoutes(app: FastifyInstance, ctx: AppContext)
 
   app.get("/v1/tenants/:tenantId/usage/summary", { preHandler: scoped }, async (request) => {
     return withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
-      const since = new Date();
-      since.setDate(1); // month-to-date
+      // Midnight on the 1st, not "the 1st at whatever time it is now" —
+      // the latter silently drops everything used earlier in the day on the
+      // 1st, which then under-reports overage for the whole month.
+      const since = currentPeriodStart();
       const records = await tx.usageRecord.findMany({ where: { tenantId: request.tenantCtx!.tenantId, timestamp: { gte: since } } });
       const limits = await tx.usageLimits.findUnique({ where: { tenantId: request.tenantCtx!.tenantId } });
 
@@ -37,6 +40,12 @@ export async function registerUsageRoutes(app: FastifyInstance, ctx: AppContext)
         limits,
         overageTokens,
         estimatedOverageUsd: limits ? overageTokens * (Number(limits.overageRatePerThousandTokensUsd) / 1000) : 0,
+        // Drives the dashboard's allowance meter — the client can see how
+        // close they are to their plan's included amount and to the cap
+        // where their agents stop, instead of finding out from an invoice.
+        percentOfIncludedUsed: limits ? Math.round((totalTokens / limits.includedTokensPerMonth) * 100) : null,
+        hardCapTokens: limits?.hardCapTokensPerMonth ?? null,
+        overHardCap: limits?.hardCapTokensPerMonth != null && totalTokens >= limits.hardCapTokensPerMonth,
       };
     });
   });

@@ -8,12 +8,14 @@ import { runWorkflowJob } from "./jobs/workflowRun.js";
 import { runRetentionSweep } from "./jobs/retentionSweep.js";
 import { runConversationTimeoutSweep } from "./jobs/conversationTimeoutSweep.js";
 import { runEscalationNotificationSweep } from "./jobs/escalationNotificationSweep.js";
+import { runOverageBillingSweep } from "./jobs/overageBillingSweep.js";
 import { withDistributedLock } from "./lib/lock.js";
 import { env } from "./env.js";
 
 const RETENTION_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6h — production should instead trigger this via EventBridge Scheduler; the interval here is a self-contained fallback so retention still runs with zero extra infra.
 const CONVERSATION_TIMEOUT_SWEEP_INTERVAL_MS = 5 * 60 * 1000; // 5m — CONVERSATION_ABANDONED needs to fire close to its 30m threshold, not hours late.
 const ESCALATION_NOTIFICATION_SWEEP_INTERVAL_MS = 2 * 60 * 1000; // 2m — a human should hear about a live handoff quickly, not on the same cadence as the 5m/6h sweeps above.
+const OVERAGE_BILLING_SWEEP_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12h — only ever bills a closed month, so running twice a day is plenty and self-heals if the worker was down at the month boundary.
 
 /**
  * Async job runner for the `chat` product — knowledge ingestion and
@@ -65,6 +67,18 @@ async function main() {
       Sentry.captureException(err);
     });
   }, ESCALATION_NOTIFICATION_SWEEP_INTERVAL_MS);
+
+  setInterval(() => {
+    void withDistributedLock(
+      ctx.redis,
+      "chat:lock:overage-billing-sweep",
+      OVERAGE_BILLING_SWEEP_INTERVAL_MS - 10_000,
+      () => runOverageBillingSweep(ctx),
+    ).catch((err) => {
+      console.error("[workers] overage billing sweep failed", err);
+      Sentry.captureException(err);
+    });
+  }, OVERAGE_BILLING_SWEEP_INTERVAL_MS);
 
   await Promise.all([
     ctx.queue.consume<KnowledgeIngestJob>(knowledgeQueueTarget, async (msg) => {

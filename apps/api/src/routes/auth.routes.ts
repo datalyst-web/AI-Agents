@@ -8,6 +8,7 @@ import type { AppContext } from "../lib/context.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { verifyTurnstileToken } from "../lib/turnstile.js";
 import { recordSubscriptionStateChange } from "../lib/subscriptionHistory.js";
+import { provisionUsageLimits } from "../lib/planLimits.js";
 import { env } from "../env.js";
 
 const LoginSchema = z.object({ email: z.string().email(), password: z.string().min(8), turnstileToken: z.string().optional() });
@@ -82,6 +83,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
         },
       });
       await recordSubscriptionStateChange(tx, tenant.id, null, "TRIAL");
+      await provisionUsageLimits(tx, tenant.id, "STARTER", "TRIAL");
       return { tenant, user };
     });
 

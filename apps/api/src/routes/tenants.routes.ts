@@ -9,6 +9,7 @@ import { requirePermission, resolveTenantContext, requireTenantMatch, requireSta
 import { verifyActiveImpersonation } from "../lib/impersonation.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { recordSubscriptionStateChange } from "../lib/subscriptionHistory.js";
+import { provisionUsageLimits } from "../lib/planLimits.js";
 
 const UpdateTenantSchema = z.object({
   subscriptionState: SubscriptionStateSchema.optional(),
@@ -49,6 +50,12 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
         const before = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { subscriptionState: true } });
         const updated = await tx.tenant.update({ where: { id: tenantId }, data: body });
         if (body.subscriptionState) await recordSubscriptionStateChange(tx, tenantId, before.subscriptionState, body.subscriptionState);
+        // A tier or state change moves which allowance applies, so the
+        // limits row has to follow it — otherwise an upgraded client keeps
+        // the old plan's cap.
+        if (body.subscriptionTier || body.subscriptionState) {
+          await provisionUsageLimits(tx, tenantId, updated.subscriptionTier, updated.subscriptionState);
+        }
         return updated;
       });
       reply.send(updated);
@@ -104,6 +111,7 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
           },
         });
         await recordSubscriptionStateChange(tx, tenant.id, null, "ACTIVE");
+        await provisionUsageLimits(tx, tenant.id, "STARTER", "ACTIVE");
         return tenant;
       });
       await withTenant(ctx.prisma, { tenantId: tenant.id }, (tx) =>
@@ -151,6 +159,7 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
         const before = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { subscriptionState: true } });
         const updated = await tx.tenant.update({ where: { id: tenantId }, data: { subscriptionState: "ACTIVE" } });
         await recordSubscriptionStateChange(tx, tenantId, before.subscriptionState, "ACTIVE");
+        await provisionUsageLimits(tx, tenantId, updated.subscriptionTier, "ACTIVE");
         return updated;
       });
       await withTenant(ctx.prisma, { tenantId }, (tx) =>
