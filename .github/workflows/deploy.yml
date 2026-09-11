@@ -28,6 +28,58 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
+      # Production schema is NOT applied anywhere else. CI only pushes the
+      # schema to its own ephemeral Postgres, so without this step a deploy
+      # ships a Prisma client selecting columns production doesn't have,
+      # and every query touching that model 500s — this took login down on
+      # 2026-09-10 (users.notify_escalation_email).
+      #
+      # Runs BEFORE the services deploy, so the schema is always ahead of
+      # the code that depends on it, never behind.
+      #
+      # The app's own DATABASE_URL is a least-privilege role with no DDL
+      # rights (correct, and staying that way), so this needs the database
+      # owner's URL in DATABASE_MIGRATE_URL — set as a Railway variable on
+      # the `api` service, which `railway run` injects here. Skips cleanly
+      # when it isn't set rather than failing the deploy.
+      - name: Set up Node + pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install -g pnpm@9
+      - run: pnpm install --frozen-lockfile
+
+      # psql (not `prisma db execute`) for the two SQL files, matching what
+      # ci.yml already does — rls_policies.sql is a DO $$ block, and psql is
+      # the client it's known to run correctly under. It's preinstalled on
+      # ubuntu-latest.
+      - name: Apply schema + RLS policies to production
+        run: |
+          railway run --service api -- bash -euo pipefail -c '
+            if [ -z "${DATABASE_MIGRATE_URL:-}" ]; then
+              echo "DATABASE_MIGRATE_URL not set — skipping schema apply."
+              exit 0
+            fi
+            echo "--- schema changes to be applied ---"
+            DATABASE_URL="$DATABASE_MIGRATE_URL" \
+              pnpm --filter @chat-agent/db exec prisma migrate diff \
+                --from-schema-datasource packages/db/prisma/schema.prisma \
+                --to-schema-datamodel packages/db/prisma/schema.prisma
+            # No --accept-data-loss: an additive change applies cleanly, and
+            # anything destructive fails the deploy rather than silently
+            # dropping a production column.
+            DATABASE_URL="$DATABASE_MIGRATE_URL" \
+              pnpm --filter @chat-agent/db exec prisma db push --skip-generate
+            # db push creates tables but knows nothing about row-level
+            # security, so a newly added tenant-scoped table has NO tenant
+            # isolation until this re-runs. Both files are idempotent.
+            psql "$DATABASE_MIGRATE_URL" -v ON_ERROR_STOP=1 -f packages/db/prisma/sql/rls_policies.sql
+            psql "$DATABASE_MIGRATE_URL" -v ON_ERROR_STOP=1 -f packages/db/prisma/sql/vector_index.sql
+          '
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: 15de703e-d006-43d8-837f-10b800abb87e
+
       # `railway up` builds from each service's own Dockerfile (RAILWAY_DOCKERFILE_PATH
       # is set per-service in the Railway project, not here) and deploys —
       # the exact same command this project's deploys have used manually.
