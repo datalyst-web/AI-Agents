@@ -2,7 +2,15 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { api, setToken, getImpersonation, setImpersonation, type ImpersonationContext } from "./api";
+import {
+  api,
+  setToken,
+  getImpersonation,
+  setImpersonation,
+  isTwoFactorChallenge,
+  type ImpersonationContext,
+  type TwoFactorChallengeResponse,
+} from "./api";
 
 export type DashboardTheme = "DARK" | "LIGHT";
 
@@ -31,8 +39,10 @@ interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
   impersonation: ImpersonationContext | null;
-  login: (email: string, password: string, turnstileToken?: string) => Promise<void>;
-  loginWithGoogle: (credential: string, turnstileToken?: string) => Promise<void>;
+  /** Resolves to a challenge when a 2FA code has been emailed; the caller then collects the code and calls completeTwoFactor. */
+  login: (email: string, password: string, turnstileToken?: string) => Promise<TwoFactorChallengeResponse | null>;
+  loginWithGoogle: (credential: string, turnstileToken?: string) => Promise<TwoFactorChallengeResponse | null>;
+  completeTwoFactor: (challenge: string, code: string) => Promise<void>;
   acceptInvite: (token: string, displayName: string, password: string) => Promise<void>;
   logout: () => void;
   startImpersonation: (tenantId: string, tenantName: string, reason: string, durationMinutes?: number) => Promise<void>;
@@ -116,20 +126,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     document.documentElement.dataset.theme = (user?.theme ?? "DARK").toLowerCase();
   }, [user?.theme]);
 
-  async function login(email: string, password: string, turnstileToken?: string) {
-    const { token } = await api.login(email, password, turnstileToken);
+  // Shared tail for every path that ends in a real session.
+  async function establishSession(token: string) {
     setToken(token);
     setImpersonation(null);
     await refreshMe();
     router.push("/overview");
   }
 
+  async function login(email: string, password: string, turnstileToken?: string) {
+    const result = await api.login(email, password, turnstileToken);
+    if (isTwoFactorChallenge(result)) return result;
+    await establishSession(result.token);
+    return null;
+  }
+
   async function loginWithGoogle(credential: string, turnstileToken?: string) {
-    const { token } = await api.googleLogin(credential, turnstileToken);
-    setToken(token);
-    setImpersonation(null);
-    await refreshMe();
-    router.push("/overview");
+    const result = await api.googleLogin(credential, turnstileToken);
+    if (isTwoFactorChallenge(result)) return result;
+    await establishSession(result.token);
+    return null;
+  }
+
+  async function completeTwoFactor(challenge: string, code: string) {
+    const { token } = await api.verifyTwoFactor(challenge, code);
+    await establishSession(token);
   }
 
   async function acceptInvite(inviteToken: string, displayName: string, password: string) {
@@ -192,7 +213,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, impersonation, login, loginWithGoogle, acceptInvite, logout, startImpersonation, endImpersonation, setTheme }}
+      value={{
+        user,
+        loading,
+        impersonation,
+        login,
+        loginWithGoogle,
+        completeTwoFactor,
+        acceptInvite,
+        logout,
+        startImpersonation,
+        endImpersonation,
+        setTheme,
+      }}
     >
       {children}
     </AuthContext.Provider>

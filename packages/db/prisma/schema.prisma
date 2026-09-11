@@ -160,6 +160,16 @@ model User {
   passwordResetTokenHash String?   @map("password_reset_token_hash")
   passwordResetExpiresAt DateTime? @map("password_reset_expires_at")
 
+  /// Email two-factor: the one-time code is bcrypt-hashed, never stored raw
+  /// — same reasoning as passwordResetTokenHash above. Issued after a
+  /// password or Google login succeeds, and cleared the moment it's used,
+  /// expires, or runs out of attempts. twoFactorAttempts is what makes a
+  /// 6-digit code safe to use at all: without a cap, a million guesses
+  /// inside the expiry window would walk the whole keyspace.
+  twoFactorCodeHash      String?   @map("two_factor_code_hash")
+  twoFactorExpiresAt     DateTime? @map("two_factor_expires_at")
+  twoFactorAttempts      Int       @default(0) @map("two_factor_attempts")
+
   /// Escalation notification preferences — all three now wired to a real
   /// provider (see packages/email, packages/sms, packages/push): email via
   /// SMTP, SMS via Twilio (falls back to a logging no-op if

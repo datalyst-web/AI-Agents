@@ -109,17 +109,40 @@ async function uploadLogo(path: string, file: File) {
   return resp.json();
 }
 
+/**
+ * A successful password/Google login no longer returns a session directly —
+ * it returns a challenge, and only /verify-2fa exchanges that plus the
+ * emailed code for a real token. See apps/api/src/lib/twoFactor.ts.
+ */
+export interface SessionResponse {
+  token: string;
+  user: { id: string; tenantId: string; role: string };
+}
+export interface TwoFactorChallengeResponse {
+  requiresTwoFactor: true;
+  challenge: string;
+  /** Partially masked, just enough to say which inbox to check. */
+  email: string;
+}
+export type LoginResponse = SessionResponse | TwoFactorChallengeResponse;
+
+export function isTwoFactorChallenge(r: LoginResponse): r is TwoFactorChallengeResponse {
+  return "requiresTwoFactor" in r;
+}
+
 export const api = {
   login: (email: string, password: string, turnstileToken?: string) =>
-    apiFetch<{ token: string; user: { id: string; tenantId: string; role: string } }>("/v1/auth/login", {
+    apiFetch<LoginResponse>("/v1/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password, turnstileToken }),
     }),
   googleLogin: (credential: string, turnstileToken?: string) =>
-    apiFetch<{ token: string; user: { id: string; tenantId: string; role: string } }>("/v1/auth/google", {
+    apiFetch<LoginResponse>("/v1/auth/google", {
       method: "POST",
       body: JSON.stringify({ credential, turnstileToken }),
     }),
+  verifyTwoFactor: (challenge: string, code: string) =>
+    apiFetch<SessionResponse>("/v1/auth/verify-2fa", { method: "POST", body: JSON.stringify({ challenge, code }) }),
   forgotPassword: (email: string) =>
     apiFetch<{ message: string }>("/v1/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
   resetPassword: (token: string, newPassword: string) =>

@@ -41,7 +41,7 @@ declare global {
 }
 
 export default function LoginPage() {
-  const { login, loginWithGoogle } = useAuth();
+  const { login, loginWithGoogle, completeTwoFactor } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +52,10 @@ export default function LoginPage() {
   const [turnstileScriptLoaded, setTurnstileScriptLoaded] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const turnstileContainerRef = useRef<HTMLDivElement>(null);
+  // Set once a password/Google login succeeds and a code has been emailed;
+  // its presence is what swaps the form for the code prompt.
+  const [challenge, setChallenge] = useState<{ challenge: string; email: string } | null>(null);
+  const [code, setCode] = useState("");
   const turnstileWidgetId = useRef<string | undefined>(undefined);
   // The Google button's own effect below must NOT re-run (re-initializing/
   // re-rendering the button) every time the CAPTCHA token changes, so its
@@ -79,10 +83,32 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await login(email, password, turnstileToken ?? undefined);
+      const pending = await login(email, password, turnstileToken ?? undefined);
+      if (pending) setChallenge(pending);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Login failed.");
       resetTurnstile();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onSubmitCode(e: FormEvent) {
+    e.preventDefault();
+    if (!challenge) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await completeTwoFactor(challenge.challenge, code);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "That code didn't work.");
+      // An expired or exhausted challenge can't be retried — send them back
+      // to the form rather than leaving them typing into a dead prompt.
+      if (err instanceof ApiError && err.status === 401 && !/isn't right/.test(err.message)) {
+        setChallenge(null);
+        setCode("");
+        resetTurnstile();
+      }
     } finally {
       setBusy(false);
     }
@@ -117,7 +143,8 @@ export default function LoginPage() {
         setBusy(true);
         setError(null);
         try {
-          await loginWithGoogle(response.credential, turnstileTokenRef.current ?? undefined);
+          const pending = await loginWithGoogle(response.credential, turnstileTokenRef.current ?? undefined);
+          if (pending) setChallenge(pending);
         } catch (err) {
           setError(err instanceof ApiError ? err.message : "Google sign-in failed.");
           resetTurnstile();
@@ -167,12 +194,55 @@ export default function LoginPage() {
               <circle cx="12" cy="12" r="1.4" fill="white" />
             </svg>
           </div>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">Welcome back</h1>
-          <p className="mt-1 text-sm text-foreground/50">Sign in to manage your AI chat agents</p>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            {challenge ? "Check your email" : "Welcome back"}
+          </h1>
+          <p className="mt-1 text-sm text-foreground/50">
+            {challenge ? `We sent a 6-digit code to ${challenge.email}` : "Sign in to manage your AI chat agents"}
+          </p>
         </div>
 
         <div className="rounded-xl3 bg-brand-gradient-soft p-px shadow-card">
           <div className="space-y-3.5 rounded-[calc(1.75rem-1px)] bg-surface-raised/95 p-6 backdrop-blur">
+            {challenge ? (
+              <form onSubmit={onSubmitCode} className="space-y-3.5">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-foreground/60">6-digit code</label>
+                  <input
+                    autoFocus
+                    required
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="\d{6}"
+                    maxLength={6}
+                    placeholder="000000"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-center text-lg font-semibold tracking-[0.4em] text-foreground outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+                  />
+                </div>
+                {error ? <p className="text-xs text-danger">{error}</p> : null}
+                <Button type="submit" disabled={busy || code.length !== 6} className="w-full">
+                  {busy ? "Verifying..." : "Verify and sign in"}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChallenge(null);
+                    setCode("");
+                    setError(null);
+                    resetTurnstile();
+                  }}
+                  className="w-full text-center text-xs text-foreground/40 transition-colors hover:text-foreground/70"
+                >
+                  Use a different account
+                </button>
+                <p className="text-center text-[11px] text-foreground/30">
+                  The code expires in 10 minutes. Check your spam folder if it hasn&apos;t arrived.
+                </p>
+              </form>
+            ) : (
+              <>
             <form onSubmit={onSubmit} className="space-y-3.5">
               <div>
                 <label className="mb-1 block text-xs font-medium text-foreground/60">Email</label>
@@ -214,6 +284,8 @@ export default function LoginPage() {
                 <div ref={googleButtonRef} className="flex h-10 justify-center overflow-hidden rounded-full" />
               </>
             ) : null}
+              </>
+            )}
           </div>
         </div>
         <p className="mt-5 text-center text-xs text-foreground/40">

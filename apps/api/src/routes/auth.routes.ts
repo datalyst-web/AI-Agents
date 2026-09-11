@@ -2,12 +2,14 @@ import { randomUUID, randomBytes, createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
+import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import { withPlatformContext, withTenant } from "@chat-agent/db";
 import type { AppContext } from "../lib/context.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { verifyTurnstileToken } from "../lib/turnstile.js";
 import { recordSubscriptionStateChange } from "../lib/subscriptionHistory.js";
+import { issueTwoFactorCode, verifyTwoFactorCode, TWO_FACTOR_CODE_TTL_MINUTES } from "../lib/twoFactor.js";
 import { provisionUsageLimits, trialEndDate } from "../lib/planLimits.js";
 import { env } from "../env.js";
 
@@ -19,9 +21,41 @@ const SignupSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
 });
+const VerifyTwoFactorSchema = z.object({ challenge: z.string().min(10), code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code.") });
 const ForgotPasswordSchema = z.object({ email: z.string().email() });
 const ResetPasswordSchema = z.object({ token: z.string().min(1), newPassword: z.string().min(8) });
 const AcceptInviteSchema = z.object({ token: z.string().min(1), displayName: z.string().min(1).max(120), password: z.string().min(8) });
+
+/**
+ * The short-lived handle a client holds between "your password was right"
+ * and "here is your session". It is deliberately NOT a session token: it
+ * carries a purpose claim so it can never be replayed as one (same
+ * technique as the Google OAuth state token in integrations.routes.ts),
+ * and it expires well before the code itself would.
+ */
+const TWO_FACTOR_CHALLENGE_PURPOSE = "two_factor_pending";
+
+function signTwoFactorChallenge(userId: string): string {
+  return jwt.sign({ sub: userId, purpose: TWO_FACTOR_CHALLENGE_PURPOSE }, env.JWT_SECRET, {
+    expiresIn: `${TWO_FACTOR_CODE_TTL_MINUTES}m`,
+  });
+}
+
+function verifyTwoFactorChallenge(token: string): string {
+  const decoded = jwt.verify(token, env.JWT_SECRET) as { sub?: string; purpose?: string };
+  // Without this, an ordinary session token would be accepted here as a
+  // challenge — the token-confusion hole the purpose claim exists to close.
+  if (decoded.purpose !== TWO_FACTOR_CHALLENGE_PURPOSE || !decoded.sub) throw new Error("wrong token purpose");
+  return decoded.sub;
+}
+
+/** Shows enough of the address to confirm which inbox to check, without printing it in full to whoever holds the password. */
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!local || !domain) return "your email";
+  const shown = local.slice(0, 2);
+  return `${shown}${"•".repeat(Math.max(1, local.length - 2))}@${domain}`;
+}
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 function hashResetToken(rawToken: string): string {
@@ -113,12 +147,18 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       reply.code(401).send({ error: "invalid_credentials" });
       return;
     }
-    const token = await reply.jwtSign({
-      sub: user.id,
-      tenantId: user.tenantId ?? undefined,
-      role: user.role,
-    });
-    reply.send({ token, user: { id: user.id, email: user.email, role: user.role, tenantId: user.tenantId } });
+    const issued = await issueTwoFactorCode(ctx.prisma, ctx.email, user);
+    if (!issued.sent) {
+      // Never hand back a challenge for a code that was never delivered —
+      // that strands the user at a prompt they cannot possibly satisfy.
+      request.log.error({ userId: user.id, error: issued.error }, "failed to send 2FA code");
+      reply.code(503).send({
+        error: "could_not_send_code",
+        message: "We couldn't send your sign-in code by email. Please try again shortly.",
+      });
+      return;
+    }
+    reply.send({ requiresTwoFactor: true, challenge: signTwoFactorChallenge(user.id), email: maskEmail(user.email) });
   });
 
   /**
@@ -167,8 +207,16 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       return;
     }
 
-    const token = await reply.jwtSign({ sub: user.id, tenantId: user.tenantId ?? undefined, role: user.role });
-    reply.send({ token, user: { id: user.id, email: user.email, role: user.role, tenantId: user.tenantId } });
+    const issued = await issueTwoFactorCode(ctx.prisma, ctx.email, user);
+    if (!issued.sent) {
+      request.log.error({ userId: user.id, error: issued.error }, "failed to send 2FA code");
+      reply.code(503).send({
+        error: "could_not_send_code",
+        message: "We couldn't send your sign-in code by email. Please try again shortly.",
+      });
+      return;
+    }
+    reply.send({ requiresTwoFactor: true, challenge: signTwoFactorChallenge(user.id), email: maskEmail(user.email) });
   });
 
   /**
@@ -180,6 +228,49 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
    * out that never will — CLAUDE.md's anti-hallucination principle
    * applies to our own product just as much as the AI agent's answers.
    */
+  /**
+   * Exchanges a 2FA challenge + emailed code for a real session. This is
+   * the only place a dashboard token is minted for a returning user —
+   * /login and /google both stop at the challenge.
+   *
+   * Rate-limited hard: a 6-digit code is only 1,000,000 possibilities, so
+   * the per-user attempt cap in verifyTwoFactorCode is the real defence
+   * and this is the second layer under it, blunting distributed guessing
+   * across many challenges from one address.
+   */
+  app.post("/v1/auth/verify-2fa", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const body = VerifyTwoFactorSchema.parse(request.body);
+
+    let userId: string;
+    try {
+      userId = verifyTwoFactorChallenge(body.challenge);
+    } catch {
+      reply.code(401).send({ error: "challenge_expired", message: "That sign-in attempt expired. Please sign in again." });
+      return;
+    }
+
+    const outcome = await verifyTwoFactorCode(ctx.prisma, userId, body.code);
+    if (outcome !== "ok") {
+      const message =
+        outcome === "too_many_attempts"
+          ? "Too many incorrect codes. Please sign in again to get a new one."
+          : outcome === "expired" || outcome === "no_challenge"
+            ? "That code expired. Please sign in again to get a new one."
+            : "That code isn't right. Check the latest email and try again.";
+      reply.code(401).send({ error: outcome, message });
+      return;
+    }
+
+    const user = await withPlatformContext(ctx.prisma, (tx) => tx.user.findUnique({ where: { id: userId } }));
+    if (!user || !user.isActive) {
+      reply.code(401).send({ error: "invalid_credentials" });
+      return;
+    }
+
+    const token = await reply.jwtSign({ sub: user.id, tenantId: user.tenantId ?? undefined, role: user.role });
+    reply.send({ token, user: { id: user.id, email: user.email, role: user.role, tenantId: user.tenantId } });
+  });
+
   app.post("/v1/auth/forgot-password", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = ForgotPasswordSchema.parse(request.body);
     const genericResponse = { message: "If that email is registered, a reset link is on its way." };
