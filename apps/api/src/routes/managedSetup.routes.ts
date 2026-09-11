@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { withPlatformContext, withTenant } from "@chat-agent/db";
 import type { AppContext } from "../lib/context.js";
 import { writeAuditLog } from "../lib/audit.js";
+import { requireStaff } from "../lib/rbac.js";
 
 const StartImpersonationSchema = z.object({
   tenantId: z.string().uuid(),
@@ -12,18 +13,22 @@ const StartImpersonationSchema = z.object({
 });
 
 /**
- * The only way a setup_specialist ever gets tenant access — a fresh,
- * explicitly-scoped, time-boxed session (CLAUDE.md's "Internal roles &
- * access"). Once started, the returned token carries the impersonation
- * claim and every subsequent request goes through the exact same
- * tenant-scoped routes/RLS as a client would use — never a bypass path.
+ * The only way staff ever get tenant access — a fresh, explicitly-scoped,
+ * time-boxed session (CLAUDE.md's "Internal roles & access"). Once
+ * started, the returned token carries the impersonation claim and every
+ * subsequent request goes through the exact same tenant-scoped routes/RLS
+ * a client would use — never a bypass path.
+ *
+ * Gated on requireStaff(), which is platform_admin OR setup_specialist.
+ * These two endpoints previously hand-rolled a `role !== "setup_specialist"`
+ * check, which rejected platform_admin — the *more* privileged role — so a
+ * platform admin could see the Managed Setup queue (requireStaff passes on
+ * the listing route) but got a 403 the moment they clicked into a client.
+ * The end-session handler below already accepted both roles, which is what
+ * showed it to be an oversight rather than a deliberate narrowing.
  */
 export async function registerManagedSetupRoutes(app: FastifyInstance, ctx: AppContext) {
-  app.post("/v1/managed-setup/impersonate/start", { preHandler: app.authenticate }, async (request, reply) => {
-    if (request.authUser!.role !== "setup_specialist") {
-      reply.code(403).send({ error: "not_a_setup_specialist" });
-      return;
-    }
+  app.post("/v1/managed-setup/impersonate/start", { preHandler: [app.authenticate, requireStaff()] }, async (request, reply) => {
     const body = StartImpersonationSchema.parse(request.body);
     const sessionId = randomUUID();
     const expiresAt = new Date(Date.now() + body.durationMinutes * 60_000);
@@ -57,12 +62,8 @@ export async function registerManagedSetupRoutes(app: FastifyInstance, ctx: AppC
     reply.send({ token, sessionId, tenantId: body.tenantId, expiresAt: expiresAt.toISOString() });
   });
 
-  app.post("/v1/managed-setup/impersonate/:sessionId/end", { preHandler: app.authenticate }, async (request, reply) => {
+  app.post("/v1/managed-setup/impersonate/:sessionId/end", { preHandler: [app.authenticate, requireStaff()] }, async (request, reply) => {
     const { sessionId } = request.params as { sessionId: string };
-    if (request.authUser!.role !== "setup_specialist") {
-      reply.code(403).send({ error: "not_a_setup_specialist" });
-      return;
-    }
 
     const session = await withPlatformContext(ctx.prisma, (tx) =>
       tx.staffImpersonationSession.update({ where: { id: sessionId }, data: { endedAt: new Date() } }),
