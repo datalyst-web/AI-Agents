@@ -65,5 +65,9 @@ export default defineConfig({
     // Loaded values only fill in keys not already present in the real
     // process.env, so CI/shell-provided overrides always win.
     env: loadDotEnvFile(resolve(rootDir, ".env.test")),
+    // Runs once before any test file: refuses to touch a database that
+    // already holds real tenants, since these tests create and delete
+    // tenant data. See vitest.setup.ts.
+    globalSetup: [resolve(rootDir, "vitest.setup.ts")],
   },
 });

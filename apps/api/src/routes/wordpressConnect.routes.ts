@@ -11,14 +11,19 @@ const ConnectSchema = z.object({ email: z.string().email(), password: z.string()
  * WordPress plugin (wordpress-plugin/datalyst-ai-concierge) — a
  * server-to-server PHP request (wp_remote_post), never a browser form, so
  * it deliberately skips Turnstile (that's an anti-bot gate for the public
- * login page specifically; this is a real credential check hit by a
- * legitimate site backend, same IP-based rate limiting as every other
- * pre-auth route still applies). No token is issued or stored — the
- * plugin only ever persists a chosen agentId + widget position, both
- * non-secret, exactly like the manual embed snippet.
+ * login page specifically). No token is issued or stored — the plugin only
+ * ever persists a chosen agentId + widget position, both non-secret,
+ * exactly like the manual embed snippet.
+ *
+ * Because it checks a real password without a captcha in front of it, it
+ * gets its own much tighter rate limit rather than inheriting the global
+ * pre-auth one (120/min/IP) — that budget is sized for ordinary browsing
+ * and would allow ~170k password guesses a day from a single address,
+ * making this the weakest credential surface on the platform. A real
+ * plugin only ever calls this once, when someone clicks "Connect".
  */
 export async function registerWordpressConnectRoutes(app: FastifyInstance, ctx: AppContext) {
-  app.post("/v1/integrations/wordpress/connect", async (request, reply) => {
+  app.post("/v1/integrations/wordpress/connect", { config: { rateLimit: { max: 8, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = ConnectSchema.parse(request.body);
 
     const user = await withPlatformContext(ctx.prisma, (tx) => tx.user.findUnique({ where: { email: body.email } }));

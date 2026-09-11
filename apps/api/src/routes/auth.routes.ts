@@ -40,7 +40,7 @@ function hashInviteToken(rawToken: string): string {
  * see routes/managedSetup.routes.ts for the impersonation-session flow.
  */
 export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) {
-  app.post("/v1/auth/signup", async (request, reply) => {
+  app.post("/v1/auth/signup", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = SignupSchema.parse(request.body);
 
     // No tenant exists yet for a signing-up user, so this — and the tenant/
@@ -95,7 +95,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
     reply.send({ token, tenant: { id: tenant.id, slug: tenant.slug, name: tenant.name } });
   });
 
-  app.post("/v1/auth/login", async (request, reply) => {
+  app.post("/v1/auth/login", { config: { rateLimit: { max: 15, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = LoginSchema.parse(request.body);
     if (!(await verifyTurnstileToken(body.turnstileToken, request.ip))) {
       reply.code(400).send({ error: "captcha_failed" });
@@ -180,7 +180,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
    * out that never will — CLAUDE.md's anti-hallucination principle
    * applies to our own product just as much as the AI agent's answers.
    */
-  app.post("/v1/auth/forgot-password", async (request, reply) => {
+  app.post("/v1/auth/forgot-password", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = ForgotPasswordSchema.parse(request.body);
     const genericResponse = { message: "If that email is registered, a reset link is on its way." };
 
@@ -223,7 +223,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
     reply.send(genericResponse);
   });
 
-  app.post("/v1/auth/reset-password", async (request, reply) => {
+  app.post("/v1/auth/reset-password", { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = ResetPasswordSchema.parse(request.body);
     const tokenHash = hashResetToken(body.token);
 

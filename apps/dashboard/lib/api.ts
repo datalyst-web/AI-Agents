@@ -248,6 +248,28 @@ export const api = {
     }>(`/v1/tenants/${tenantId}/agents/${agentId}/test-message`, { method: "POST", body: JSON.stringify(body) }),
 
   listKnowledge: (tenantId: string, agentId: string) => apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/knowledge`),
+  /**
+   * Uploads one document into an agent's knowledge base. Multipart, so it
+   * can't go through apiFetch (which sets a JSON content-type) — the
+   * browser has to set its own boundary. Returns 202: the row exists
+   * immediately as PENDING and the worker ingests it asynchronously.
+   */
+  uploadKnowledgeFile: async (tenantId: string, agentId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const token = getToken();
+    const resp = await fetch(`${API_BASE}/v1/tenants/${tenantId}/agents/${agentId}/knowledge/upload`, {
+      method: "POST",
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({ error: resp.statusText }));
+      const supported = Array.isArray(body.supported) ? ` Supported: ${body.supported.join(", ")}.` : "";
+      throw new ApiError(resp.status, (body.message ?? body.error ?? resp.statusText) + supported);
+    }
+    return resp.json() as Promise<{ id: string; originalFilename: string; status: string }>;
+  },
   addFaq: (tenantId: string, agentId: string, entries: { question: string; answer: string }[]) =>
     apiFetch(`/v1/tenants/${tenantId}/knowledge/faq`, { method: "POST", body: JSON.stringify({ agentId, entries }) }),
   crawlWebsite: (tenantId: string, agentId: string, startUrls: string[]) =>
@@ -458,10 +480,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
+  // Reuses the conversation-detail endpoint, which already returns the full
+  // message list — there is no separate .../messages route on the
+  // tenant-scoped surface (the /v1/chat/... one is widget-token auth, for
+  // customers, not staff).
   getConversationMessages: (tenantId: string, conversationId: string) =>
-    apiFetch<{ id: string; role: string; content: string; createdAt: string }[]>(
-      `/v1/tenants/${tenantId}/conversations/${conversationId}/messages`,
-    ),
+    apiFetch<{ messages: { id: string; role: string; content: string; createdAt: string }[] }>(
+      `/v1/tenants/${tenantId}/conversations/${conversationId}`,
+    ).then((r) => r.messages),
 
   // --- Notification preferences (self-service) ---
   updateNotificationPreferences: (body: {

@@ -290,6 +290,7 @@ export default function AgentDetailPage() {
   const [faqQ, setFaqQ] = useState("");
   const [faqA, setFaqA] = useState("");
   const [crawlUrl, setCrawlUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   const [testMessages, setTestMessages] = useState<TestMessage[]>([]);
   const [testConversationId, setTestConversationId] = useState<string | undefined>(undefined);
@@ -615,6 +616,27 @@ export default function AgentDetailPage() {
     } catch (err) {
       setKnowledgeError(err instanceof ApiError ? err.message : "Failed to start crawl.");
     }
+  }
+
+  async function uploadDocuments(files: FileList | null) {
+    if (!user || !files || files.length === 0) return;
+    setKnowledgeError(null);
+    setUploading(true);
+    // Sequential, not Promise.all: each upload streams a whole file to S3
+    // and enqueues an ingest job, and a client's document drop is usually
+    // several files at once — firing them in parallel just makes the
+    // failure case ambiguous about which ones actually landed.
+    const failed: string[] = [];
+    for (const file of Array.from(files)) {
+      try {
+        await api.uploadKnowledgeFile(user.tenantId, agentId, file);
+      } catch (err) {
+        failed.push(`${file.name} — ${err instanceof ApiError ? err.message : "upload failed"}`);
+      }
+    }
+    setUploading(false);
+    if (failed.length > 0) setKnowledgeError(failed.join("; "));
+    refreshKnowledge();
   }
 
   async function removeKnowledge(knowledgeSourceId: string) {
@@ -983,6 +1005,38 @@ export default function AgentDetailPage() {
                 />
                 <Button type="submit" variant="secondary">Add FAQ</Button>
               </form>
+            </CardBody>
+          </Card>
+          <Card>
+            <CardHeader
+              title="Upload documents"
+              subtitle="PDF, DOCX, TXT or CSV — price lists, policies, service descriptions. Up to 25MB each."
+            />
+            <CardBody>
+              <label
+                className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl2 border-2 border-dashed border-foreground/15 px-5 py-8 text-center transition-colors hover:border-brand-400 hover:bg-foreground/[0.03] ${
+                  uploading ? "pointer-events-none opacity-60" : ""
+                }`}
+              >
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,.docx,.txt,.csv"
+                  disabled={uploading}
+                  className="hidden"
+                  onChange={(e) => {
+                    void uploadDocuments(e.target.files);
+                    // Reset so re-selecting the same file still fires onChange.
+                    e.target.value = "";
+                  }}
+                />
+                <span className="text-sm font-medium text-foreground">
+                  {uploading ? "Uploading…" : "Choose files or drop them here"}
+                </span>
+                <span className="text-xs text-foreground/45">
+                  Each document is queued for processing and appears below as Pending until it finishes.
+                </span>
+              </label>
             </CardBody>
           </Card>
           <Card>

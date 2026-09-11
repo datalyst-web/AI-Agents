@@ -19,7 +19,8 @@
     "dev": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed": "tsx src/seed.ts",
-    "clean": "rimraf dist .turbo"
+    "clean": "rimraf dist .turbo",
+    "create-admin": "tsx src/createAdmin.ts"
   },
   "dependencies": {
     "@chat-agent/shared-types": "workspace:*",

@@ -174,8 +174,18 @@ function ThreadPanel({
     if (!user) return;
     api
       .getConversationMessages(user.tenantId, item.id)
-      .then(setMessages)
-      .catch(() => setMessages((prev) => prev ?? []));
+      .then((m) => {
+        setMessages(m);
+        setError(null);
+      })
+      .catch((err) => {
+        // Surfaced, not swallowed: silently falling back to an empty list
+        // renders "No messages yet" on a conversation that actually has
+        // messages, which is indistinguishable from a genuinely new
+        // conversation and hid a broken endpoint here once already.
+        setMessages((prev) => prev ?? []);
+        setError(err instanceof ApiError ? `Couldn't load this conversation: ${err.message}` : "Couldn't load this conversation.");
+      });
   }
   useEffect(() => {
     refresh();
