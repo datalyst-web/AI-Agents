@@ -6,6 +6,7 @@ import Script from "next/script";
 import { Button, PasswordInput } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
+import { PublicThemeToggle } from "@/components/PublicThemeToggle";
 
 // Baked in at build time (Vercel env), same pattern as NEXT_PUBLIC_API_BASE_URL
 // elsewhere in this app — must match the API's GOOGLE_CLIENT_ID exactly, since
@@ -144,6 +145,9 @@ export default function LoginPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+      <div className="absolute right-4 top-4 z-10">
+        <PublicThemeToggle />
+      </div>
       {GOOGLE_CLIENT_ID ? (
         <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onLoad={() => setGoogleScriptLoaded(true)} />
       ) : null}
@@ -163,26 +167,26 @@ export default function LoginPage() {
               <circle cx="12" cy="12" r="1.4" fill="white" />
             </svg>
           </div>
-          <h1 className="text-xl font-semibold tracking-tight text-white">Welcome back</h1>
-          <p className="mt-1 text-sm text-white/50">Sign in to manage your AI chat agents</p>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Welcome back</h1>
+          <p className="mt-1 text-sm text-foreground/50">Sign in to manage your AI chat agents</p>
         </div>
 
         <div className="rounded-xl3 bg-brand-gradient-soft p-px shadow-card">
           <div className="space-y-3.5 rounded-[calc(1.75rem-1px)] bg-surface-raised/95 p-6 backdrop-blur">
             <form onSubmit={onSubmit} className="space-y-3.5">
               <div>
-                <label className="mb-1 block text-xs font-medium text-white/60">Email</label>
+                <label className="mb-1 block text-xs font-medium text-foreground/60">Email</label>
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+                  className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
                 />
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <label className="block text-xs font-medium text-white/60">Password</label>
+                  <label className="block text-xs font-medium text-foreground/60">Password</label>
                   <Link href="/forgot-password" className="text-xs font-medium text-brand-link hover:underline">
                     Forgot password?
                   </Link>
@@ -199,9 +203,9 @@ export default function LoginPage() {
             {GOOGLE_CLIENT_ID ? (
               <>
                 <div className="flex items-center gap-3 pt-1">
-                  <div className="h-px flex-1 bg-white/10" />
-                  <span className="text-xs text-white/40">or</span>
-                  <div className="h-px flex-1 bg-white/10" />
+                  <div className="h-px flex-1 bg-foreground/10" />
+                  <span className="text-xs text-foreground/40">or</span>
+                  <div className="h-px flex-1 bg-foreground/10" />
                 </div>
                 {/* h-10 + overflow-hidden + rounded-full crop the white letterboxing Google's
                     iframe renders around the filled_black pill button — the iframe itself
@@ -212,7 +216,7 @@ export default function LoginPage() {
             ) : null}
           </div>
         </div>
-        <p className="mt-5 text-center text-xs text-white/40">
+        <p className="mt-5 text-center text-xs text-foreground/40">
           No account?{" "}
           <Link href="/signup" className="font-medium text-brand-link hover:underline">
             Start your trial

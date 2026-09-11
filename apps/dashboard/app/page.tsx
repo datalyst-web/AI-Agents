@@ -164,7 +164,7 @@ function Section({ id, children, className = "" }: { id?: string; children: Reac
 function SectionHeading({ eyebrow, title, body }: { eyebrow: string; title: string; body?: string }) {
   return (
     <div className="mx-auto max-w-2xl text-center">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-400">{eyebrow}</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-link">{eyebrow}</p>
       <h2 className="mt-3 text-3xl font-semibold tracking-tightest text-foreground sm:text-4xl">{title}</h2>
       {body ? <p className="mt-4 text-base leading-relaxed text-foreground/55">{body}</p> : null}
     </div>
@@ -285,7 +285,7 @@ export default function LandingPage() {
           <div className="mt-14 grid gap-6 md:grid-cols-3">
             {STEPS.map((item) => (
               <div key={item.step} className="relative rounded-xl3 bg-surface p-7 shadow-card ring-1 ring-inset ring-surface-border">
-                <span className="font-mono text-xs font-semibold tracking-widest text-brand-400">{item.step}</span>
+                <span className="font-mono text-xs font-semibold tracking-widest text-brand-link">{item.step}</span>
                 <h3 className="mt-4 text-lg font-semibold text-foreground">{item.title}</h3>
                 <p className="mt-2.5 text-sm leading-relaxed text-foreground/55">{item.body}</p>
               </div>
@@ -345,7 +345,7 @@ export default function LandingPage() {
                 <ul className="mt-6 space-y-2.5 border-t border-surface-border pt-6">
                   {plan.included.map((feature) => (
                     <li key={feature} className="flex gap-2.5 text-sm text-foreground/70">
-                      <svg viewBox="0 0 16 16" className="mt-0.5 h-4 w-4 flex-none text-brand-400" fill="none" aria-hidden="true">
+                      <svg viewBox="0 0 16 16" className="mt-0.5 h-4 w-4 flex-none text-brand-link" fill="none" aria-hidden="true">
                         <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                       {feature}

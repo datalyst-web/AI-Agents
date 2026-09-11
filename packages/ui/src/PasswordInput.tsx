@@ -15,14 +15,14 @@ export function PasswordInput({ className = "", ...rest }: InputHTMLAttributes<H
       <input
         {...rest}
         type={visible ? "text" : "password"}
-        className={`w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 pr-10 text-sm text-white outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 ${className}`}
+        className={`w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 pr-10 text-sm text-foreground outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 ${className}`}
       />
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
         aria-label={visible ? "Hide password" : "Show password"}
         tabIndex={-1}
-        className="absolute right-0 top-0 flex h-full w-10 items-center justify-center text-white/35 transition-colors hover:text-white/70"
+        className="absolute right-0 top-0 flex h-full w-10 items-center justify-center text-foreground/35 transition-colors hover:text-foreground/70"
       >
         {visible ? (
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">

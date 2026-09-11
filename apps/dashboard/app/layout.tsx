@@ -12,15 +12,13 @@ export const metadata: Metadata = {
  * Applies the visitor's public-page theme before first paint, so switching
  * to light doesn't flash dark on every navigation.
  *
- * Scoped to the public routes by pathname on purpose. The dashboard's theme
- * is a tenant setting AuthProvider applies from /me, and the auth pages
- * (login, signup, forgot/reset password) are built with fixed
- * white-on-dark styling — letting either follow a visitor's local
- * preference would override a real setting in the first case and render
- * white-on-white in the second.
+ * Scoped by pathname to the signed-out surface (marketing, legal, guide
+ * and the auth screens) on purpose. Inside the dashboard the theme is a
+ * tenant setting AuthProvider applies from /me — a visitor's local
+ * preference must not override a real saved setting there.
  */
 const PUBLIC_THEME_BOOTSTRAP = `(function(){try{
-if(["/","/guide","/terms","/privacy"].indexOf(location.pathname.replace(/\\/$/,"")||"/")===-1)return;
+if(["/","/guide","/terms","/privacy","/login","/signup","/forgot-password","/reset-password","/accept-invite"].indexOf(location.pathname.replace(/\\/$/,"")||"/")===-1)return;
 var t=localStorage.getItem("datalyst:public-theme");
 if(t!=="light"&&t!=="dark")t=window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";
 document.documentElement.dataset.theme=t;

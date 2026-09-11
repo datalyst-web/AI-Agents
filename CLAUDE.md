@@ -2,7 +2,7 @@
 
 Guidance for Claude Code (and any contributor) working in this repository.
 
-**Doc status:** v1.1 — living architecture/guidance doc, not a finished
+**Doc status:** v1.2 — living architecture/guidance doc, not a finished
 spec. Sections are marked `[LOCKED]` (settled decision, treat as a
 constraint) or `[PROPOSED]` (direction we intend to take, still open to
 revision — e.g. against real vendor testing). Anything unmarked should
@@ -19,19 +19,31 @@ website and other channels.
 **Core philosophy:** Build the AI engine once. Configure each client's AI
 employee separately.
 
-**Two ways a client gets configured:**
+**How a client gets configured `[LOCKED]`:**
 
-1. **Self-serve** — the client configures their own agent and knowledge
-   base through the client dashboard (see Client Lifecycle below).
-2. **Managed / Done-For-You (DFY)** — many clients will not know how to
-   assemble a knowledge base, write agent instructions, or wire up
-   integrations. For these clients, **our own internal team builds and
-   configures the knowledge base and agent on their behalf**, using the
-   same tools and pipelines the client would otherwise use themselves
-   (never a separate, undocumented path). This is a first-class,
-   supported mode of onboarding — not a manual workaround — and must be
-   designed into the platform from the start (see "Managed Setup Service"
-   below).
+**Every client is fully managed. There is no self-serve configuration
+path.** Our own team builds and configures the knowledge base, agent
+instructions and integrations on the client's behalf, using the same
+tenant-scoped tools and pipelines a client would use (never a separate,
+undocumented path) — see "Managed Setup Service" below. The client's
+dashboard is for **reviewing, testing, approving and monitoring**, not for
+building.
+
+This is a product decision, not a limitation to design around. It shapes
+concrete things in the code, all of which must stay consistent with it:
+
+- Signup creates tenants as `FULLY_MANAGED`, never `SELF_SERVE`
+  (`auth.routes.ts`).
+- `CLIENT_NAV` in the dashboard layout deliberately omits the
+  configuration surfaces (Tools, Workflows) that `TENANT_NAV` exposes to
+  staff while impersonating. Adding a config screen to `CLIENT_NAV` is a
+  product regression, not a feature.
+- Public copy (the marketing page and `/guide`) must never tell a client
+  to configure, upload or wire up anything themselves. Their only input is
+  sending us their material, then reviewing what we build.
+
+The `SELF_SERVE` value still exists in `ManagedSetupTier` for historical
+tenants; nothing new should be created with it.
 
 The system is not a simple Q&A chatbot. Every agent operates on the loop:
 
@@ -332,14 +344,15 @@ This must be designed as a first-class product capability from day one:
 
 ### Service tiers (reflect in the data model / billing, not just docs)
 
-- **Self-serve** — client does everything through the dashboard, no staff
-  involvement.
-- **Assisted setup** — client provides raw materials (docs, URLs, a call);
-  staff structure and load the knowledge base and initial agent config,
-  client reviews and approves before go-live.
-- **Fully managed** — staff own the entire setup end-to-end, including
-  ongoing knowledge base maintenance, on a recurring basis (e.g. monthly
-  update service).
+`ManagedSetupTier` retains three values, but only one is sold:
+
+- **Fully managed `[LOCKED — the only tier sold]`** — staff own the entire
+  setup end-to-end, including ongoing knowledge base maintenance. Every new
+  tenant is created as this.
+- **Assisted setup** — legacy value. Client provides raw materials, staff
+  structure and load them. Kept for existing tenants; not offered.
+- **Self-serve** — legacy value. Not offered, and not compatible with the
+  current client dashboard, which has no configuration surfaces.
 
 ### Internal roles & access
 
@@ -411,7 +424,70 @@ invoiced and reported on separately.
   with optional custom domain for premium clients
   (`https://ai.clientcompany.com`).
 - **Client dashboard** — overview, conversations, leads, knowledge, agent
-  config, integrations, analytics.
+  config, integrations, analytics. Lives at `/overview` and below; `/` is
+  the public marketing page, not the dashboard.
+- **Public marketing surface** — `/` (landing + pricing), `/guide`,
+  `/terms`, `/privacy`. Static server components, no auth, indexable.
+  Two rules they must keep: never name the AI provider or model
+  (principle 6), and never claim a customer, logo, testimonial or metric
+  we don't have — the same anti-fabrication standard the agent is held to.
+  The legal pages render unfilled company details as visible highlighted
+  placeholders so they can't be published half-finished by accident.
+
+### Theming `[LOCKED]`
+
+Two separate theme systems, deliberately:
+
+- **Signed-out surface** (marketing, legal, guide, and all five auth
+  screens) — a per-browser light/dark choice in `localStorage`, applied by
+  an inline pre-paint script in `app/layout.tsx` so switching never flashes
+  the wrong theme. That script is scoped by pathname; it must not run
+  inside the dashboard.
+- **Dashboard and widgets** — a tenant setting persisted server-side and
+  applied by `AuthProvider` from `/me`. One setting, two surfaces. A
+  visitor's local preference must never override it.
+
+Write colors with the theme tokens (`text-foreground/60`, `bg-surface-raised`,
+`border-surface-border`, `text-brand-link`), never `text-white/60` or a raw
+hex. `text-white` is correct *only* on a brand gradient or a solid status
+fill, where it's white in both themes. `brand-300`/`brand-400` are
+near-invisible on a light surface — use `brand-link`, which adapts.
+
+## Database schema changes `[LOCKED — read before touching schema.prisma]`
+
+There is **no `prisma/migrations` directory**. Schema changes are applied
+with `prisma db push`, and the generated client is refreshed with
+`pnpm --filter @chat-agent/db run generate`.
+
+**CI applies the schema only to its own ephemeral Postgres. The deploy
+pipeline does not apply it to production.** A schema change therefore ships
+a Prisma client that selects columns production may not have, and every
+query touching that model starts failing — this has already taken login
+down in production once, when `users.notify_escalation_email` existed in
+the client but not in the database.
+
+So, for any change to `schema.prisma`:
+
+1. Regenerate the client locally and typecheck.
+2. Before/with the deploy, apply it to production. The app's own
+   `DATABASE_URL` is a least-privilege role (`chat_app_user`) with no DDL
+   rights — this is correct and should stay that way — so DDL needs the
+   database owner's connection string, kept as a separate variable.
+3. Re-apply `packages/db/prisma/sql/rls_policies.sql` afterwards whenever
+   the change added a **tenant-scoped table**. `db push` creates the table
+   but knows nothing about row-level security, so a new tenant table is
+   created with no tenant isolation at all until that file is re-run. Both
+   SQL files in that directory are idempotent and safe to re-run.
+4. Check the diff before applying to production:
+   `prisma migrate diff --from-schema-datasource prisma/schema.prisma
+   --to-schema-datamodel prisma/schema.prisma`. Additive-only output
+   (`[+]` lines) is safe. Anything removed or retyped needs a deliberate
+   decision, never `--accept-data-loss` on production.
+
+Platform-level tables that carry no `tenant_id` (`feature_flags`,
+`prompt_templates`, `branding_presets`, `incident_log_entries`,
+`push_subscriptions`, `platform_settings`) are deliberately excluded from
+the RLS list; access to them is gated by role in the route instead.
 
 ## Security Requirements
 
@@ -436,6 +512,34 @@ Track per organization, agent, conversation, request, provider, and model:
 input tokens, output tokens, model, provider, request cost (where
 available), timestamp, conversation, tenant. This backs
 included-usage → limit → overage billing logic.
+
+### How that logic is wired `[LOCKED]`
+
+- **Allowances live in one place** — `apps/api/src/lib/planLimits.ts`.
+  Changing what a plan includes means editing that table, never a
+  migration or a per-tenant edit. A `UsageLimits` row is provisioned
+  wherever a tenant is created or changes plan, and `checkUsageAllowance`
+  self-provisions for any tenant that somehow lacks one.
+- **Only the hard cap blocks.** Going over the included allowance is a
+  billing event, not an outage — `checkUsageAllowance` refuses a turn only
+  past `hardCapTokensPerMonth`, and is called on every inbound
+  customer-message path before any model call. A tenant with no limits row
+  fails **open**: wrongly cutting off a paying client's agent is worse than
+  briefly under-billing one.
+- **Never tell the customer about the tenant's billing.** When a cap
+  blocks a turn, the end customer sees the same neutral "temporarily
+  unavailable" message as any other outage. Quotas and invoices are the
+  business's private matter, not their customer's (white-label safety).
+- **Overage is billed from closed months only.** `overageBillingSweep`
+  writes an `AI_INFERENCE_OVERAGE` line item for the *previous* calendar
+  month, idempotent per (tenant, period) so it self-heals if the worker was
+  down at the boundary.
+- **Trials end.** `Tenant.trialEndsAt` is set at signup (`TRIAL_DAYS`) and
+  cleared on conversion; `trialExpirySweep` suspends expired trials and
+  warns three days out. Trials are hard-capped at exactly their included
+  amount — a trial should stop, not quietly accrue overage nobody agreed
+  to pay. Suspension never deletes: everything built during the trial is
+  intact the moment they pay.
 
 ## Conversation Analytics & Quality
 
@@ -507,6 +611,15 @@ Before any agent goes live, cover:
 - Don't auto-publish a staff-configured agent to `LIVE` without client
   approval unless that authority has been explicitly delegated in the
   client's account settings.
+- Don't add configuration surfaces to the client dashboard, or write copy
+  telling clients to configure anything themselves — every client is fully
+  managed.
+- Don't change `schema.prisma` without also applying it to production and
+  re-running the RLS policies for any new tenant-scoped table.
+- Don't surface a tenant's quota, overage or billing state to their end
+  customers.
+- Don't style with `text-white/60` or raw hex on any surface that can
+  render light — use the theme tokens.
 
 ## Suggested Tech Stack `[PROPOSED — confirm before first build]`
 

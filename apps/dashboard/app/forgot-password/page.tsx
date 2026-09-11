@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Button } from "@chat-agent/ui";
 import { api, ApiError } from "@/lib/api";
+import { PublicThemeToggle } from "@/components/PublicThemeToggle";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -27,6 +28,9 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+      <div className="absolute right-4 top-4 z-10">
+        <PublicThemeToggle />
+      </div>
       <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-brand-gradient opacity-20 blur-3xl" />
       <div className="relative w-full max-w-sm animate-fade-up">
         <div className="mb-8 text-center">
@@ -36,24 +40,24 @@ export default function ForgotPasswordPage() {
               <circle cx="12" cy="12" r="1.4" fill="white" />
             </svg>
           </div>
-          <h1 className="text-xl font-semibold tracking-tight text-white">Reset your password</h1>
-          <p className="mt-1 text-sm text-white/50">We&apos;ll email you a link to get back in.</p>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Reset your password</h1>
+          <p className="mt-1 text-sm text-foreground/50">We&apos;ll email you a link to get back in.</p>
         </div>
 
         <div className="rounded-xl3 bg-brand-gradient-soft p-px shadow-card">
           <div className="rounded-[calc(1.75rem-1px)] bg-surface-raised/95 p-6 backdrop-blur">
             {message ? (
-              <p className="text-sm text-white/70">{message}</p>
+              <p className="text-sm text-foreground/70">{message}</p>
             ) : (
               <form onSubmit={onSubmit} className="space-y-3.5">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-white/60">Email</label>
+                  <label className="mb-1 block text-xs font-medium text-foreground/60">Email</label>
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+                    className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
                   />
                 </div>
                 {error ? <p className="text-xs text-danger">{error}</p> : null}
@@ -64,8 +68,8 @@ export default function ForgotPasswordPage() {
             )}
           </div>
         </div>
-        <p className="mt-5 text-center text-xs text-white/40">
-          <Link href="/login" className="font-medium text-brand-300 hover:underline">
+        <p className="mt-5 text-center text-xs text-foreground/40">
+          <Link href="/login" className="font-medium text-brand-link hover:text-brand-link-hover hover:underline">
             Back to sign in
           </Link>
         </p>

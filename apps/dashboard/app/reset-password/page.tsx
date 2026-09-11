@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button, PasswordInput } from "@chat-agent/ui";
 import { api, ApiError } from "@/lib/api";
+import { PublicThemeToggle } from "@/components/PublicThemeToggle";
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -37,9 +38,9 @@ function ResetPasswordForm() {
 
   if (!token) {
     return (
-      <p className="text-sm text-white/50">
+      <p className="text-sm text-foreground/50">
         This link is missing its reset token — make sure you followed the exact link from your email, or{" "}
-        <Link href="/forgot-password" className="font-medium text-brand-300 hover:underline">
+        <Link href="/forgot-password" className="font-medium text-brand-link hover:text-brand-link-hover hover:underline">
           request a new one
         </Link>
         .
@@ -48,17 +49,17 @@ function ResetPasswordForm() {
   }
 
   if (done) {
-    return <p className="text-sm text-white/70">Password updated — taking you to sign in...</p>;
+    return <p className="text-sm text-foreground/70">Password updated — taking you to sign in...</p>;
   }
 
   return (
     <form onSubmit={onSubmit} className="space-y-3.5">
       <div>
-        <label className="mb-1 block text-xs font-medium text-white/60">New password</label>
+        <label className="mb-1 block text-xs font-medium text-foreground/60">New password</label>
         <PasswordInput required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
       </div>
       <div>
-        <label className="mb-1 block text-xs font-medium text-white/60">Confirm new password</label>
+        <label className="mb-1 block text-xs font-medium text-foreground/60">Confirm new password</label>
         <PasswordInput required minLength={8} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
@@ -72,6 +73,9 @@ function ResetPasswordForm() {
 export default function ResetPasswordPage() {
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+      <div className="absolute right-4 top-4 z-10">
+        <PublicThemeToggle />
+      </div>
       <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-brand-gradient opacity-20 blur-3xl" />
       <div className="relative w-full max-w-sm animate-fade-up">
         <div className="mb-8 text-center">
@@ -81,18 +85,18 @@ export default function ResetPasswordPage() {
               <circle cx="12" cy="12" r="1.4" fill="white" />
             </svg>
           </div>
-          <h1 className="text-xl font-semibold tracking-tight text-white">Choose a new password</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Choose a new password</h1>
         </div>
 
         <div className="rounded-xl3 bg-brand-gradient-soft p-px shadow-card">
           <div className="rounded-[calc(1.75rem-1px)] bg-surface-raised/95 p-6 backdrop-blur">
-            <Suspense fallback={<p className="text-sm text-white/40">Loading...</p>}>
+            <Suspense fallback={<p className="text-sm text-foreground/40">Loading...</p>}>
               <ResetPasswordForm />
             </Suspense>
           </div>
         </div>
-        <p className="mt-5 text-center text-xs text-white/40">
-          <Link href="/login" className="font-medium text-brand-300 hover:underline">
+        <p className="mt-5 text-center text-xs text-foreground/40">
+          <Link href="/login" className="font-medium text-brand-link hover:text-brand-link-hover hover:underline">
             Back to sign in
           </Link>
         </p>
