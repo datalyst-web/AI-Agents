@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Clause, Bullets } from "../_components";
 
 export const metadata: Metadata = {
-  title: "How it works — Datalyst AI",
+  title: "How it works — Datalyst Africa",
   description: "What happens from the day you sign up to the day your AI agent goes live — and what we need from you along the way.",
 };
 

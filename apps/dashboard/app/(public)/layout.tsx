@@ -16,7 +16,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
         <div className="mx-auto flex h-16 w-full max-w-3xl items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-2.5">
             <div className="h-7 w-7 rounded-lg bg-brand-gradient" />
-            <span className="text-sm font-semibold tracking-tight text-foreground">Datalyst AI</span>
+            <span className="text-sm font-semibold tracking-tight text-foreground">Datalyst Africa</span>
           </Link>
           <div className="flex items-center gap-5 text-xs text-foreground/50">
             <Link href="/guide" className="transition-colors hover:text-foreground/80">

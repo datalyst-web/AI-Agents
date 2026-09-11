@@ -91,7 +91,22 @@ interface PendingConfirmation {
 }
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
-const WIDGET_SCRIPT_URL = process.env.NEXT_PUBLIC_WIDGET_SCRIPT_URL ?? "http://localhost:3000/widget.js";
+/**
+ * The widget script is served by this very app from its own /public, so
+ * its URL is always same-origin — deriving it from the browser's location
+ * at runtime is strictly more correct than a build-time env var, and
+ * removes a whole failure mode: if NEXT_PUBLIC_WIDGET_SCRIPT_URL were
+ * simply missing from the deploy environment, the old fallback handed
+ * every client an embed snippet pointing at http://localhost:3000, which
+ * looks completely fine in the dashboard and silently never loads on their
+ * site. The env var still wins when set, for the case where the widget is
+ * ever served from a CDN on a different host.
+ */
+function widgetScriptUrl(): string {
+  if (process.env.NEXT_PUBLIC_WIDGET_SCRIPT_URL) return process.env.NEXT_PUBLIC_WIDGET_SCRIPT_URL;
+  if (typeof window !== "undefined") return `${window.location.origin}/widget.js`;
+  return "/widget.js";
+}
 
 const KNOWN_ERROR_MESSAGES: Record<string, string> = {
   staff_cannot_approve_on_clients_behalf:
@@ -880,7 +895,7 @@ export default function AgentDetailPage() {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-foreground/60">Website embed</label>
                   <CopyField
-                    value={`<script src="${WIDGET_SCRIPT_URL}" data-agent-id="${agent.id}" data-api-base="${API_BASE_URL}"></script>`}
+                    value={`<script src="${widgetScriptUrl()}" data-agent-id="${agent.id}" data-api-base="${API_BASE_URL}"></script>`}
                   />
                 </div>
                 <div>

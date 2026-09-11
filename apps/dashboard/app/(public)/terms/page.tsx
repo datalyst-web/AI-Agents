@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { LegalTitle, Clause, Bullets, Fill, PlaceholderNotice } from "../_components";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — Datalyst AI",
-  description: "The terms governing use of the Datalyst AI chat agent platform.",
+  title: "Terms of Service — Datalyst Africa",
+  description: "The terms governing use of the Datalyst Africa AI chat agent platform.",
 };
 
 export default function TermsPage() {

@@ -54,22 +54,26 @@ jobs:
       # the client it's known to run correctly under. It's preinstalled on
       # ubuntu-latest.
       - name: Apply schema + RLS policies to production
+        # --environment production is required, not optional: an account-
+        # scoped RAILWAY_API_TOKEN can't infer the environment on its own
+        # (same reason the `railway up` steps below pass it).
+        # Paths inside are relative to packages/db, because that's the cwd
+        # `pnpm --filter` runs its command in.
         run: |
-          railway run --service api -- bash -euo pipefail -c '
+          railway run --service api --environment production -- bash -euo pipefail -c '
             if [ -z "${DATABASE_MIGRATE_URL:-}" ]; then
               echo "DATABASE_MIGRATE_URL not set — skipping schema apply."
               exit 0
             fi
+            export DATABASE_URL="$DATABASE_MIGRATE_URL"
             echo "--- schema changes to be applied ---"
-            DATABASE_URL="$DATABASE_MIGRATE_URL" \
-              pnpm --filter @chat-agent/db exec prisma migrate diff \
-                --from-schema-datasource packages/db/prisma/schema.prisma \
-                --to-schema-datamodel packages/db/prisma/schema.prisma
+            pnpm --filter @chat-agent/db exec prisma migrate diff \
+              --from-schema-datasource prisma/schema.prisma \
+              --to-schema-datamodel prisma/schema.prisma
             # No --accept-data-loss: an additive change applies cleanly, and
             # anything destructive fails the deploy rather than silently
             # dropping a production column.
-            DATABASE_URL="$DATABASE_MIGRATE_URL" \
-              pnpm --filter @chat-agent/db exec prisma db push --skip-generate
+            pnpm --filter @chat-agent/db exec prisma db push --skip-generate
             # db push creates tables but knows nothing about row-level
             # security, so a newly added tenant-scoped table has NO tenant
             # isolation until this re-runs. Both files are idempotent.

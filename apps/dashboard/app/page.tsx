@@ -16,7 +16,7 @@ import { PublicThemeToggle } from "@/components/PublicThemeToggle";
  *    Everything described here is a capability that actually ships today;
  *    the same anti-hallucination standard the agent itself is held to.
  */
-const BRAND = "Datalyst AI";
+const BRAND = "Datalyst Africa";
 
 export const metadata: Metadata = {
   title: `${BRAND} — AI digital employees for your business`,
@@ -402,9 +402,12 @@ export default function LandingPage() {
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-6 sm:flex-row">
           <div className="flex items-center gap-2.5">
             <div className="h-6 w-6 rounded-lg bg-brand-gradient" />
-            <span className="text-xs text-foreground/45">
-              © {new Date().getFullYear()} {BRAND}
-            </span>
+            <div>
+              <span className="block text-xs text-foreground/45">
+                © {new Date().getFullYear()} {BRAND}
+              </span>
+              <span className="block text-[11px] italic text-brand-link">what gets measured, gets managed</span>
+            </div>
           </div>
           <div className="flex items-center gap-6 text-xs text-foreground/45">
             <Link href="/guide" className="transition-colors hover:text-foreground/70">

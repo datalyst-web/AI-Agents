@@ -22,12 +22,12 @@
   --color-surface-border: 35 40 55;
   --color-foreground: 255 255 255;
   --color-scheme: dark;
-  /* brand-300/brand-200 — readable on dark, near-invisible on light (a
-     light periwinkle on a near-white surface has ~1.6:1 contrast, well
-     under WCAG AA's 4.5:1) — found live across every link/active-nav/badge
-     using them in light theme. These two adapt per theme instead. */
-  --color-brand-link: 157 179 255; /* brand-300 */
-  --color-brand-link-hover: 195 211 255; /* brand-200 */
+  /* brand-300/brand-200 — readable on dark, near-invisible on light (the
+     brand's pale azure on a near-white surface measures ~1.6:1, well under
+     WCAG AA's 4.5:1) — found live across every link/active-nav/badge using
+     them in light theme. These two adapt per theme instead. */
+  --color-brand-link: 121 211 247; /* brand-300 — 11.8:1 on the dark surface */
+  --color-brand-link-hover: 182 230 251; /* brand-200 — lighter still, for hover feedback */
   /* Same problem, same fix, for the four semantic status colors: each was
      a single fixed value used both as a tinted badge/border color (fine
      at low opacity in either theme) AND as full-opacity text (error
@@ -41,7 +41,7 @@
   /* Second chart-series hue (LineChart's "accent" tone) — same contrast
      problem as brand-link above, just never had a token to fix it through
      until now (packages/ui/src/LineChart.tsx hardcoded the hex directly). */
-  --color-accent: 232 121 249;
+  --color-accent: 234 61 51; /* accent-500, the logo red — 4.9:1 on the dark surface */
 }
 
 [data-theme="light"] {
@@ -52,13 +52,13 @@
   --color-surface-border: 225 228 238;
   --color-foreground: 15 19 48;
   --color-scheme: light;
-  --color-brand-link: 55 66 214; /* brand-600 — ~8:1 contrast on white */
-  --color-brand-link-hover: 44 51 172; /* brand-700 — darker still, for hover feedback */
+  --color-brand-link: 10 106 153; /* brand-700 — 5.6:1 on the light surface; brand-600 only manages 3.9:1 */
+  --color-brand-link-hover: 15 88 126; /* brand-800 — 7.3:1, darker still for hover feedback */
   --color-success: 22 101 52; /* ~5.8:1 on white */
   --color-warning: 133 77 14; /* ~5.3:1 on white */
   --color-danger: 153 27 27; /* ~5.3:1 on white */
   --color-info: 29 78 216; /* ~5:1 on white */
-  --color-accent: 162 28 175; /* fuchsia-700 — ~5.5:1 on white */
+  --color-accent: 185 28 28; /* a darkened logo red — 6.1:1 on white, where accent-500 manages only 3.8:1 */
 }
 
 html {
@@ -74,7 +74,8 @@ body {
   text-rendering: optimizeLegibility;
 }
 /* The ambient mesh above reads as a faint depth cue on the near-black dark
-   surface (12% blue / 10% magenta over near-black is barely perceptible),
+   surface (brand blue at 25% / logo red at 10% over near-black is barely
+   perceptible),
    but the identical blobs over a near-white light surface show up as
    visible colored smears — busy rather than premium. Light theme stays
    flat and basic instead; every other accent color (badges, buttons,
@@ -106,14 +107,14 @@ body {
 }
 [data-theme="light"] .shadow-glow {
   box-shadow:
-    0 0 0 1px rgba(74, 94, 245, 0.16),
-    0 6px 18px -6px rgba(74, 94, 245, 0.28);
+    0 0 0 1px rgba(18, 165, 224, 0.16),
+    0 6px 18px -6px rgba(18, 165, 224, 0.28);
 }
 [data-theme="light"] .shadow-glow-lg,
 [data-theme="light"] .hover\:shadow-glow-lg:hover {
   box-shadow:
-    0 0 0 1px rgba(74, 94, 245, 0.2),
-    0 12px 30px -8px rgba(74, 94, 245, 0.3);
+    0 0 0 1px rgba(18, 165, 224, 0.2),
+    0 12px 30px -8px rgba(18, 165, 224, 0.3);
 }
 
 ::selection {

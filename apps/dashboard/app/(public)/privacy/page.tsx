@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { LegalTitle, Clause, Bullets, Fill, PlaceholderNotice } from "../_components";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Datalyst AI",
-  description: "What data the Datalyst AI platform collects, why, how long it is kept, and the rights you and your customers have.",
+  title: "Privacy Policy — Datalyst Africa",
+  description: "What data the Datalyst Africa AI platform collects, why, how long it is kept, and the rights you and your customers have.",
 };
 
 export default function PrivacyPage() {
@@ -17,7 +17,7 @@ export default function PrivacyPage() {
       <Clause heading="1. Who this policy is from">
         <p>
           This policy explains how <Fill>LEGAL ENTITY NAME</Fill> (&quot;we&quot;) handles personal data in the course of operating
-          the Datalyst AI platform. Our contact point for privacy questions is <Fill>PRIVACY CONTACT EMAIL</Fill>, and our
+          the Datalyst Africa AI platform. Our contact point for privacy questions is <Fill>PRIVACY CONTACT EMAIL</Fill>, and our
           registered address is <Fill>REGISTERED BUSINESS ADDRESS</Fill>.
           <Fill>IF REQUIRED IN YOUR JURISDICTION: DATA PROTECTION OFFICER NAME AND CONTACT</Fill>
         </p>
