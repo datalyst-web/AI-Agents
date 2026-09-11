@@ -3,13 +3,9 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { useAuth, type DashboardTheme } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
 import { API_BASE } from "@/lib/api";
-
-const THEMES: { value: DashboardTheme; label: string; swatch: string }[] = [
-  { value: "DARK", label: "Dark", swatch: "bg-[#08090f]" },
-  { value: "LIGHT", label: "Light", swatch: "bg-[#f7f8fc]" },
-];
+import { DashboardThemeToggle } from "@/components/DashboardThemeToggle";
 
 const PLAN_LABEL: Record<"STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE", string> = {
   STARTER: "Starter Plan",
@@ -78,7 +74,7 @@ const PLATFORM_ADMIN_NAV = [
 ];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  const { user, loading, logout, impersonation, endImpersonation, setTheme } = useAuth();
+  const { user, loading, logout, impersonation, endImpersonation } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const isStaff = user?.role === "setup_specialist" || user?.role === "platform_admin";
@@ -213,8 +209,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="border-t border-surface-border p-3">
-          <div className="mb-2 px-2 py-1.5">
-            <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-foreground/35">
+          <div className="mb-2 flex items-center justify-between gap-3 px-2 py-1.5">
+            <div className="min-w-0 text-[10px] font-medium uppercase tracking-wider text-foreground/35">
               Theme{" "}
               <span className="normal-case text-foreground/25">
                 {/* Staff's own unscoped home has no tenant/widget to affect —
@@ -224,20 +220,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 {isStaff && !impersonation ? "— this browser only" : "— also sets your widget"}
               </span>
             </div>
-            <div className="flex gap-1.5">
-              {THEMES.map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  title={t.label}
-                  aria-label={`${t.label} theme`}
-                  onClick={() => void setTheme(t.value)}
-                  className={`h-6 w-6 rounded-full ${t.swatch} ring-1 ring-inset ring-black/10 transition-all ${
-                    user.theme === t.value ? "ring-2 ring-brand-400 ring-offset-2 ring-offset-surface-raised" : "hover:scale-110"
-                  }`}
-                />
-              ))}
-            </div>
+            <DashboardThemeToggle />
           </div>
           <div className="flex items-center gap-2.5 rounded-lg px-2 py-2">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-gradient text-xs font-semibold text-white">
