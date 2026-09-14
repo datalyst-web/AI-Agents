@@ -50,8 +50,9 @@ export function Fill({ children }: { children: ReactNode }) {
 export function PlaceholderNotice() {
   return (
     <div className="rounded-xl2 bg-warning/10 px-5 py-4 text-sm text-warning ring-1 ring-inset ring-warning/25">
-      <strong className="font-semibold">Draft — not yet legally reviewed.</strong> Every highlighted field below needs your real
-      company details, and this document should be checked by a lawyer in your jurisdiction before you rely on it.
+      <strong className="font-semibold">Draft — not yet legally reviewed.</strong> Filled in with the company&apos;s real details
+      and standard default terms (notice periods, retention, liability caps). A lawyer in Zimbabwe should confirm these — the
+      regulator, retention periods and cross-border transfer wording in particular — before this is relied on.
     </div>
   );
 }

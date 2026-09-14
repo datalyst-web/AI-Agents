@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { LegalTitle, Clause, Bullets, Fill, PlaceholderNotice } from "../_components";
+import { LegalTitle, Clause, Bullets, PlaceholderNotice } from "../_components";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — Datalyst Africa",
@@ -9,17 +9,18 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <article>
-      <LegalTitle title="Privacy Policy" updated="[EFFECTIVE DATE]" />
+      <LegalTitle title="Privacy Policy" updated="14 September 2026" />
       <div className="mt-8">
         <PlaceholderNotice />
       </div>
 
       <Clause heading="1. Who this policy is from">
         <p>
-          This policy explains how <Fill>LEGAL ENTITY NAME</Fill> (&quot;we&quot;) handles personal data in the course of operating
-          the Datalyst Africa AI platform. Our contact point for privacy questions is <Fill>PRIVACY CONTACT EMAIL</Fill>, and our
-          registered address is <Fill>REGISTERED BUSINESS ADDRESS</Fill>.
-          <Fill>IF REQUIRED IN YOUR JURISDICTION: DATA PROTECTION OFFICER NAME AND CONTACT</Fill>
+          This policy explains how Datalyst Africa (&quot;we&quot;) handles personal data in the course of operating
+          the Datalyst Africa AI platform. Our contact point for privacy questions is munyaradzi@datalystafrica.com, and our
+          registered address is Corner Rotten Row &amp; Pennefather Road, Harare City Library, Harare, Zimbabwe.
+          We do not currently have a dedicated Data Protection Officer — a business of our size and processing scope is not required
+          to appoint one under Zimbabwean law. Direct any data protection query to the email above.
         </p>
       </Clause>
 
@@ -108,19 +109,35 @@ export default function PrivacyPage() {
           ]}
         />
         <p>
-          <Fill>LIST YOUR ACTUAL SUB-PROCESSORS AND THEIR LOCATIONS HERE — many data protection regimes require this to be public</Fill>
+          Our current sub-processors:
+        </p>
+        <Bullets
+          items={[
+            "Neon, Inc. — PostgreSQL database hosting (United States).",
+            "Railway Corporation — application hosting for the API and background workers (United States).",
+            "Vercel Inc. — dashboard hosting and content delivery (United States, global edge network).",
+            "Cloudflare, Inc. — encrypted document/logo storage and bot-verification on our sign-in forms (global network, United States-headquartered).",
+            "Anthropic PBC, OpenAI, L.L.C. and Google LLC — AI model providers used to generate Agent replies (United States).",
+            "Google LLC — additionally used for \"Sign in with Google\" and, where a customer connects it, Google Calendar (United States).",
+            "Brevo (Sendinblue SAS) — transactional email delivery, e.g. sign-in codes and alerts (European Union).",
+            "Meta Platforms, Inc. — WhatsApp Business Platform, Messenger and Instagram messaging, only for customers who connect those channels (United States).",
+            "Twilio Inc. — SMS alert delivery, only for customers who enable that channel (United States).",
+            "Paynow (Zimbabwe) — payment processing, only for customers on a paid plan (Zimbabwe).",
+          ]}
+        />
+        <p>
         </p>
         <p>We do not sell personal data, and we do not share it for advertising.</p>
       </Clause>
 
       <Clause heading="8. Where data is held">
         <p>
-          The platform currently operates from a single region: <Fill>HOSTING REGION</Fill>. If you have a regulatory requirement
+          The platform currently operates primarily from the United States (see the sub-processor list above); Cloudflare&apos;s global network may cache static assets and file uploads closer to you. If you have a regulatory requirement
           for data to stay in a particular region, tell us before you go live — we record that requirement against your account, but
           you should not assume data is physically relocated unless we have confirmed that in writing.
         </p>
         <p>
-          Where data crosses a border, we rely on <Fill>TRANSFER MECHANISM, e.g. Standard Contractual Clauses</Fill>.
+          Where data crosses a border, we rely on the standard contractual data-processing safeguards each provider listed above already has in place, rather than a bespoke agreement of our own.
         </p>
       </Clause>
 
@@ -143,11 +160,11 @@ export default function PrivacyPage() {
       <Clause heading="10. How long we keep it">
         <p>
           Conversation and memory data is kept for the retention period configured on your account, then deleted automatically. The
-          default is <Fill>DEFAULT RETENTION, e.g. 365 days</Fill>.
+          default is 365 days.
         </p>
         <p>
           Account, billing and audit records are kept for as long as you are a customer and then for as long as we are legally
-          required to keep them — typically <Fill>FINANCIAL RECORD RETENTION, e.g. 7 years</Fill> for accounting records. Audit logs
+          required to keep them — typically 6 years for accounting records, in line with Zimbabwean tax record-keeping requirements. Audit logs
           are kept deliberately, because they are the record of who changed what.
         </p>
       </Clause>
@@ -156,14 +173,14 @@ export default function PrivacyPage() {
         <p>
           Depending on where you are, you may have the right to access, correct, export, or delete your personal data, to object to
           or restrict processing, and to complain to a regulator. To exercise any of these, contact{" "}
-          <Fill>PRIVACY CONTACT EMAIL</Fill>. We will respond within <Fill>RESPONSE TIME, e.g. 30 days</Fill>.
+          munyaradzi@datalystafrica.com. We will respond within 30 days.
         </p>
         <p>
           You can delete a specific customer&apos;s stored memory from your dashboard at any time; that action is recorded in your
           audit log.
         </p>
         <p>
-          The regulator for our jurisdiction is <Fill>SUPERVISORY AUTHORITY NAME</Fill>.
+          The regulator for our jurisdiction is the Postal and Telecommunications Regulatory Authority of Zimbabwe (POTRAZ), the Data Protection Authority under Zimbabwe&apos;s Cyber and Data Protection Act.
         </p>
       </Clause>
 

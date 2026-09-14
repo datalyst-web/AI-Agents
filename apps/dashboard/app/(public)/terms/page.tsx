@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { LegalTitle, Clause, Bullets, Fill, PlaceholderNotice } from "../_components";
+import { LegalTitle, Clause, Bullets, PlaceholderNotice } from "../_components";
 
 export const metadata: Metadata = {
   title: "Terms of Service — Datalyst Africa",
@@ -9,15 +9,15 @@ export const metadata: Metadata = {
 export default function TermsPage() {
   return (
     <article>
-      <LegalTitle title="Terms of Service" updated="[EFFECTIVE DATE]" />
+      <LegalTitle title="Terms of Service" updated="14 September 2026" />
       <div className="mt-8">
         <PlaceholderNotice />
       </div>
 
       <Clause heading="1. Who these terms are between">
         <p>
-          These terms are an agreement between <Fill>LEGAL ENTITY NAME</Fill>, a company registered in{" "}
-          <Fill>COUNTRY OF REGISTRATION</Fill> under company number <Fill>COMPANY REGISTRATION NUMBER</Fill> (&quot;we&quot;,
+          These terms are an agreement between Datalyst Africa, a company registered in Zimbabwe under company number{" "}
+          +263 773 806 868 (&quot;we&quot;,
           &quot;us&quot;, the &quot;Provider&quot;), and the business or person that creates an account to use the platform
           (&quot;you&quot;, the &quot;Customer&quot;).
         </p>
@@ -101,8 +101,7 @@ export default function TermsPage() {
 
       <Clause heading="6. Fees, usage allowances and overage">
         <p>
-          Subscription prices are shown on our pricing page and are charged monthly in advance in{" "}
-          <Fill>BILLING CURRENCY</Fill>. Each plan includes a monthly usage allowance. If you exceed it, the additional usage is
+          Subscription prices are shown on our pricing page and are charged monthly in advance in US Dollars (USD). Each plan includes a monthly usage allowance. If you exceed it, the additional usage is
           billed at the overage rate for your plan, shown in your dashboard.
         </p>
         <p>
@@ -111,7 +110,7 @@ export default function TermsPage() {
         </p>
         <p>
           Paid setup and ongoing knowledge upkeep are quoted separately and invoiced as agreed. Fees are non-refundable except where
-          required by law. We may change prices with <Fill>NOTICE PERIOD, e.g. 30 days</Fill> notice; a change never applies to a
+          required by law. We may change prices with 30 days&apos; notice; a change never applies to a
           period you have already paid for.
         </p>
       </Clause>
@@ -123,8 +122,7 @@ export default function TermsPage() {
         </p>
         <p>
           You can cancel at any time and your subscription runs to the end of the paid period. When a subscription ends we suspend
-          your Agent — we do not delete your data at that point. You can ask us to export or delete it, and we will delete it after{" "}
-          <Fill>POST-CANCELLATION RETENTION PERIOD, e.g. 90 days</Fill> unless you ask us to sooner or the law requires us to keep
+          your Agent — we do not delete your data at that point. You can ask us to export or delete it, and we will delete it after 90 days unless you ask us to sooner or the law requires us to keep
           it.
         </p>
       </Clause>
@@ -136,7 +134,7 @@ export default function TermsPage() {
           failing does not necessarily take your Agent down, but we cannot guarantee it.
         </p>
         <p>
-          Any service level commitment applies only if we have agreed one with you in writing: <Fill>SLA TERMS, IF ANY</Fill>.
+          We do not currently offer a formal service-level agreement. Any uptime or response-time commitment applies only where we have agreed one with you separately in writing.
         </p>
       </Clause>
 
@@ -155,8 +153,7 @@ export default function TermsPage() {
       <Clause heading="10. Liability">
         <p>
           To the extent the law allows, neither party is liable for indirect or consequential loss, lost profit, lost revenue, or
-          lost data. Our total liability under this agreement is capped at the fees you paid us in the{" "}
-          <Fill>LIABILITY CAP PERIOD, e.g. 12 months</Fill> before the claim arose.
+          lost data. Our total liability under this agreement is capped at the fees you paid us in the 12 months before the claim arose.
         </p>
         <p>
           Nothing in these terms limits liability that cannot be limited by law, including for death or personal injury caused by
@@ -166,26 +163,24 @@ export default function TermsPage() {
 
       <Clause heading="11. Changes to these terms">
         <p>
-          We may update these terms. If a change materially reduces your rights, we will tell you at least{" "}
-          <Fill>NOTICE PERIOD, e.g. 30 days</Fill> before it takes effect. Continuing to use the service after that means you accept
+          We may update these terms. If a change materially reduces your rights, we will tell you at least 30 days before it takes effect. Continuing to use the service after that means you accept
           the updated terms.
         </p>
       </Clause>
 
       <Clause heading="12. Governing law and disputes">
         <p>
-          These terms are governed by the laws of <Fill>GOVERNING JURISDICTION</Fill>, and the courts of{" "}
-          <Fill>COURTS WITH JURISDICTION</Fill> have exclusive jurisdiction. Before starting proceedings, both parties agree to try
+          These terms are governed by the laws of Zimbabwe, and the courts of Harare, Zimbabwe have exclusive jurisdiction. Before starting proceedings, both parties agree to try
           to resolve the dispute by talking to each other first.
         </p>
       </Clause>
 
       <Clause heading="13. How to reach us">
         <p>
-          Questions about these terms: <Fill>SUPPORT / LEGAL EMAIL</Fill>.
+          Questions about these terms: info@datalystafrica.com.
         </p>
         <p>
-          Registered address: <Fill>REGISTERED BUSINESS ADDRESS</Fill>.
+          Registered address: Corner Rotten Row & Pennefather Road, Harare City Library, Harare, Zimbabwe.
         </p>
       </Clause>
     </article>
