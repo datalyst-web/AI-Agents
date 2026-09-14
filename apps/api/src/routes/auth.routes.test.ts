@@ -28,6 +28,8 @@ let prisma: import("@chat-agent/db").PrismaClient;
 
 const createdUserEmails: string[] = [];
 const createdTenantIds: string[] = [];
+/** Captures 2FA codes login/verify-2fa send — see extractTwoFactorCode below. Never reset between tests; every test uses a unique email so lookups by `to` never collide. */
+let sentEmails: { to: string; subject: string; text: string }[] = [];
 
 beforeAll(async () => {
   process.env.DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://placeholder:placeholder@localhost:5432/placeholder";
@@ -72,12 +74,33 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
+/**
+ * Since login/Google now stop at a 2FA challenge (see auth.routes.ts's
+ * issueTwoFactorCode call) rather than issuing a token directly, ctx.email
+ * has to actually work here — a login test against `{ prisma } as never`
+ * with no email provider throws inside issueTwoFactorCode the moment a
+ * password check succeeds. Same stub-EmailProvider pattern as
+ * team.routes.test.ts's own doc comment on why: real capture, not a mock
+ * that would hide a broken send path.
+ */
 async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   await app.register(authPlugin);
-  await registerAuthRoutes(app, { prisma } as never);
+  const email = {
+    send: async (message: { to: string; subject: string; text: string }) => {
+      sentEmails.push(message);
+      return { sent: true };
+    },
+  };
+  await registerAuthRoutes(app, { prisma, email } as never);
   await app.ready();
   return app;
+}
+
+function extractTwoFactorCode(text: string): string {
+  const match = text.match(/Your sign-in code is (\d{6})/);
+  if (!match) throw new Error(`no 2FA code found in email text: ${text}`);
+  return match[1]!;
 }
 
 describe.skipIf(!process.env.CHAT_APP_DATABASE_URL)("auth routes — RLS entry-point regression (real chat_app_user connection)", () => {
@@ -145,19 +168,118 @@ describe.skipIf(!process.env.CHAT_APP_DATABASE_URL)("auth routes — RLS entry-p
     });
     expect(login.statusCode).toBe(200);
     const loginBody = JSON.parse(login.body);
-    expect(loginBody.token).toBeTruthy();
-    expect(loginBody.user.email).toBe(email);
-    expect(loginBody.user.tenantId).toBe(tenantId);
+    // A correct password now earns a 2FA challenge, not a session — the
+    // whole point of guarding this path is that neither it nor Google
+    // alone hands back a usable token.
+    expect(loginBody.requiresTwoFactor).toBe(true);
+    expect(loginBody.challenge).toBeTruthy();
+    expect(loginBody.token).toBeUndefined();
+
+    const code = extractTwoFactorCode(sentEmails.find((m) => m.to === email)!.text);
+    const verify = await app.inject({
+      method: "POST",
+      url: "/v1/auth/verify-2fa",
+      payload: { challenge: loginBody.challenge, code },
+    });
+    expect(verify.statusCode).toBe(200);
+    const verifyBody = JSON.parse(verify.body);
+    expect(verifyBody.token).toBeTruthy();
+    expect(verifyBody.user.email).toBe(email);
+    expect(verifyBody.user.tenantId).toBe(tenantId);
 
     const me = await app.inject({
       method: "GET",
       url: "/v1/auth/me",
-      headers: { authorization: `Bearer ${loginBody.token}` },
+      headers: { authorization: `Bearer ${verifyBody.token}` },
     });
     expect(me.statusCode).toBe(200);
     const meBody = JSON.parse(me.body);
     expect(meBody.email).toBe(email);
     expect(meBody.tenantId).toBe(tenantId);
+
+    await app.close();
+  });
+
+  it("verify-2fa rejects a wrong code, then accepts the right one — a bad guess costs an attempt, not the whole challenge", async () => {
+    const app = await buildApp();
+    const email = `auth-rls-2fa-wrong-${randomUUID()}@example.com`;
+    const password = "correct-horse-battery-staple";
+
+    const signup = await app.inject({
+      method: "POST",
+      url: "/v1/auth/signup",
+      payload: { tenantName: "RLS 2FA Wrong-Code Co", email, password },
+    });
+    createdTenantIds.push(JSON.parse(signup.body).tenant.id);
+
+    const login = await app.inject({ method: "POST", url: "/v1/auth/login", payload: { email, password } });
+    const { challenge } = JSON.parse(login.body);
+    const realCode = extractTwoFactorCode(sentEmails.find((m) => m.to === email)!.text);
+    const wrongCode = realCode === "000000" ? "111111" : "000000";
+
+    const badAttempt = await app.inject({ method: "POST", url: "/v1/auth/verify-2fa", payload: { challenge, code: wrongCode } });
+    expect(badAttempt.statusCode).toBe(401);
+    expect(JSON.parse(badAttempt.body).error).toBe("invalid");
+
+    const goodAttempt = await app.inject({ method: "POST", url: "/v1/auth/verify-2fa", payload: { challenge, code: realCode } });
+    expect(goodAttempt.statusCode).toBe(200);
+    expect(JSON.parse(goodAttempt.body).token).toBeTruthy();
+
+    await app.close();
+  });
+
+  it("verify-2fa voids the challenge outright after five wrong codes — the real code stops working too", async () => {
+    const app = await buildApp();
+    const email = `auth-rls-2fa-lockout-${randomUUID()}@example.com`;
+    const password = "correct-horse-battery-staple";
+
+    const signup = await app.inject({
+      method: "POST",
+      url: "/v1/auth/signup",
+      payload: { tenantName: "RLS 2FA Lockout Co", email, password },
+    });
+    createdTenantIds.push(JSON.parse(signup.body).tenant.id);
+
+    const login = await app.inject({ method: "POST", url: "/v1/auth/login", payload: { email, password } });
+    const { challenge } = JSON.parse(login.body);
+    const realCode = extractTwoFactorCode(sentEmails.find((m) => m.to === email)!.text);
+    const wrongCode = realCode === "000000" ? "111111" : "000000";
+
+    let last: Awaited<ReturnType<typeof app.inject>> | undefined;
+    for (let i = 0; i < 5; i++) {
+      last = await app.inject({ method: "POST", url: "/v1/auth/verify-2fa", payload: { challenge, code: wrongCode } });
+    }
+    expect(JSON.parse(last!.body).error).toBe("too_many_attempts");
+
+    // The keyspace-walk this guards against: even the correct code must
+    // now be refused, since the challenge itself is gone, not just that
+    // one guess.
+    const afterLockout = await app.inject({ method: "POST", url: "/v1/auth/verify-2fa", payload: { challenge, code: realCode } });
+    expect(afterLockout.statusCode).toBe(401);
+
+    await app.close();
+  });
+
+  it("verify-2fa rejects a real session token used as a challenge — the purpose claim can't be replayed across token types", async () => {
+    const app = await buildApp();
+    const email = `auth-rls-2fa-purpose-${randomUUID()}@example.com`;
+    const password = "correct-horse-battery-staple";
+
+    const signup = await app.inject({
+      method: "POST",
+      url: "/v1/auth/signup",
+      payload: { tenantName: "RLS 2FA Purpose Co", email, password },
+    });
+    createdTenantIds.push(JSON.parse(signup.body).tenant.id);
+    const sessionToken = JSON.parse(signup.body).token;
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/auth/verify-2fa",
+      payload: { challenge: sessionToken, code: "000000" },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body).error).toBe("challenge_expired");
 
     await app.close();
   });

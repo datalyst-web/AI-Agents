@@ -77,7 +77,11 @@ async function buildApp(): Promise<FastifyInstance> {
       return { sent: true };
     },
   };
-  await registerAuthRoutes(app, { prisma } as never);
+  // login/Google now stop at a 2FA challenge and email the code (see
+  // auth.routes.ts's issueTwoFactorCode) — without a working email
+  // provider here, a login test against a still-active user would throw
+  // instead of exercising the route at all.
+  await registerAuthRoutes(app, { prisma, email } as never);
   await registerTeamRoutes(app, { prisma, email } as never);
   await app.ready();
   return app;
