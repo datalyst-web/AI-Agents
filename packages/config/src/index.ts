@@ -196,6 +196,15 @@ export const EnvSchema = z.object({
   // silently allowed) so a careless deploy doesn't accidentally ship with
   // secrets sitting in plain env vars. Revisit once real AWS infra exists.
   ALLOW_ENV_SECRETS_IN_PRODUCTION: z.coerce.boolean().default(false),
+
+  // Defaults to true — every login stops at an emailed 6-digit code (see
+  // auth.routes.ts's issueTwoFactorCode). Exists as a single reversible
+  // escape hatch for the case that actually happened once already: the
+  // configured SMTP provider breaks and 2FA can no longer be satisfied by
+  // anyone, so login is unusable until it's fixed. Setting this to false
+  // reverts to single-step (password or Google) login without any code
+  // change or redeploy — flip it back to true the moment email works again.
+  REQUIRE_TWO_FACTOR: z.coerce.boolean().default(true),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

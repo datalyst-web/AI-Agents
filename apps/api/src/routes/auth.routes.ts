@@ -1,10 +1,10 @@
 import { randomUUID, randomBytes, createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
-import { withPlatformContext, withTenant } from "@chat-agent/db";
+import { withPlatformContext, withTenant, type Role } from "@chat-agent/db";
 import type { AppContext } from "../lib/context.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { verifyTurnstileToken } from "../lib/turnstile.js";
@@ -55,6 +55,20 @@ function maskEmail(email: string): string {
   if (!local || !domain) return "your email";
   const shown = local.slice(0, 2);
   return `${shown}${"•".repeat(Math.max(1, local.length - 2))}@${domain}`;
+}
+
+/**
+ * Issues a real session directly, skipping the 2FA challenge — the
+ * pre-91cddb1 behavior, kept alive behind env.REQUIRE_TWO_FACTOR as a
+ * single reversible escape hatch for when the configured email provider is
+ * broken and no one can satisfy a code-based challenge at all.
+ */
+async function issueSessionDirectly(
+  reply: FastifyReply,
+  user: { id: string; email: string; role: Role; tenantId: string | null },
+) {
+  const token = await reply.jwtSign({ sub: user.id, tenantId: user.tenantId ?? undefined, role: user.role });
+  reply.send({ token, user: { id: user.id, email: user.email, role: user.role, tenantId: user.tenantId } });
 }
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -147,6 +161,10 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       reply.code(401).send({ error: "invalid_credentials" });
       return;
     }
+    if (!env.REQUIRE_TWO_FACTOR) {
+      await issueSessionDirectly(reply, user);
+      return;
+    }
     const issued = await issueTwoFactorCode(ctx.prisma, ctx.email, user);
     if (!issued.sent) {
       // Never hand back a challenge for a code that was never delivered —
@@ -207,6 +225,10 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       return;
     }
 
+    if (!env.REQUIRE_TWO_FACTOR) {
+      await issueSessionDirectly(reply, user);
+      return;
+    }
     const issued = await issueTwoFactorCode(ctx.prisma, ctx.email, user);
     if (!issued.sent) {
       request.log.error({ userId: user.id, error: issued.error }, "failed to send 2FA code");
