@@ -123,6 +123,8 @@ interface ChatResponse {
 
   const host = document.createElement("div");
   host.id = "chat-agent-widget-root";
+  // Hidden until the agent's config has actually loaded — see start().
+  host.style.display = "none";
   document.body.appendChild(host);
   const shadow = host.attachShadow({ mode: "open" });
 
@@ -201,7 +203,7 @@ interface ChatResponse {
 
   async function loadConfig() {
     const resp = await fetch(`${apiBase}/v1/widget-config/${agentId}`);
-    if (!resp.ok) throw new Error(`widget-config fetch failed: ${resp.status}`);
+    if (!resp.ok) throw Object.assign(new Error(`widget-config fetch failed: ${resp.status}`), { status: resp.status });
     config = (await resp.json()) as WidgetConfig;
     applyTheme(config.theme);
     nameEl.textContent = config.name;
@@ -285,9 +287,6 @@ interface ChatResponse {
   // entrance pop (see the .launcher rule, which plays on mount with no JS
   // needed) — a first-impression nudge only, never repeats mid-session and
   // stops the instant the visitor engages.
-  setTimeout(() => {
-    if (!opened) launcher.classList.add("invite");
-  }, 900);
   launcher.addEventListener("animationend", (e) => {
     if ((e as AnimationEvent).animationName === "sonarPing") launcher.classList.remove("invite");
   });
@@ -421,7 +420,35 @@ interface ChatResponse {
     void sendMessage(text);
   });
 
-  void loadConfig();
+  function reveal() {
+    host.style.display = "";
+    setTimeout(() => {
+      if (!opened) launcher.classList.add("invite");
+    }, 900);
+  }
+
+  // The widget stays invisible until its config loads. A launcher that
+  // opens onto an empty, nameless panel and silently ignores every message
+  // (sendMessage bails without config) is worse on a client's own website
+  // than no launcher at all. Network errors and 5xx are retried briefly; a
+  // 4xx is final (an agent that doesn't exist or isn't live), so it never
+  // appears rather than hammering the API from every page view.
+  async function start() {
+    for (const delay of [0, 2000, 6000]) {
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+      try {
+        await loadConfig();
+        reveal();
+        return;
+      } catch (err) {
+        const status = (err as { status?: number }).status;
+        if (status !== undefined && status >= 400 && status < 500) break;
+      }
+    }
+    console.warn("[chat-widget] this assistant is unavailable right now, so the chat button is hidden.");
+  }
+
+  void start();
 
   function styles(position: "left" | "right"): string {
     // Bottom-right by default (unchanged for every existing embed that
