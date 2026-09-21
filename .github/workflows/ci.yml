@@ -11,7 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        # Same major version as production (Railway Postgres 18), so the
+        # schema push, RLS policies and tests run against what really runs.
+        image: pgvector/pgvector:pg18
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

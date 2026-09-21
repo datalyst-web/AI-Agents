@@ -1,12 +1,14 @@
 name: Deploy dashboard
 
-# Real deploy target: the Vercel project `datalyst3/dashboard`, rootDirectory
-# apps/dashboard. Must run from the repo ROOT (not apps/dashboard) — Vercel's
-# monorepo build needs the full pnpm workspace visible, or it falls back to
-# plain npm install and breaks on `workspace:*` deps (found live earlier
-# this project's history). widget.js is no longer a separate deploy: apps/
-# dashboard's own build script now rebuilds apps/widget and copies its
-# output into public/widget.js on every build, so it's never stale.
+# Real deploy target: the Railway service `dashboard` in the same project as
+# api/workers, served at app.datalystafrica.com. It builds from
+# apps/dashboard/Dockerfile (RAILWAY_DOCKERFILE_PATH is set on the service),
+# and the four NEXT_PUBLIC_* values are Railway service variables, passed to
+# the Dockerfile as build args. widget.js isn't a separate deploy: the
+# dashboard build rebuilds apps/widget and copies it into public/widget.js.
+#
+# This replaced Vercel on 2026-09-21 — Vercel's free plan doesn't allow
+# commercial use, and moving here keeps all hosting on one bill.
 on:
   workflow_run:
     workflows: ["CI"]
@@ -14,13 +16,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
-env:
-  VERCEL_ORG_ID: team_gQUHLw8BNoUniYa7cvuJwUBB
-  VERCEL_PROJECT_ID: prj_ns1TpswB2X4tSWNfesHXDP5eFd4y
-
 jobs:
   deploy:
-    if: ${{ vars.DASHBOARD_HOST != 'railway' && (github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,26 +28,10 @@ jobs:
           # this job starting would deploy an untested commit instead of
           # the one CI actually passed.
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-
-      - name: Install Vercel CLI
-        run: npm install -g vercel
-
-      - name: Deploy to Vercel production
-        run: vercel deploy --prod --yes --token="$VERCEL_TOKEN"
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-
-  deploy-railway:
-    # Enable only after provisioning and verifying the dashboard service,
-    # public build variables, and domain. Until then Vercel remains active.
-    if: ${{ vars.DASHBOARD_HOST == 'railway' && (github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch') }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Install Railway CLI
         run: npm install -g @railway/cli
+      # Same account-scoped token and project/environment flags as deploy.yml
+      # (see the comment there for why both are required).
       - name: Deploy dashboard to Railway
         run: railway up --service dashboard --environment production --ci
         env:
