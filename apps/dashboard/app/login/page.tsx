@@ -16,6 +16,11 @@ const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 // the browser) — only TURNSTILE_SECRET_KEY on the API side is sensitive.
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
+/** The theme currently painted on the page — set before first paint by app/layout.tsx's bootstrap script, light by default. */
+function pageTheme(): "light" | "dark" {
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+}
+
 declare global {
   interface Window {
     google?: {
@@ -118,7 +123,11 @@ export default function LoginPage() {
     if (!turnstileScriptLoaded || !TURNSTILE_SITE_KEY || !turnstileContainerRef.current || !window.turnstile) return;
     turnstileWidgetId.current = window.turnstile.render(turnstileContainerRef.current, {
       sitekey: TURNSTILE_SITE_KEY,
-      theme: "dark",
+      // Matches the page as it is when the widget mounts. Hardcoded "dark"
+      // painted a black box on the (now default) light login page. Not
+      // re-rendered on a later theme toggle: that would discard a CAPTCHA the
+      // visitor has already solved, which is worse than a mismatched frame.
+      theme: pageTheme(),
       callback: (token) => setTurnstileToken(token),
       "error-callback": () => setTurnstileToken(null),
     });
@@ -130,10 +139,9 @@ export default function LoginPage() {
       client_id: GOOGLE_CLIENT_ID,
       // Without this, a returning user gets Chrome's native FedCM
       // "quick re-authentication" chip ("Sign in as {name}") popping up
-      // unprompted — a white pill the browser renders itself, completely
-      // outside our CSS/theme control, clashing with the always-dark
-      // login card. We already offer the styled filled_black button
-      // below for the same action, so the automatic one is just noise.
+      // unprompted — a pill the browser renders itself, completely outside
+      // our CSS/theme control. We already offer the styled button below for
+      // the same action, so the automatic one is just noise.
       auto_select: false,
       callback: async (response) => {
         if (TURNSTILE_SITE_KEY && !turnstileTokenRef.current) {
@@ -154,13 +162,13 @@ export default function LoginPage() {
       },
     });
     window.google.accounts.id.renderButton(googleButtonRef.current, {
-      // The login card is always dark (fixed-dark by design, never
-      // theme-toggled) — filled_black is the only GIS theme that actually
-      // reads as "part of this card" instead of a lighter foreign box
-      // dropped on top of it. Width matches the card's own content width
-      // (measured, not hardcoded) so it lines up exactly with the
-      // full-width "Sign in" button above it instead of looking narrower.
-      theme: "filled_black",
+      // Follows the page theme at mount: Google's outlined button on the
+      // light card, its filled_black button on the dark one — each reads as
+      // part of the card rather than a foreign box dropped on top of it.
+      // Width matches the card's own content width (measured, not
+      // hardcoded) so it lines up exactly with the full-width "Sign in"
+      // button above it instead of looking narrower.
+      theme: pageTheme() === "dark" ? "filled_black" : "outline",
       size: "large",
       shape: "pill",
       width: Math.round(googleButtonRef.current.clientWidth),
@@ -278,9 +286,9 @@ export default function LoginPage() {
                   <div className="h-px flex-1 bg-foreground/10" />
                 </div>
                 {/* h-10 + overflow-hidden + rounded-full crop the white letterboxing Google's
-                    iframe renders around the filled_black pill button — the iframe itself
-                    reports a taller canvas than the visible button, so without a matching-height
-                    clip the white shows as a bar above/below the dark pill. */}
+                    iframe renders around the pill button — the iframe itself reports a taller
+                    canvas than the visible button, so without a matching-height clip the white
+                    shows as a bar above/below the dark (filled_black) pill in dark theme. */}
                 <div ref={googleButtonRef} className="flex h-10 justify-center overflow-hidden rounded-full" />
               </>
             ) : null}

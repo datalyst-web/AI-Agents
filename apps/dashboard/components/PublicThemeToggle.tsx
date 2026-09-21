@@ -26,7 +26,7 @@ export function PublicThemeToggle() {
   const [theme, setThemeState] = useState<Theme | null>(null);
 
   // Read from the DOM rather than from storage: the inline script has
-  // already resolved stored-preference-or-system-preference by this point,
+  // already resolved the saved preference or light default by this point,
   // so the attribute is the single source of truth for what's on screen.
   useEffect(() => {
     setThemeState(document.documentElement.dataset.theme === "light" ? "light" : "dark");

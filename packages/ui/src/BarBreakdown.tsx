@@ -7,7 +7,7 @@ export interface BarBreakdownItem {
 }
 
 const TONE_COLOR: Record<NonNullable<BarBreakdownItem["tone"]>, string> = {
-  brand: "#7288ff",
+  brand: "#12a5e0",
   success: "#2fbf71",
   warning: "#e8a53d",
   danger: "#e5484d",

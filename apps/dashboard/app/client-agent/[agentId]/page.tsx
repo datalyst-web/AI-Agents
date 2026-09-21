@@ -111,7 +111,7 @@ export default function ClientAgentPage() {
 
   return (
     <div
-      data-theme={(config?.theme ?? "DARK").toLowerCase()}
+      data-theme={(config?.theme ?? "LIGHT").toLowerCase()}
       className="relative flex min-h-screen flex-col overflow-hidden bg-surface text-foreground"
     >
       <div className="pointer-events-none absolute -top-40 left-1/2 h-96 w-[48rem] -translate-x-1/2 rounded-full bg-brand-gradient opacity-[0.12] blur-3xl" />

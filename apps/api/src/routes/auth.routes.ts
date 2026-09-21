@@ -114,6 +114,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
         data: {
           id: randomUUID(),
           name: body.tenantName,
+          theme: "LIGHT",
           slug: `${slug}-${randomUUID().slice(0, 6)}`,
           subscriptionState: "TRIAL",
           subscriptionTier: "STARTER",
@@ -475,7 +476,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
           // No tenant in scope at all (staff pre-impersonation, or a
           // platform_admin token) — the dashboard chrome stays on the
           // default until an impersonation session picks one.
-          theme: "DARK" as const,
+          theme: "LIGHT" as const,
           subscriptionTier: null,
           subscriptionState: null,
           brandName: null,

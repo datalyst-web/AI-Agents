@@ -26,7 +26,7 @@ interface WidgetConfig {
 /**
  * Same 2 themes as the dashboard's own chrome (apps/dashboard/app/globals.css)
  * — one tenant preference, two surfaces. `:host`'s defaults below are the
- * DARK values, so the widget looks exactly as it always has until
+ * LIGHT values (the platform-wide default), so the widget paints light until
  * `applyTheme()` runs post-config-load; brand-1/2/3 (the gradient accent)
  * stay constant across themes on purpose, same as the dashboard's brand
  * palette.
@@ -54,7 +54,7 @@ const WIDGET_THEMES: Record<WidgetTheme, Record<string, string>> = {
     "--footer-brand-text": "rgba(255,255,255,0.4)",
     "--scrollbar-thumb": "rgba(255,255,255,0.12)",
     "--panel-shadow": "0 24px 70px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.07) inset",
-    "--header-glow": "rgba(114,136,255,0.25)",
+    "--header-glow": "rgba(53,189,240,0.25)",
   },
   LIGHT: {
     "--panel-bg": "#ffffff",
@@ -78,7 +78,7 @@ const WIDGET_THEMES: Record<WidgetTheme, Record<string, string>> = {
     "--footer-brand-text": "rgba(15,19,48,0.5)",
     "--scrollbar-thumb": "rgba(15,19,48,0.14)",
     "--panel-shadow": "0 24px 70px rgba(20,27,77,0.16), 0 4px 16px rgba(20,27,77,0.1), 0 0 0 1px rgba(15,19,48,0.06) inset",
-    "--header-glow": "rgba(114,136,255,0.14)",
+    "--header-glow": "rgba(53,189,240,0.14)",
   },
 };
 
@@ -195,7 +195,7 @@ interface ChatResponse {
   let opened = false;
 
   function applyTheme(theme: WidgetTheme | undefined) {
-    const tokens = WIDGET_THEMES[theme ?? "DARK"];
+    const tokens = WIDGET_THEMES[theme ?? "LIGHT"];
     for (const [name, value] of Object.entries(tokens)) host.style.setProperty(name, value);
   }
 
@@ -434,8 +434,8 @@ interface ChatResponse {
     return `
       :host, * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
       :host {
-        --brand-1: #7288ff; --brand-2: #4a5ef5; --brand-3: #a21caf;
-        ${Object.entries(WIDGET_THEMES.DARK)
+        --brand-1: #35bdf0; --brand-2: #12a5e0; --brand-3: #0a6a99;
+        ${Object.entries(WIDGET_THEMES.LIGHT)
           .map(([name, value]) => `${name}: ${value};`)
           .join(" ")}
       }
@@ -445,7 +445,7 @@ interface ChatResponse {
       @keyframes pulseDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
       @keyframes typingBounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 30% { transform: translateY(-3px); opacity: 1; } }
       @keyframes launcherPop { 0% { opacity: 0; transform: scale(0.4) translateY(12px); } 60% { opacity: 1; transform: scale(1.08) translateY(0); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
-      @keyframes sonarPing { 0% { box-shadow: 0 0 0 0 rgba(74,94,245,0.45); } 100% { box-shadow: 0 0 0 22px rgba(74,94,245,0); } }
+      @keyframes sonarPing { 0% { box-shadow: 0 0 0 0 rgba(18,165,224,0.45); } 100% { box-shadow: 0 0 0 22px rgba(18,165,224,0); } }
       @keyframes bobIdle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 
       .launcher {
@@ -453,7 +453,7 @@ interface ChatResponse {
         background: linear-gradient(135deg, var(--brand-1), var(--brand-2) 55%, var(--brand-3));
         background-size: 160% auto; background-position: left center;
         color: white; display: flex; align-items: center; justify-content: center; cursor: pointer;
-        box-shadow: 0 4px 14px rgba(74,94,245,0.3), 0 12px 32px rgba(74,94,245,0.28), 0 0 0 1px rgba(255,255,255,0.08) inset;
+        box-shadow: 0 4px 14px rgba(18,165,224,0.3), 0 12px 32px rgba(18,165,224,0.28), 0 0 0 1px rgba(255,255,255,0.08) inset;
         z-index: 999999;
         /* Plays automatically the instant this element mounts — no JS
            gating needed for the entrance itself, so it can never get stuck
@@ -462,7 +462,7 @@ interface ChatResponse {
         transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.25s ease, background-position 0.3s ease;
       }
       .launcher.invite { animation: launcherPop 0.55s cubic-bezier(0.34,1.56,0.64,1) both, sonarPing 1.6s ease-out 3, bobIdle 3.2s ease-in-out 0.6s infinite; }
-      .launcher:hover { animation-play-state: paused; transform: scale(1.07); background-position: right center; box-shadow: 0 6px 18px rgba(74,94,245,0.4), 0 16px 40px rgba(74,94,245,0.32), 0 0 0 1px rgba(255,255,255,0.1) inset; }
+      .launcher:hover { animation-play-state: paused; transform: scale(1.07); background-position: right center; box-shadow: 0 6px 18px rgba(18,165,224,0.4), 0 16px 40px rgba(18,165,224,0.32), 0 0 0 1px rgba(255,255,255,0.1) inset; }
       .launcher:active { transform: scale(0.96); }
       .launcher.open { animation: none; transform: scale(1); }
       .launcher .icon-chat, .launcher .icon-close { position: absolute; transition: opacity 0.18s ease, transform 0.25s cubic-bezier(0.34,1.56,0.64,1); }
@@ -506,7 +506,7 @@ interface ChatResponse {
       .row.customer { align-self: flex-end; align-items: flex-end; }
       .bubble { padding: 10px 13px; border-radius: 15px; font-size: 13.5px; line-height: 1.48; white-space: pre-wrap; word-break: break-word; }
       .bubble.agent { background: var(--bubble-agent-bg); color: var(--bubble-agent-text); border: 1px solid var(--bubble-agent-border); border-bottom-left-radius: 4px; }
-      .bubble.customer { background: linear-gradient(135deg, var(--brand-1), var(--brand-2)); color: white; border-bottom-right-radius: 4px; box-shadow: 0 2px 10px rgba(74,94,245,0.25); }
+      .bubble.customer { background: linear-gradient(135deg, var(--brand-1), var(--brand-2)); color: white; border-bottom-right-radius: 4px; box-shadow: 0 2px 10px rgba(18,165,224,0.25); }
       .timestamp { font-size: 10px; color: var(--text-muted); margin-top: 4px; padding: 0 3px; }
 
       .bubble.typing { display: flex; align-items: center; gap: 4px; padding: 12px 14px; }
@@ -533,12 +533,12 @@ interface ChatResponse {
       .composer { display: flex; gap: 8px; padding: 13px; border-top: 1px solid var(--composer-border); background: var(--composer-bg); }
       .composer input { flex: 1; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 11px;
         padding: 10px 13px; color: var(--input-text); font-size: 13.5px; outline: none; transition: border-color 0.15s, background 0.15s; }
-      .composer input:focus { border-color: rgba(114,136,255,0.55); background: var(--input-focus-bg); }
+      .composer input:focus { border-color: rgba(53,189,240,0.55); background: var(--input-focus-bg); }
       .composer input::placeholder { color: var(--input-placeholder); }
       .composer button {
         background: linear-gradient(135deg, var(--brand-1), var(--brand-2)); border: none; color: white; border-radius: 11px;
         width: 42px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-        transition: transform 0.15s, opacity 0.2s, filter 0.15s; box-shadow: 0 2px 10px rgba(74,94,245,0.3);
+        transition: transform 0.15s, opacity 0.2s, filter 0.15s; box-shadow: 0 2px 10px rgba(18,165,224,0.3);
       }
       .composer button:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
       .composer button:active:not(:disabled) { transform: scale(0.94); }

@@ -82,10 +82,15 @@ model Tenant {
   /// never delete (CLAUDE.md Client Lifecycle), so converting later
   /// restores everything they built during the trial.
   trialEndsAt          DateTime?         @map("trial_ends_at")
-  managedSetupTier     ManagedSetupTier  @default(SELF_SERVE)
+  // Every client is fully managed (CLAUDE.md, LOCKED) — SELF_SERVE survives
+  // only for historical tenants. Only a DEFAULT change; existing rows keep
+  // their value.
+  managedSetupTier     ManagedSetupTier  @default(FULLY_MANAGED)
   delegatesAutoPublish Boolean           @default(false)
   dataRetentionDays    Int               @default(365)
-  theme                DashboardTheme    @default(DARK)
+  // Light is the platform-wide default. Only a DEFAULT change — existing
+  // tenants keep whatever theme they already have.
+  theme                DashboardTheme    @default(LIGHT)
   // White-label per-tenant dashboard branding, set by staff only (never
   // client-editable) — see apps/api routes/tenants.routes.ts branding
   // endpoints. logoObjectKey is an internal S3 key, never returned

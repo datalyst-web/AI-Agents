@@ -94,6 +94,7 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
           data: {
             id: randomUUID(),
             name: body.tenantName,
+            theme: "LIGHT",
             slug: `${slug}-${randomUUID().slice(0, 6)}`,
             subscriptionState: "ACTIVE",
             subscriptionTier: "STARTER",

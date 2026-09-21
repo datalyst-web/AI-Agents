@@ -28,6 +28,7 @@ async function main() {
     update: {},
     create: {
       name: "Demo Business",
+      theme: "LIGHT",
       slug: "demo",
       subscriptionState: "TRIAL",
       subscriptionTier: "GROWTH",

@@ -10,10 +10,8 @@
  * tailwind-preset.cjs) can still apply opacity modifiers —
  * `bg-surface-overlay/60`, `text-foreground/70`, etc. all keep working
  * exactly as before, just resolving to whichever theme is active.
- * Defaults to `dark` (the original, only palette) when no [data-theme]
- * is set yet, so nothing regresses before the tenant's preference loads.
+ * Defaults to light before a saved theme preference loads.
  */
-:root,
 [data-theme="dark"] {
   --color-surface: 8 9 15;
   --color-surface-raised: 15 17 25;
@@ -44,6 +42,7 @@
   --color-accent: 234 61 51; /* accent-500, the logo red — 4.9:1 on the dark surface */
 }
 
+:root:not([data-theme]),
 [data-theme="light"] {
   --color-surface: 247 248 252;
   --color-surface-raised: 255 255 255;

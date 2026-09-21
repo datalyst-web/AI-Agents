@@ -100,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         // Staff's own unscoped home has no tenant to persist a theme
         // preference against (the API's theme endpoint is tenant-scoped) —
-        // /me always answers "DARK" here, so fall back to whatever this
+        // /me answers "LIGHT" here, so fall back to whatever this
         // browser last chose locally instead, same as
         // getLocalStaffTheme()/setTheme() below.
         setUser(me.tenantId ? me : { ...me, theme: getLocalStaffTheme() ?? me.theme });
@@ -123,7 +123,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // globals.css). Runs before paint's worth of delay is fine here: theme
   // only changes on login/impersonation-switch, not per-navigation.
   useEffect(() => {
-    document.documentElement.dataset.theme = (user?.theme ?? "DARK").toLowerCase();
+    if (user?.theme) {
+      document.documentElement.dataset.theme = user.theme.toLowerCase();
+      return;
+    }
+    let theme = "light";
+    try {
+      const saved = localStorage.getItem("datalyst:public-theme");
+      if (saved === "dark" || saved === "light") theme = saved;
+    } catch {
+      // Storage may be unavailable; keep the light default.
+    }
+    document.documentElement.dataset.theme = theme;
   }, [user?.theme]);
 
   // Shared tail for every path that ends in a real session.

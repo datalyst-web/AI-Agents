@@ -20,19 +20,16 @@ export const metadata: Metadata = {
 const PUBLIC_THEME_BOOTSTRAP = `(function(){try{
 if(["/","/guide","/terms","/privacy","/login","/signup","/forgot-password","/reset-password","/accept-invite"].indexOf(location.pathname.replace(/\\/$/,"")||"/")===-1)return;
 var t=localStorage.getItem("datalyst:public-theme");
-if(t!=="light"&&t!=="dark")t=window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";
+if(t!=="light"&&t!=="dark")t="light";
 document.documentElement.dataset.theme=t;
 }catch(e){}})()`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    // Server-rendered default so pre-auth pages (login, signup, forgot/reset
-    // password) are guaranteed dark from first paint — no reliance on the
-    // client-side theme effect running first. AuthProvider's own effect
-    // (lib/auth.tsx) overwrites this attribute once a real user with a real
-    // theme preference loads; until then (including anyone not signed in)
-    // it stays exactly this.
-    <html lang="en" data-theme="dark">
+    // Start light on every page; saved preferences are applied by the
+    // bootstrap script or AuthProvider. The script can change this attribute
+    // before hydration, so React must allow that expected difference.
+    <html lang="en" data-theme="light" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: PUBLIC_THEME_BOOTSTRAP }} />
       </head>
