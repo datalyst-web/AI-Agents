@@ -67,6 +67,9 @@ export function buildWorkerContext(): WorkerContext {
   const redis = new Redis(env.REDIS_URL);
   const email = createEmailProviderFromEnv({
     GMAIL_SERVICE_ACCOUNT_JSON: env.GMAIL_SERVICE_ACCOUNT_JSON,
+    GMAIL_OAUTH_CLIENT_ID: env.GMAIL_OAUTH_CLIENT_ID,
+    GMAIL_OAUTH_CLIENT_SECRET: env.GMAIL_OAUTH_CLIENT_SECRET,
+    GMAIL_OAUTH_REFRESH_TOKEN: env.GMAIL_OAUTH_REFRESH_TOKEN,
     SMTP_HOST: env.SMTP_HOST,
     SMTP_PORT: env.SMTP_PORT,
     SMTP_SECURE: env.SMTP_SECURE,

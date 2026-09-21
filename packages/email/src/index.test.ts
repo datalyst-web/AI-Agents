@@ -117,6 +117,36 @@ describe("GmailApiEmailProvider", () => {
   });
 });
 
+describe("GmailApiEmailProvider with the mailbox's own consent (refresh token)", () => {
+  const oauth = { clientId: "client-1.apps.googleusercontent.com", clientSecret: "secret-1", refreshToken: "refresh-1" };
+
+  it("exchanges the refresh token for an access token, then sends", async () => {
+    const google = fakeGoogle();
+    const provider = new GmailApiEmailProvider({ oauth, fromAddress: FROM, fetchImpl: google.fetchImpl });
+
+    expect(await provider.send({ to: "customer@example.org", subject: "Hi", text: "Body" })).toEqual({ sent: true });
+
+    const form = new URLSearchParams(String(google.calls[0]!.init.body));
+    expect(Object.fromEntries(form)).toEqual({
+      grant_type: "refresh_token",
+      client_id: oauth.clientId,
+      client_secret: oauth.clientSecret,
+      refresh_token: oauth.refreshToken,
+    });
+    expect((google.calls[1]!.init.headers as Record<string, string>).authorization).toBe("Bearer tok-1");
+  });
+
+  it("reports revoked consent without leaking the token", async () => {
+    const google = fakeGoogle({ tokenStatus: 400, tokenBody: { error: "invalid_grant", error_description: "Token has been expired or revoked." } });
+    const provider = new GmailApiEmailProvider({ oauth, fromAddress: FROM, fetchImpl: google.fetchImpl });
+
+    const result = await provider.send({ to: "a@example.org", subject: "x", text: "x" });
+    expect(result).toEqual({ sent: false, error: "google_token_invalid_grant: Token has been expired or revoked." });
+    expect(result.error).not.toContain("refresh-1");
+    expect(result.error).not.toContain("secret-1");
+  });
+});
+
 describe("parseGoogleServiceAccount", () => {
   it("accepts the key file as JSON or base64", () => {
     const text = JSON.stringify({ type: "service_account", ...serviceAccount });
@@ -136,6 +166,13 @@ describe("createEmailProviderFromEnv", () => {
   it("prefers the Gmail API over SMTP when both are configured", () => {
     const provider = createEmailProviderFromEnv({ ...smtp, GMAIL_SERVICE_ACCOUNT_JSON: JSON.stringify(serviceAccount) });
     expect(provider).toBeInstanceOf(GmailApiEmailProvider);
+  });
+
+  it("prefers the mailbox's own consent when all three OAuth settings are present", () => {
+    const oauthEnv = { GMAIL_OAUTH_CLIENT_ID: "c", GMAIL_OAUTH_CLIENT_SECRET: "s", GMAIL_OAUTH_REFRESH_TOKEN: "r" };
+    expect(createEmailProviderFromEnv({ ...smtp, ...oauthEnv, GMAIL_SERVICE_ACCOUNT_JSON: "{broken" })).toBeInstanceOf(GmailApiEmailProvider);
+    // Partial OAuth settings don't count — fall through to SMTP.
+    expect(createEmailProviderFromEnv({ ...smtp, GMAIL_OAUTH_CLIENT_ID: "c" })).toBeInstanceOf(SmtpEmailProvider);
   });
 
   it("falls back to SMTP, then to the logging no-op", () => {

@@ -83,6 +83,12 @@ export const EnvSchema = z.object({
   // through Gmail's HTTPS API as SMTP_FROM_ADDRESS instead of SMTP — needed
   // on Railway, which blocks outbound SMTP below the Pro plan.
   GMAIL_SERVICE_ACCOUNT_JSON: z.string().optional(),
+  // Alternative that needs no Workspace admin: the mailbox's own one-time
+  // consent, produced by infra/scripts/gmail-authorize.mjs. All three are
+  // required together, and take priority over the service account.
+  GMAIL_OAUTH_CLIENT_ID: z.string().optional(),
+  GMAIL_OAUTH_CLIENT_SECRET: z.string().optional(),
+  GMAIL_OAUTH_REFRESH_TOKEN: z.string().optional(),
 
   // Platform transactional SMS (escalation alerts) — see
   // packages/sms. Left unset in dev/test, where the Noop provider logs
