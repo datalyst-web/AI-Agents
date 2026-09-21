@@ -78,6 +78,11 @@ export const EnvSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
   SMTP_FROM_ADDRESS: z.string().optional(),
+  // Google Workspace service account key (JSON, or base64 of it) with
+  // domain-wide delegation for the gmail.send scope. When set, email goes
+  // through Gmail's HTTPS API as SMTP_FROM_ADDRESS instead of SMTP — needed
+  // on Railway, which blocks outbound SMTP below the Pro plan.
+  GMAIL_SERVICE_ACCOUNT_JSON: z.string().optional(),
 
   // Platform transactional SMS (escalation alerts) — see
   // packages/sms. Left unset in dev/test, where the Noop provider logs

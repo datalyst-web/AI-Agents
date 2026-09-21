@@ -75,6 +75,7 @@ export function buildAppContext(): AppContext {
   const objectStore = new ObjectStore(env.S3_BUCKET, env.S3_KEY_PREFIX, env.AWS_REGION, env.S3_ENDPOINT);
 
   const email = createEmailProviderFromEnv({
+    GMAIL_SERVICE_ACCOUNT_JSON: env.GMAIL_SERVICE_ACCOUNT_JSON,
     SMTP_HOST: env.SMTP_HOST,
     SMTP_PORT: env.SMTP_PORT,
     SMTP_SECURE: env.SMTP_SECURE,
