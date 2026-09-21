@@ -70,11 +70,45 @@ export async function buildApp(ctx: AppContext = buildAppContext()) {
   });
 
   // Uses Fastify's onError hook internally (not setErrorHandler), so this
-  // coexists cleanly with the custom setErrorHandler registered at the
-  // bottom of this function — Sentry just observes/reports errors here,
-  // the custom handler still owns the actual HTTP response. A no-op when
-  // SENTRY_DSN isn't set (see instrument.ts).
+  // coexists cleanly with the custom setErrorHandler below — Sentry just
+  // observes/reports errors here, the custom handler still owns the actual
+  // HTTP response. A no-op when SENTRY_DSN isn't set (see instrument.ts).
   Sentry.setupFastifyErrorHandler(app);
+
+  // MUST be set before any route or plugin is registered: Fastify captures
+  // the error handler into each route's context at registration time, so
+  // this used to sit at the bottom of the function and applied to no route
+  // at all. Every 500 went out through Fastify's default handler instead,
+  // whose body carries the raw error message — a database outage handed
+  // any anonymous caller the database host, port and vendor, and showed
+  // the same text on the login page.
+  app.setErrorHandler((err: FastifyError, request, reply) => {
+    // Prisma's "record required but not found" (findFirstOrThrow, a
+    // delete/update targeting an id that's gone, etc.) has no .statusCode
+    // of its own, so it would otherwise surface as a 500 — scary and wrong
+    // for what's really just a 404, e.g. re-fetching an agent right after
+    // deleting it.
+    if ((err as { code?: string }).code === "P2025") {
+      reply.code(404).send({ error: "not_found" });
+      return;
+    }
+    // Schema.parse() on a request body throws a ZodError, which carries no
+    // statusCode — it's the caller's bad input, so 400 with the first
+    // issue's message (which describes their input, never our internals).
+    if (err.name === "ZodError") {
+      const issue = (err as unknown as { issues?: { message?: string }[] }).issues?.[0];
+      reply.code(400).send({ error: "invalid_request", message: issue?.message ?? "Some of the details sent were invalid." });
+      return;
+    }
+    const statusCode = err.statusCode ?? 500;
+    if (statusCode >= 500) {
+      request.log.error(err);
+      // Never err.message here — the full error is in the log and Sentry.
+      reply.code(statusCode).send({ error: "internal_error", message: "Something went wrong on our side. Please try again in a moment." });
+      return;
+    }
+    reply.code(statusCode).send({ error: err.message });
+  });
 
   // A single CORS registration, policy chosen per-request via the
   // `delegator` callback (registering @fastify/cors twice — once per route
@@ -141,21 +175,6 @@ export async function buildApp(ctx: AppContext = buildAppContext()) {
   await registerPlatformAnalyticsRoutes(app, ctx);
   await registerMemoryRoutes(app, ctx);
   await registerPaynowBillingRoutes(app, ctx); // includes a server-to-server webhook — CORS is moot there, no browser involved
-
-  app.setErrorHandler((err: FastifyError, request, reply) => {
-    request.log.error(err);
-    // Prisma's "record required but not found" (findFirstOrThrow, a
-    // delete/update targeting an id that's gone, etc.) has no .statusCode
-    // of its own, so it fell through to a raw 500 "internal_error" —
-    // scary and wrong for what's really just a 404, e.g. re-fetching an
-    // agent right after deleting it. Every findFirstOrThrow across the
-    // app benefits from this, not just one route.
-    const isPrismaNotFound = (err as { code?: string }).code === "P2025";
-    const statusCode = isPrismaNotFound ? 404 : (err.statusCode ?? 500);
-    reply.code(statusCode).send({
-      error: isPrismaNotFound ? "not_found" : statusCode >= 500 ? "internal_error" : err.message,
-    });
-  });
 
   return app;
 }
