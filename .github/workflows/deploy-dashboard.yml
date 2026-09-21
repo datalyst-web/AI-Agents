@@ -1,4 +1,4 @@
-name: Deploy dashboard (Vercel)
+name: Deploy dashboard
 
 # Real deploy target: the Vercel project `datalyst3/dashboard`, rootDirectory
 # apps/dashboard. Must run from the repo ROOT (not apps/dashboard) — Vercel's
@@ -20,7 +20,7 @@ env:
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ vars.DASHBOARD_HOST != 'railway' && (github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,3 +38,20 @@ jobs:
         run: vercel deploy --prod --yes --token="$VERCEL_TOKEN"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+  deploy-railway:
+    # Enable only after provisioning and verifying the dashboard service,
+    # public build variables, and domain. Until then Vercel remains active.
+    if: ${{ vars.DASHBOARD_HOST == 'railway' && (github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      - name: Deploy dashboard to Railway
+        run: railway up --service dashboard --environment production --ci
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: 15de703e-d006-43d8-837f-10b800abb87e

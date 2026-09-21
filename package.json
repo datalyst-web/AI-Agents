@@ -17,6 +17,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "pnpm -r run build && vitest run",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
     "db:generate": "pnpm --filter @chat-agent/db run generate",
     "db:migrate": "pnpm --filter @chat-agent/db run migrate",
     "clean": "turbo run clean && rimraf node_modules"

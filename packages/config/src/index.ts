@@ -1,6 +1,9 @@
 import { z } from "zod";
 
 const ProviderNameSchema = z.enum(["anthropic", "openai", "gemini"]);
+// Environment variables are strings: JavaScript Boolean("false") is true.
+// Reject typos rather than silently enabling a security-sensitive setting.
+const EnvBooleanSchema = z.union([z.boolean(), z.enum(["true", "false"])]).transform((value) => value === true || value === "true");
 
 /**
  * Single source of truth for environment shape, shared by apps/api,
@@ -195,7 +198,7 @@ export const EnvSchema = z.object({
   // AWS Secrets Manager in production, and this must stay opt-in (never
   // silently allowed) so a careless deploy doesn't accidentally ship with
   // secrets sitting in plain env vars. Revisit once real AWS infra exists.
-  ALLOW_ENV_SECRETS_IN_PRODUCTION: z.coerce.boolean().default(false),
+  ALLOW_ENV_SECRETS_IN_PRODUCTION: EnvBooleanSchema.default(false),
 
   // Defaults to true — every login stops at an emailed 6-digit code (see
   // auth.routes.ts's issueTwoFactorCode). Exists as a single reversible
@@ -204,7 +207,7 @@ export const EnvSchema = z.object({
   // anyone, so login is unusable until it's fixed. Setting this to false
   // reverts to single-step (password or Google) login without any code
   // change or redeploy — flip it back to true the moment email works again.
-  REQUIRE_TWO_FACTOR: z.coerce.boolean().default(true),
+  REQUIRE_TWO_FACTOR: EnvBooleanSchema.default(true),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

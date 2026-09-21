@@ -40,8 +40,8 @@ jobs:
       # The app's own DATABASE_URL is a least-privilege role with no DDL
       # rights (correct, and staying that way), so this needs the database
       # owner's URL in DATABASE_MIGRATE_URL — set as a Railway variable on
-      # the `api` service, which `railway run` injects here. Skips cleanly
-      # when it isn't set rather than failing the deploy.
+      # the `api` service, which `railway run` injects here. Missing migration
+      # credentials must stop the release before either service deploys.
       - name: Set up Node + pnpm
         uses: actions/setup-node@v4
         with:
@@ -62,8 +62,8 @@ jobs:
         run: |
           railway run --service api --environment production -- bash -euo pipefail -c '
             if [ -z "${DATABASE_MIGRATE_URL:-}" ]; then
-              echo "DATABASE_MIGRATE_URL not set — skipping schema apply."
-              exit 0
+              echo "::error::DATABASE_MIGRATE_URL is required; refusing to deploy without applying schema and RLS."
+              exit 1
             fi
             export DATABASE_URL="$DATABASE_MIGRATE_URL"
             echo "--- schema changes to be applied ---"

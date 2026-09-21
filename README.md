@@ -64,13 +64,16 @@ local API:
 
 ## Deploying
 
-This product deploys onto the **same shared AWS platform** as the Voice
-Agent product — see [infra/README.md](infra/README.md) for the exact
-resources this adds (new ECS services in the existing cluster, a new
-Postgres schema in the existing Aurora cluster, new SQS queues, IAM scoped
-to `chat/*` secrets and S3 keys) versus what it reuses. `.github/workflows/`
-builds and pushes each service's image and rolls the corresponding ECS
-service — no separate infrastructure to provision per product.
+**Current production deployment:** the API and workers run on Railway,
+the dashboard and widget on Vercel, the database on Neon, and object
+storage on Cloudflare R2. See [production readiness](docs/production-readiness.md)
+for verified status and launch blockers. The AWS design below is the
+original infrastructure plan, not the active deployment.
+
+`.github/workflows/deploy.yml` deploys API/workers to Railway, and
+`deploy-dashboard.yml` deploys the dashboard to Vercel after CI passes.
+The dashboard build includes the widget. The earlier shared-AWS design
+remains under [infra/README.md](infra/README.md) for reference.
 
 ## What's here vs. what's next
 
@@ -84,6 +87,11 @@ Record agent loop, Managed Setup / staff impersonation with full audit
 trail, the embeddable widget, and the client dashboard.
 
 Before pointing this at real traffic:
+
+Use the current [launch tracker](docs/production-readiness.md) first.
+The list below is historical architecture guidance; its AWS deployment
+step and generic vendor-adapter description do not reflect current hosting
+and the dedicated integrations now implemented in the API.
 
 1. **API keys** — fill in `.env` (Anthropic/OpenAI/Gemini, and any
    CRM/email/calendar vendor credentials for the tools you enable). This
