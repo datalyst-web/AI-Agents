@@ -56,7 +56,10 @@ export default function OverviewPage() {
     api
       .getUsageDaily(user.tenantId, 14)
       .then((data) => setDaily(data))
-      .catch(() => setDaily([]));
+      .catch((err) => {
+        setDaily([]);
+        onFail(err);
+      });
   }, [user]);
 
   const liveCount = agents ? agents.filter((a) => a.status === "LIVE").length : 0;

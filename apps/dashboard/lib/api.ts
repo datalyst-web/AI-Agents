@@ -199,6 +199,8 @@ export const api = {
     apiFetch(`/v1/platform/tenants/${tenantId}/branding`, { method: "PATCH", body: JSON.stringify({ brandName }) }),
   uploadClientLogo: (tenantId: string, file: File) => uploadLogo(`/v1/platform/tenants/${tenantId}/branding/logo`, file),
 
+  /** Staff-only. AI providers that actually have credentials, in the order they answer — the first is the effective default. */
+  getConfiguredAiProviders: () => apiFetch<{ configured: ("anthropic" | "openai" | "gemini")[] }>("/v1/platform/ai-providers"),
   listStaff: () =>
     apiFetch<{ id: string; email: string; displayName: string; role: string; isActive: boolean; createdAt: string }[]>(
       "/v1/platform/staff",

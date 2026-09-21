@@ -94,6 +94,17 @@ export class ModelRouter {
     this.usageListeners.push(listener);
   }
 
+  /**
+   * Providers that actually have credentials, in the order an agent with no
+   * preference is answered — so the first entry is the effective default.
+   * An agent that prefers an unconfigured provider is silently served by
+   * this chain (see resolveChain), which the agent screen needs to show
+   * rather than pretend the preference took effect. Names only, never keys.
+   */
+  configuredProviders(): ProviderName[] {
+    return this.defaultChain.filter((p) => this.providers[p] !== undefined);
+  }
+
   private emitUsage(event: RouterUsageEvent): void {
     for (const l of this.usageListeners) l(event);
   }

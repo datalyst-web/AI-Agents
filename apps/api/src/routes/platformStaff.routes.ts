@@ -25,6 +25,18 @@ const CreateStaffSchema = z.object({
  * platform_admin account can still be chosen explicitly when needed.
  */
 export async function registerPlatformStaffRoutes(app: FastifyInstance, ctx: AppContext) {
+  /**
+   * Which AI providers actually have credentials on this deployment, in the
+   * order they answer — the first is the effective default. Lets the
+   * agent-configuration screen show the truth instead of offering a
+   * provider (and its model tiers) that would silently never run. Staff
+   * only: naming the provider is exactly what principle 6 keeps from
+   * clients. Names only; credentials never leave the server.
+   */
+  app.get("/v1/platform/ai-providers", { preHandler: [app.authenticate, requireStaff()] }, async () => {
+    return { configured: ctx.router.configuredProviders() };
+  });
+
   app.get("/v1/platform/staff", { preHandler: [app.authenticate, requireStaff()] }, async () => {
     return withPlatformContext(ctx.prisma, (tx) =>
       tx.user.findMany({

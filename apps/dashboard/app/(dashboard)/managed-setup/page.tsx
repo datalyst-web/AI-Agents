@@ -96,8 +96,24 @@ export default function ManagedSetupPage() {
   function refresh() {
     if (!user) return;
     api.listManagedSetupQueue().then(setQueue).catch((err) => setError(err instanceof ApiError ? err.message : "Could not load the queue."));
-    api.listStaff().then(setStaff).catch(() => setStaff([]));
-    api.listBrandingPresets().then(setPresets).catch(() => setPresets([]));
+    // A failed load must not read as "no staff" or "no presets" — staff
+    // would think their team or saved branding had been deleted.
+    api
+      .listStaff()
+      .then(setStaff)
+      .catch((err) => {
+        setStaff([]);
+        // Page-level, not staffError — that one only renders inside the
+        // "Add staff" dialog, so a list failure there would stay invisible.
+        setError(err instanceof ApiError ? `Could not load staff: ${err.message}` : "Could not load staff.");
+      });
+    api
+      .listBrandingPresets()
+      .then(setPresets)
+      .catch((err) => {
+        setPresets([]);
+        setError(err instanceof ApiError ? `Could not load branding presets: ${err.message}` : "Could not load branding presets.");
+      });
   }
   useEffect(refresh, [user]);
 

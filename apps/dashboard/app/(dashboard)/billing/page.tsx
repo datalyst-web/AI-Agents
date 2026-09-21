@@ -79,7 +79,12 @@ function BillingPageContent() {
     api
       .listPaynowPayments(user.tenantId)
       .then(setPayments)
-      .catch(() => setPayments([]));
+      .catch((err) => {
+        setPayments([]);
+        // Never let a failed load pass as "no payments" — on a billing page
+        // that reads as a payment that vanished.
+        setError(err instanceof ApiError ? `Could not load payment history: ${err.message}` : "Could not load payment history.");
+      });
   }
 
   useEffect(() => {
@@ -103,7 +108,10 @@ function BillingPageContent() {
     api
       .getUsageDaily(user.tenantId, 30)
       .then((d) => setDaily(d))
-      .catch(() => setDaily([]));
+      .catch((err) => {
+        setDaily([]);
+        setError(err instanceof ApiError ? `Could not load daily usage: ${err.message}` : "Could not load daily usage.");
+      });
     refreshBilling();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -119,6 +127,21 @@ function BillingPageContent() {
     router.replace("/billing");
     pollAttempts.current = 0;
 
+    // A failed check counts as an attempt and is retried, same as a
+    // still-pending one. Dropping it (the old .catch) ended polling in
+    // silence, so a client who had just paid saw nothing at all.
+    const retryOrGiveUp = () => {
+      pollAttempts.current += 1;
+      if (pollAttempts.current < 10) {
+        setTimeout(poll, 2000);
+      } else {
+        setReturnNotice({
+          tone: "warning",
+          text: "Still waiting on confirmation from Paynow — this can take a minute. Refresh shortly, or check Recent payments below.",
+        });
+      }
+    };
+
     const poll = () => {
       api
         .getPaynowPayment(user.tenantId, reference)
@@ -132,17 +155,9 @@ function BillingPageContent() {
             setReturnNotice({ tone: "danger", text: `Payment ${payment.status.toLowerCase()} — nothing was charged.` });
             return;
           }
-          pollAttempts.current += 1;
-          if (pollAttempts.current < 10) {
-            setTimeout(poll, 2000);
-          } else {
-            setReturnNotice({
-              tone: "warning",
-              text: "Still waiting on confirmation from Paynow — this can take a minute. Refresh shortly, or check Recent payments below.",
-            });
-          }
+          retryOrGiveUp();
         })
-        .catch(() => undefined);
+        .catch(retryOrGiveUp);
     };
     poll();
     // eslint-disable-next-line react-hooks/exhaustive-deps

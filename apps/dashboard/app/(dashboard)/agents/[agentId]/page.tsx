@@ -19,6 +19,12 @@ interface AgentDetail {
   };
 }
 
+const PROVIDER_LABELS: Record<AgentDetail["modelRouting"]["preferredProvider"], string> = {
+  anthropic: "Anthropic",
+  openai: "OpenAI",
+  gemini: "Gemini",
+};
+
 const ANTHROPIC_TIER_LABELS: Record<string, string> = {
   haiku: "Haiku — fastest, most affordable",
   sonnet: "Sonnet — balanced (recommended)",
@@ -302,6 +308,12 @@ export default function AgentDetailPage() {
   const [rollingBackTo, setRollingBackTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [agentLoadError, setAgentLoadError] = useState<string | null>(null);
+  // A tab's data failing to load. Kept apart from `error` (failed saves) so
+  // switching tabs clears a stale load failure without hiding a save error.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // Staff-only (Configuration tab). Null until loaded; the first entry is
+  // whichever provider actually answers an agent with no preference.
+  const [configuredProviders, setConfiguredProviders] = useState<AgentDetail["modelRouting"]["preferredProvider"][] | null>(null);
   const [faqQ, setFaqQ] = useState("");
   const [faqA, setFaqA] = useState("");
   const [crawlUrl, setCrawlUrl] = useState("");
@@ -460,8 +472,17 @@ export default function AgentDetailPage() {
       .catch((err) => setKnowledgeError(err instanceof ApiError ? err.message : "Could not load knowledge sources."));
   }
 
+  // A failed load must say so. Falling back to an empty list alone renders
+  // "No conversations yet" for data that exists but didn't load — the same
+  // bug that once hid every message in the Live Inbox.
+  function loadFailed(what: string) {
+    return (err: unknown) =>
+      setLoadError(err instanceof ApiError ? `Couldn't load ${what}: ${err.message}` : `Couldn't load ${what}. Refresh to try again.`);
+  }
+
   function refreshConversations() {
     if (!user) return;
+    setLoadError(null);
     setConversationsLoading(true);
     api
       .listConversations(user.tenantId, agentId, {
@@ -471,7 +492,10 @@ export default function AgentDetailPage() {
         until: conversationUntilFilter || undefined,
       })
       .then((d) => setConversations(d as Conversation[]))
-      .catch(() => setConversations([]))
+      .catch((err) => {
+        setConversations([]);
+        loadFailed("conversations")(err);
+      })
       .finally(() => setConversationsLoading(false));
   }
 
@@ -499,27 +523,42 @@ export default function AgentDetailPage() {
   }, [conversationOutcomeFilter, conversationChannelFilter, conversationSinceFilter, conversationUntilFilter]);
   useEffect(() => {
     if (!user) return;
+    setLoadError(null);
     if (tab === "Knowledge") refreshKnowledge();
-    if (tab === "Configuration")
+    if (tab === "Configuration") {
       api
         .listAgentVersions(user.tenantId, agentId)
         .then(setVersions)
-        .catch(() => setVersions([]));
+        .catch(loadFailed("version history"));
+      api
+        .getConfiguredAiProviders()
+        .then((r) => setConfiguredProviders(r.configured))
+        .catch(loadFailed("AI provider status"));
+    }
     if (tab === "Conversations") refreshConversations();
     if (tab === "Analytics") {
       api
         .getAnalytics(user.tenantId, agentId)
         .then((d) => setAnalytics(d as Analytics))
-        .catch(() => setAnalytics(null));
+        .catch(loadFailed("analytics"));
       api
         .getAnalyticsDaily(user.tenantId, agentId, 14)
         .then(setDailyAnalytics)
-        .catch(() => setDailyAnalytics([]));
+        .catch((err) => {
+          setDailyAnalytics([]);
+          loadFailed("analytics")(err);
+        });
       api
         .getGapReport(user.tenantId, agentId)
         .then(setGapReport)
-        .catch(() => setGapReport([]));
+        .catch((err) => {
+          setGapReport([]);
+          loadFailed("unanswered questions")(err);
+        });
     }
+    // Deliberately keyed on the tab/agent only: the refresh helpers are
+    // recreated every render, so listing them would re-fetch in a loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, user, agentId]);
 
   async function saveInstructions(e: FormEvent) {
@@ -711,6 +750,7 @@ export default function AgentDetailPage() {
         </div>
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
+      {loadError ? <p className="text-xs text-danger">{loadError}</p> : null}
       {agent.status === "TESTING" && impersonation ? (
         <p className="text-xs text-foreground/40">
           Only <span className="text-foreground/70">{impersonation.tenantName}</span> can approve this stage — ask them to log in
@@ -922,27 +962,40 @@ export default function AgentDetailPage() {
           </Card>
 
           <Card>
-            <CardHeader title="AI Model" subtitle="Which model powers this agent's responses. Anthropic Claude is the default — the most reliable choice for accuracy and instruction-following." />
+            <CardHeader
+              title="AI Model"
+              subtitle="The provider this agent prefers. If it isn't connected, replies automatically come from the next connected provider, so the agent never goes silent."
+            />
             <CardBody className="space-y-4">
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-foreground/60">Provider</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {(["anthropic", "openai", "gemini"] as const).map((provider) => (
-                    <button
-                      key={provider}
-                      type="button"
-                      onClick={() => setAgent({ ...agent, modelRouting: { ...agent.modelRouting, preferredProvider: provider } })}
-                      className={`rounded-lg border px-3 py-2.5 text-sm font-medium capitalize transition-colors ${
-                        agent.modelRouting.preferredProvider === provider
-                          ? "border-brand-500/50 bg-brand-500/15 text-foreground"
-                          : "border-foreground/10 bg-foreground/5 text-foreground/60 hover:text-foreground/80"
-                      }`}
-                    >
-                      {provider}
-                      {provider === "anthropic" ? <span className="ml-1 text-[10px] text-brand-link">default</span> : null}
-                    </button>
-                  ))}
+                  {(["anthropic", "openai", "gemini"] as const).map((provider) => {
+                    const connected = configuredProviders === null || configuredProviders.includes(provider);
+                    return (
+                      <button
+                        key={provider}
+                        type="button"
+                        onClick={() => setAgent({ ...agent, modelRouting: { ...agent.modelRouting, preferredProvider: provider } })}
+                        className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                          agent.modelRouting.preferredProvider === provider
+                            ? "border-brand-500/50 bg-brand-500/15 text-foreground"
+                            : "border-foreground/10 bg-foreground/5 text-foreground/60 hover:text-foreground/80"
+                        } ${connected ? "" : "opacity-60"}`}
+                      >
+                        {PROVIDER_LABELS[provider]}
+                        {configuredProviders?.[0] === provider ? <span className="ml-1 text-[10px] text-brand-link">default</span> : null}
+                        {connected ? null : <span className="block text-[10px] font-normal text-foreground/45">not connected</span>}
+                      </button>
+                    );
+                  })}
                 </div>
+                {configuredProviders && !configuredProviders.includes(agent.modelRouting.preferredProvider) ? (
+                  <p className="mt-2 text-xs text-warning">
+                    {PROVIDER_LABELS[agent.modelRouting.preferredProvider]} isn&apos;t connected, so this agent is currently answered by{" "}
+                    {configuredProviders[0] ? PROVIDER_LABELS[configuredProviders[0]] : "no provider — add an API key before going live"}.
+                  </p>
+                ) : null}
               </div>
 
               {agent.modelRouting.preferredProvider === "anthropic" ? (
@@ -964,7 +1017,11 @@ export default function AgentDetailPage() {
                       </option>
                     ))}
                   </select>
-                  <p className="mt-1.5 text-xs text-foreground/40">Which Claude tier depends on your plan — you can change this any time.</p>
+                  <p className="mt-1.5 text-xs text-foreground/40">
+                    {configuredProviders && !configuredProviders.includes("anthropic")
+                      ? "Takes effect once Anthropic is connected — until then this setting is saved but unused."
+                      : "You can change this any time."}
+                  </p>
                 </div>
               ) : null}
 
@@ -1161,7 +1218,7 @@ export default function AgentDetailPage() {
           ) : (
             <CardBody className="divide-y divide-surface-border p-0">
               {conversations.length === 0 ? (
-                <p className="px-5 py-6 text-sm text-foreground/40">No conversations yet.</p>
+                <p className="px-5 py-6 text-sm text-foreground/40">{loadError ? "Conversations couldn't be loaded." : "No conversations yet."}</p>
               ) : (
                 conversations.map((c) => (
                   <div key={c.id} className="flex flex-wrap items-center justify-between gap-y-2 px-5 py-3 text-sm">

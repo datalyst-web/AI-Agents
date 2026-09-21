@@ -25,6 +25,9 @@ function AcceptInviteForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The lookup itself failed (network/server) — distinct from `invite ===
+  // null`, which means the API positively rejected the link.
+  const [lookupFailed, setLookupFailed] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -34,7 +37,13 @@ function AcceptInviteForm() {
     api
       .lookupInvite(token)
       .then(setInvite)
-      .catch(() => setInvite(null));
+      .catch((err) => {
+        // Only the API's explicit rejection means the link is dead. Any
+        // other failure (network, server) would otherwise tell someone
+        // holding a perfectly valid invite to go and ask for a new one.
+        if (err instanceof ApiError && err.status === 400) setInvite(null);
+        else setLookupFailed(true);
+      });
   }, [token]);
 
   async function onSubmit(e: FormEvent) {
@@ -51,6 +60,14 @@ function AcceptInviteForm() {
       setError(err instanceof ApiError ? err.message : "That invite is invalid or has expired.");
       setBusy(false);
     }
+  }
+
+  if (lookupFailed) {
+    return (
+      <p className="text-sm text-foreground/50">
+        We couldn&apos;t check this invite just now. Refresh the page to try again — the link itself is probably fine.
+      </p>
+    );
   }
 
   if (invite === undefined) {
