@@ -62,9 +62,15 @@ export default defineConfig({
     // connection string to the -pooler endpoint did not, since it
     // resolves to the same proxy IPs as the direct endpoint).
     fileParallelism: false,
-    // Loaded values only fill in keys not already present in the real
-    // process.env, so CI/shell-provided overrides always win.
-    env: loadDotEnvFile(resolve(rootDir, ".env.test")),
+    // .env.test only fills keys the real environment doesn't set, so
+    // CI/shell-provided values always win. vitest's `env` option overwrites
+    // process.env in the workers, so the filtering has to happen here — it
+    // used to pass the whole file straight through, which silently pointed
+    // the tests at .env.test's database while vitest.setup.ts's guard (which
+    // does honour process.env first) had checked a different one.
+    env: Object.fromEntries(
+      Object.entries(loadDotEnvFile(resolve(rootDir, ".env.test"))).filter(([key]) => process.env[key] === undefined),
+    ),
     // Runs once before any test file: refuses to touch a database that
     // already holds real tenants, since these tests create and delete
     // tenant data. See vitest.setup.ts.
