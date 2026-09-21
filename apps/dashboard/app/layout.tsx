@@ -4,8 +4,12 @@ import { AuthProvider } from "@/lib/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Chat Agent Dashboard",
-  description: "Manage your AI chat agents, knowledge base, and conversations.",
+  // No title template on purpose: the public pages already set full,
+  // self-branded titles ("Terms of Service — Datalyst Africa"), which a
+  // template would double. Dashboard pages set their own at runtime —
+  // see the (dashboard) layout — to follow a client's white-label brand.
+  title: "Datalyst Africa",
+  description: "AI chat agents for your business, built and managed for you by Datalyst Africa.",
 };
 
 /**

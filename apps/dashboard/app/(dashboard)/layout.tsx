@@ -101,6 +101,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     if (!loading && !user) router.push("/login");
   }, [loading, user, router]);
 
+  // The browser tab follows the same branding as the sidebar: a client's
+  // own white-label name once staff have set one, the platform's otherwise.
+  // Keyed on pathname too, because Next.js re-applies the root layout's
+  // static title on every client-side navigation.
+  useEffect(() => {
+    if (!user) return;
+    const brand = isStaff && !impersonation ? null : (user.brandName ?? user.platformBrandName);
+    document.title = brand ?? "Datalyst Africa";
+  }, [user, isStaff, impersonation, pathname]);
+
   useEffect(() => {
     if (!loading && isStaff && !impersonation && !staffNav.some((item) => item.href === pathname)) {
       router.push("/managed-setup");
