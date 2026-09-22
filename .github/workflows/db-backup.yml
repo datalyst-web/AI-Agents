@@ -1,0 +1,68 @@
+name: Database backup
+
+# Railway's Hobby plan takes no database backups, so this does: daily at
+# 01:30 UTC (03:30 in Harare), plus on demand from the Actions tab. See
+# infra/scripts/backup-database.sh for what each run does — including a
+# real restore into a throwaway database before anything is uploaded.
+#
+# To restore: download the .dump from R2 (backups/postgres/YYYY/MM/), create
+# a fresh database with infra/scripts/bootstrap-database.mjs, then
+#   pg_restore --dbname="$OWNER_URL" --no-owner --clean --if-exists db-....dump
+# and re-run packages/db/prisma/sql/rls_policies.sql.
+on:
+  schedule:
+    - cron: "30 1 * * *"
+  workflow_dispatch:
+  # Any change to the backup itself is proven immediately, not at 01:30.
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/db-backup.yml
+      - infra/scripts/backup-database.sh
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      restore-check:
+        # Same major version as production.
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: restore_check
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # pg_dump must be at least the server's major version (18).
+      - name: Install PostgreSQL 18 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-18
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      # Same account-scoped token and project/environment flags as deploy.yml.
+      - name: Back up, verify restore, upload, prune
+        run: railway run --service api --environment production -- bash infra/scripts/backup-database.sh
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: 15de703e-d006-43d8-837f-10b800abb87e
+          RESTORE_CHECK_URL: postgresql://postgres:postgres@localhost:5433/restore_check
+          RETENTION_DAYS: "14"
