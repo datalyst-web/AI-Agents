@@ -108,14 +108,20 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     if (!loading && !user) router.push("/login");
   }, [loading, user, router]);
 
-  // The browser tab follows the same branding as the sidebar: a client's
-  // own white-label name once staff have set one, the platform's otherwise.
-  // Keyed on pathname too, because Next.js re-applies the root layout's
-  // static title on every client-side navigation.
+  // The browser tab follows the sidebar: inside a client's dashboard it
+  // shows only the client's own identity — their white-label name, else
+  // their business name — never the platform's. Keyed on pathname too,
+  // because Next.js re-applies the root layout's static title on every
+  // client-side navigation. The tab icon becomes their logo when they have one.
   useEffect(() => {
     if (!user) return;
-    const brand = isStaff && !impersonation ? null : (user.brandName ?? user.platformBrandName);
-    document.title = brand ?? "Datalyst Africa";
+    const ownStaffHome = isStaff && !impersonation;
+    document.title = ownStaffHome ? "Staff Console" : (user.brandName ?? user.tenantName ?? "Dashboard");
+    const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (icon) {
+      if (!icon.dataset.defaultHref) icon.dataset.defaultHref = icon.href;
+      icon.href = !ownStaffHome && user.logoUrl ? `${API_BASE}${user.logoUrl}` : icon.dataset.defaultHref;
+    }
   }, [user, isStaff, impersonation, pathname]);
 
   useEffect(() => {
@@ -138,22 +144,17 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  // Prefer this tenant's own white-label branding; fall back to the
-  // platform operator's own brand (e.g. "Datalyst Africa") when the
-  // tenant hasn't been given a custom logo/name yet, or when there's no
-  // tenant in scope at all (staff's own Managed Setup view).
-  // Staff's own home (no client in view yet) gets a fixed, neutral
-  // identity — "Client Console" would be misleading here since there's
-  // no client currently in scope. The moment "Manage this client" starts
-  // an impersonation session, sidebarBrandName/sidebarLogoUrl switch to
-  // that client's own branding (or the unbranded-client default below).
+  // White-label: a client's dashboard (and staff managing that client) shows
+  // only the client's own identity — their white-label name and logo, else
+  // their business name and initial. It used to fall back to the platform
+  // operator's name and logo for any client without custom branding, so a
+  // new client saw our company in their own console. Only staff's own home
+  // (no client in view) carries the platform identity.
   const isOwnStaffHome = isStaff && !impersonation;
-  // The platform's own brand/logo is deliberately NOT shown here — it
-  // used to fall back to it whenever no tenant was in scope, which made
-  // staff's own unmanaged home look like a real client's console was
-  // already open before anyone clicked "Manage this client".
-  const sidebarLogoUrl = isOwnStaffHome ? null : (user.logoUrl ?? user.platformLogoUrl);
-  const sidebarBrandName = isOwnStaffHome ? null : (user.brandName ?? user.platformBrandName);
+  const sidebarLogoUrl = isOwnStaffHome ? null : user.logoUrl;
+  const sidebarBrandName = isOwnStaffHome
+    ? (user.platformBrandName ?? "Staff Console")
+    : (user.brandName ?? user.tenantName ?? impersonation?.tenantName ?? "Your dashboard");
 
   return (
     <div className="flex min-h-screen">
@@ -180,27 +181,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               className="h-8 w-8 shrink-0 rounded-lg object-contain"
             />
           ) : (
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-gradient shadow-glow">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M2 8a6 6 0 1 1 6 6" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
-                <circle cx="12" cy="12" r="1.4" fill="white" />
-              </svg>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-gradient text-sm font-semibold text-white shadow-glow">
+              {sidebarBrandName.trim().charAt(0).toUpperCase() || "•"}
             </div>
           )}
           <div className="min-w-0">
             <span className="block truncate text-sm font-semibold tracking-tight text-foreground">
-              {sidebarBrandName ?? "Chat Agent"}
+              {sidebarBrandName}
             </span>
             <span className="block text-[10px] font-medium uppercase tracking-wider text-foreground/35">
-              {/* Deliberately keyed off user.brandName (the TENANT's own
-                  white-label branding, only ever present during an active
-                  impersonation) rather than sidebarBrandName above, which
-                  also falls back to the platform operator's own brand —
-                  otherwise staff's own unscoped home (no client in view)
-                  showed "AI Console" just because the platform's fallback
-                  name/logo happened to render, making it look like a real
-                  client console was already open. */}
-              {user.brandName ? "AI Console" : isOwnStaffHome ? "Console" : "Client Console"}
+              {isOwnStaffHome ? "Staff" : "AI Console"}
             </span>
           </div>
         </div>

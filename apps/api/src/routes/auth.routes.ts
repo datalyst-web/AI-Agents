@@ -461,7 +461,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
     // withTenant(effectiveTenantId) and throw.
     const user = await withPlatformContext(ctx.prisma, (tx) => tx.user.findUniqueOrThrow({ where: { id: authUser.sub } }));
 
-    const { theme, subscriptionTier, subscriptionState, brandName, logoUrl, trialEndsAt } = effectiveTenantId
+    const { theme, subscriptionTier, subscriptionState, brandName, logoUrl, trialEndsAt, tenantName } = effectiveTenantId
       ? await withTenant(ctx.prisma, { tenantId: effectiveTenantId }, async (tx) => {
           const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: effectiveTenantId! } });
           return {
@@ -471,6 +471,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
             brandName: tenant.brandName,
             logoUrl: tenant.logoObjectKey ? `/v1/tenants/${tenant.id}/branding/logo` : null,
             trialEndsAt: tenant.trialEndsAt,
+            tenantName: tenant.name,
           };
         })
       : {
@@ -483,11 +484,13 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
           brandName: null,
           logoUrl: null,
           trialEndsAt: null,
+          tenantName: null,
         };
     // Platform operator's own brand — always fetched regardless of tenant
     // scope, since it's the fallback the dashboard sidebar falls back to
     // whenever a tenant hasn't been given its own white-label branding
     // (or there's no tenant in scope at all, e.g. staff pre-impersonation).
+    const isStaffRole = authUser.role === "platform_admin" || authUser.role === "setup_specialist";
     const platformSettings = await ctx.prisma.platformSettings.findUnique({ where: { id: "global" } });
     reply.send({
       id: user.id,
@@ -513,8 +516,13 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
         trialEndsAt && subscriptionState === "TRIAL"
           ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
           : null,
-      platformBrandName: platformSettings?.brandName ?? null,
-      platformLogoUrl: platformSettings?.logoObjectKey ? "/v1/platform/branding/logo" : null,
+      // The client's own business name — what their dashboard shows when
+      // no custom white-label name has been set.
+      tenantName,
+      // White-label: a client's dashboard shows only their own identity,
+      // never the platform operator's, so these go to staff only.
+      platformBrandName: isStaffRole ? (platformSettings?.brandName ?? null) : null,
+      platformLogoUrl: isStaffRole && platformSettings?.logoObjectKey ? "/v1/platform/branding/logo" : null,
       notifyEscalationEmail: user.notifyEscalationEmail,
       notifyEscalationSms: user.notifyEscalationSms,
       notifyEscalationPush: user.notifyEscalationPush,

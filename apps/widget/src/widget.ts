@@ -50,8 +50,6 @@ const WIDGET_THEMES: Record<WidgetTheme, Record<string, string>> = {
     "--composer-bg": "rgba(255,255,255,0.02)",
     "--close-icon": "rgba(255,255,255,0.4)",
     "--close-hover-bg": "rgba(255,255,255,0.08)",
-    "--footer-text": "rgba(255,255,255,0.25)",
-    "--footer-brand-text": "rgba(255,255,255,0.4)",
     "--scrollbar-thumb": "rgba(255,255,255,0.12)",
     "--panel-shadow": "0 24px 70px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.07) inset",
     "--header-glow": "rgba(53,189,240,0.25)",
@@ -74,8 +72,6 @@ const WIDGET_THEMES: Record<WidgetTheme, Record<string, string>> = {
     "--composer-bg": "rgba(15,19,48,0.015)",
     "--close-icon": "rgba(15,19,48,0.45)",
     "--close-hover-bg": "rgba(15,19,48,0.06)",
-    "--footer-text": "rgba(15,19,48,0.32)",
-    "--footer-brand-text": "rgba(15,19,48,0.5)",
     "--scrollbar-thumb": "rgba(15,19,48,0.14)",
     "--panel-shadow": "0 24px 70px rgba(20,27,77,0.16), 0 4px 16px rgba(20,27,77,0.1), 0 0 0 1px rgba(15,19,48,0.06) inset",
     "--header-glow": "rgba(53,189,240,0.14)",
@@ -170,7 +166,6 @@ interface ChatResponse {
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
         </button>
       </form>
-      <div class="footer">Powered by <span class="footer-brand">Datalyst Africa</span></div>
     </div>
   `;
 
@@ -571,8 +566,6 @@ interface ChatResponse {
       .composer button:active:not(:disabled) { transform: scale(0.94); }
       .composer button:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
 
-      .footer { text-align: center; font-size: 10.5px; color: var(--footer-text); padding: 7px 0 11px; letter-spacing: 0.01em; }
-      .footer-brand { color: var(--footer-brand-text); font-weight: 600; }
 
       @media (max-width: 480px) {
         .panel { bottom: 0; right: 0; left: 0; width: 100%; max-width: 100%; height: 100%; max-height: 100%; border-radius: 0; }

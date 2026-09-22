@@ -195,6 +195,7 @@ export const api = {
       subscriptionLapsed: boolean;
       brandName: string | null;
       logoUrl: string | null;
+      tenantName: string | null;
       platformBrandName: string | null;
       platformLogoUrl: string | null;
       notifyEscalationEmail: boolean;
