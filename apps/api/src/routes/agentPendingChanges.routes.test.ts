@@ -14,6 +14,7 @@ let withPlatformContext: typeof import("@chat-agent/db").withPlatformContext;
 let withTenant: typeof import("@chat-agent/db").withTenant;
 let app: FastifyInstance;
 const createdTenantIds: string[] = [];
+const createdStaffIds: string[] = [];
 
 beforeAll(async () => {
   if (!process.env.CHAT_APP_DATABASE_URL) return;
@@ -41,6 +42,7 @@ afterAll(async () => {
   if (!prisma) return;
   await withPlatformContext(prisma, async (tx) => {
     for (const id of createdTenantIds) await tx.tenant.delete({ where: { id } }).catch(() => undefined);
+    for (const id of createdStaffIds) await tx.user.delete({ where: { id } }).catch(() => undefined);
   });
   await app?.close();
   await prisma.$disconnect();
@@ -74,10 +76,23 @@ async function createLiveAgent() {
     });
     return a;
   });
-  // Fully managed: staff edit and roll back (a client has no agent:write);
-  // the client approves and publishes.
+  // Fully managed: staff edit and roll back through an audited Managed
+  // Setup session (no other role has agent:write); the client approves
+  // and publishes.
   const token = app.jwt.sign({ sub: ownerId, tenantId: tenant.id, role: "tenant_owner" } as never);
-  const staffToken = app.jwt.sign({ sub: randomUUID(), role: "platform_admin" } as never);
+  const staffId = randomUUID();
+  const sessionId = randomUUID();
+  const expiresAt = new Date(Date.now() + 30 * 60_000);
+  await withPlatformContext(prisma, async (tx) => {
+    await tx.user.create({ data: { id: staffId, tenantId: null, email: `staff-${randomUUID()}@example.com`, passwordHash: "x", role: "setup_specialist", displayName: "Staff" } });
+    await tx.staffImpersonationSession.create({ data: { id: sessionId, tenantId: tenant.id, staffUserId: staffId, reason: "test", expiresAt } });
+  });
+  createdStaffIds.push(staffId);
+  const staffToken = app.jwt.sign({
+    sub: staffId,
+    role: "setup_specialist",
+    impersonation: { staffUserId: staffId, sessionId, expiresAt: expiresAt.toISOString() },
+  } as never);
   return { tenantId: tenant.id, agentId: agent.id, token, staffToken };
 }
 
