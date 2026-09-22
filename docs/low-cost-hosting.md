@@ -12,13 +12,35 @@ security, so the database must stay PostgreSQL).
 | Cloudflare R2 | Uploaded knowledge-base files | Free tier; verify usage periodically |
 | Cloudflare Turnstile | Login/signup bot protection | Free |
 | HostGator | DNS for datalystafrica.com (and the existing website) | Existing account |
+| Google Workspace | Platform email, sent as info@datalystafrica.com through the Gmail API | Existing mailbox subscription |
 | Sentry | Error reporting | Free tier |
 | OpenAI (Anthropic, Gemini optional) | AI models, pay-as-you-go | Passed through to tenants via plan limits and overage billing |
 
 Retired: **Neon** (free compute allowance ran out and took production down;
 replaced by Railway Postgres, started fresh), **Vercel** (free plan forbids
-commercial use; replaced by the Railway `dashboard` service). **Brevo** is
-retired once the replacement email setup is working.
+commercial use; replaced by the Railway `dashboard` service), **Brevo**
+(replaced by the Gmail API, below).
+
+## Email
+
+Railway blocks outbound SMTP on every plan below Pro, so SMTP can't work
+from here with any provider. The platform sends through Gmail's HTTPS API
+instead (`GmailApiEmailProvider` in packages/email), as `SMTP_FROM_ADDRESS`.
+
+It uses info@'s own one-time consent rather than domain-wide delegation,
+because that needs a Workspace super-admin. The OAuth client lives in its
+own Google Cloud project, `datalyst-mailer`, set to **Internal** — not in
+the "Datalyst SMTP" project, which also holds the customer "Sign in with
+Google" client and must stay External. Settings on `api` and `workers`:
+`GMAIL_OAUTH_CLIENT_ID`, `GMAIL_OAUTH_CLIENT_SECRET`,
+`GMAIL_OAUTH_REFRESH_TOKEN`.
+
+If email stops (sends report `google_token_invalid_grant` — e.g. the
+consent was revoked or info@'s password was changed), re-run
+`node infra/scripts/gmail-authorize.mjs <desktop-client.json> info@datalystafrica.com <out.json>`
+with a fresh client download from that project, load the three values
+into both services, and redeploy them. `REQUIRE_TWO_FACTOR=true` depends on
+email working — sign-in codes are emailed.
 
 ## Database
 
