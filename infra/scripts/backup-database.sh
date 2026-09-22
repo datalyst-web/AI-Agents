@@ -67,7 +67,7 @@ echo "--- pruning backups older than ${RETENTION_DAYS} days"
 cutoff="$(date -u -d "-${RETENTION_DAYS} days" +%Y-%m-%dT%H:%M:%S)"
 aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix "${PREFIX}/" --endpoint-url "$S3_ENDPOINT" \
   --query "Contents[?LastModified<'${cutoff}'].Key" --output text |
-  tr '\t' '\n' | grep -v -e '^None$' -e '^$' -e "^${key}$" | while read -r old; do
+  tr '\t' '\n' | { grep -v -e '^None$' -e '^$' -e "^${key}$" || true; } | while read -r old; do
     aws s3 rm "s3://${S3_BUCKET}/${old}" --endpoint-url "$S3_ENDPOINT" --only-show-errors && echo "removed ${old}"
   done
 echo "kept: $(aws s3api list-objects-v2 --bucket "$S3_BUCKET" --prefix "${PREFIX}/" --endpoint-url "$S3_ENDPOINT" --query 'length(Contents)' --output text) backup(s)"
