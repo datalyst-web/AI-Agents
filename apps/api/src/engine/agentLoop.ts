@@ -163,14 +163,41 @@ function fenceUntrustedContext(label: string, lines: string[]): string {
  * unit-testable without needing a live DB/model call — see
  * agentLoop.promptInjection.test.ts.
  */
+/** Tools that only read the knowledge base — not an "action" a customer can ask for. */
+const READ_ONLY_TOOLS = new Set(["search_knowledge"]);
+
+/**
+ * Tells the model exactly which actions it can take in this conversation.
+ * Without it, a model can offer to do something it has no tool for ("Sure,
+ * I can book that — what time?") — found live on gpt-5-mini, asked to book
+ * a table by an agent with no booking tool. Principle 4: never promise an
+ * action that can't actually be carried out.
+ */
+export function capabilitiesText(toolNames: string[]): string {
+  const actions = toolNames.filter((name) => !READ_ONLY_TOOLS.has(name));
+  if (actions.length === 0) {
+    return [
+      "You cannot take any actions in this conversation — no bookings, cancellations, orders, emails, tickets or record changes.",
+      "If the customer asks you to do something like that, say plainly that you can't do it here, then tell them how they can get it done using",
+      "only what the knowledge base says, or offer to connect them with a person. Never ask for details as though you were about to do it.",
+    ].join(" ");
+  }
+  return [
+    `The only actions you can take are through these tools: ${actions.join(", ")}.`,
+    "For any other action, say plainly that you can't do it here and offer a person instead — never imply you will do it.",
+  ].join(" ");
+}
+
 export function buildSystemPrompt(
   tenantSystemInstructions: string,
   priorFacts: { fact: string }[],
   retrievedKnowledge: { textSnippet: string }[],
+  toolNames: string[] = [],
 ): string {
   return [
     tenantSystemInstructions,
     GUARDRAIL_SYSTEM_TEXT,
+    capabilitiesText(toolNames),
     priorFacts.length
       ? fenceUntrustedContext(
           "Known facts about this returning customer (only reference these if relevant, and never claim they said something they didn't)",
@@ -448,7 +475,12 @@ export async function processCustomerMessage(
         retrievedKnowledge = [];
       }
 
-      const systemPrompt = buildSystemPrompt(personality.systemInstructions, priorFacts, retrievedKnowledge);
+      const systemPrompt = buildSystemPrompt(
+        personality.systemInstructions,
+        priorFacts,
+        retrievedKnowledge,
+        toolRegistry.listToolSpecs().map((t) => t.name),
+      );
 
       const messages: ChatMessage[] = [
         { role: "system", content: systemPrompt },

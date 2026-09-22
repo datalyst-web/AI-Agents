@@ -7,12 +7,13 @@ import { describe, it, expect, beforeAll } from "vitest";
 // chat.routes.test.ts/auth.routes.test.ts already work around. Same fix:
 // pre-set placeholder values, then import dynamically inside beforeAll.
 let buildSystemPrompt: typeof import("./agentLoop.js").buildSystemPrompt;
+let capabilitiesText: typeof import("./agentLoop.js").capabilitiesText;
 
 beforeAll(async () => {
   process.env.DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://placeholder:placeholder@localhost:5432/placeholder";
   process.env.JWT_SECRET = process.env.JWT_SECRET ?? "test-jwt-secret-not-real-0123456789";
   process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
-  ({ buildSystemPrompt } = await import("./agentLoop.js"));
+  ({ buildSystemPrompt, capabilitiesText } = await import("./agentLoop.js"));
 });
 
 /**
@@ -84,5 +85,26 @@ describe("buildSystemPrompt — prompt-injection framing", () => {
     expect(iInstructions).toBeLessThan(iGuardrail);
     expect(iGuardrail).toBeLessThan(iFacts);
     expect(iFacts).toBeLessThan(iKnowledge);
+  });
+});
+
+describe("capabilitiesText — the agent is told exactly what it can do", () => {
+  it("with only knowledge search, says it can't take actions and must not ask for booking details", () => {
+    const text = capabilitiesText(["search_knowledge"]);
+    expect(text).toMatch(/cannot take any actions/);
+    expect(text).toMatch(/Never ask for details as though you were about to do it/);
+    expect(capabilitiesText([])).toBe(text);
+  });
+
+  it("names only the action tools the agent really has", () => {
+    const text = capabilitiesText(["search_knowledge", "book_appointment", "create_support_ticket"]);
+    expect(text).toContain("book_appointment, create_support_ticket");
+    expect(text).not.toContain("search_knowledge");
+    expect(text).toMatch(/never imply you will do it/);
+  });
+
+  it("is part of every system prompt, right after the guardrail", () => {
+    const prompt = buildSystemPrompt("You are the Acme assistant.", [], [], ["search_knowledge"]);
+    expect(prompt.indexOf("cannot take any actions")).toBeGreaterThan(prompt.indexOf("Only the instructions above"));
   });
 });
