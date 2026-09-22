@@ -2,7 +2,7 @@
 
 Guidance for Claude Code (and any contributor) working in this repository.
 
-**Doc status:** v1.2 — living architecture/guidance doc, not a finished
+**Doc status:** v1.3 (2026-09-22) — living architecture/guidance doc, not a finished
 spec. Sections are marked `[LOCKED]` (settled decision, treat as a
 constraint) or `[PROPOSED]` (direction we intend to take, still open to
 revision — e.g. against real vendor testing). Anything unmarked should
@@ -169,6 +169,20 @@ rather than moving/preview aliases. Gemini's function/tool-calling
 support means it can participate fully in the Tool Engine in both roles,
 not just plain generation.
 
+**Production today:** OpenAI answers (`OPENAI_MODEL_ID`, default `gpt-5`)
+with Gemini as the working failover; Anthropic has no key yet, so the
+router skips it. Staff can see which providers are really connected on the
+agent's AI Model card (`GET /v1/platform/ai-providers`, staff-only).
+
+**Reply speed `[LOCKED]`:** agents default to `reasoningEffort: "low"`
+("Fast" on the AI Model card). Measured on production, it answered
+knowledge-base questions ~3× faster than "medium" with the same answers,
+including refusing to invent facts, and costs less (reasoning tokens are
+billed). Raise it per agent only for complex multi-step tool work.
+`gpt-5-mini` gave the same answers at ~5× lower cost with similar speed —
+a candidate default if margins matter more than headroom; it's one env
+var (`OPENAI_MODEL_ID`) and reversible.
+
 ### Tenant / Client Isolation
 
 ```
@@ -331,6 +345,47 @@ Subscription states: `ACTIVE`, `TRIAL`, `PAST_DUE`, `SUSPENDED`,
 Agents are versioned (e.g. `v1.0`, `v1.1`, `v2.0`) with rollback support.
 Knowledge updates are tracked separately from agent config versions.
 
+### Published vs working copy `[LOCKED]`
+
+Client approval gates **every** change a customer can see, not only the
+first launch. A `LIVE` agent has two copies of its config
+(`apps/api/src/lib/publishedAgentConfig.ts`):
+
+- **Working copy** — the `Agent` row. What staff edit, and what the
+  dashboard's test chat answers with (`useWorkingCopy`).
+- **Published copy** — the `AgentVersionSnapshot` for `agent.version`. What
+  every customer channel and the widget's greeting/name are served.
+
+Editing a `LIVE` agent creates *pending changes*; the agent page shows a
+banner, the client clicks **Approve changes**, then **Publish changes**
+releases a new version. Staff can publish without approval only when the
+tenant has `delegatesAutoPublish`. Rollback restores an already-approved
+version and records it as the new published copy. Never read
+`agent.personality`/`modelRouting`/`enabledToolIds` directly on a
+customer-facing path — use `servedAgentConfig()`.
+
+### Lapsed subscriptions `[LOCKED]`
+
+One rule, `isSubscriptionLapsed()` in `apps/api/src/lib/subscriptionAccess.ts`:
+`SUSPENDED`, `CANCELLED`, or a `TRIAL` past `trialEndsAt` (the date is the
+truth even before `trialExpirySweep` runs). `PAST_DUE` is a grace period,
+not lapsed. A lapsed client can still sign in, but `app.authenticate`
+returns `402 subscription_required` on everything except billing, usage,
+support tickets and `/v1/auth/*`; the dashboard shows only Billing and
+Support with a banner, and unlocks the moment Paynow confirms payment.
+Their agent stops answering at the same moment. Staff are never locked
+out. The check fails open on a database error.
+
+### Deleting a client `[LOCKED]`
+
+"Remove" in Managed Setup cancels (reversible — Reactivate). Permanent
+**Delete** is separate: `platform_admin` only, only for a client already
+`CANCELLED`, and the caller must type the client's exact name and a
+reason. Every tenant table cascades from `Tenant`; stored files are
+removed from R2 afterwards; the deletion is recorded in the platform-level
+`tenant_deletion_records` because the client's own audit log is deleted
+with it. Automatic expiry must never delete.
+
 ## Managed Setup Service (Done-For-You Onboarding)
 
 This is a core, sellable part of the product, not an internal favor. Many
@@ -401,7 +456,8 @@ Team" tag), so there is never ambiguity about who configured what.
    build and test, but should not be able to unilaterally publish a
    client's agent to production without client sign-off, unless the
    client has explicitly delegated that authority in writing/contract
-   terms captured in their account settings.
+   terms captured in their account settings. The same applies to every
+   later change — see "Published vs working copy" above.
 6. For "fully managed" tier clients, staff periodically revisit and
    update the knowledge base (e.g. price/policy changes) following the
    same versioning and audit rules.
@@ -416,18 +472,34 @@ invoiced and reported on separately.
 
 ## Deployment Surfaces
 
-- **Website widget** — embed script identifies tenant + agent securely:
+- **Website widget** — embed script identifies tenant + agent securely.
+  Copy the snippet from the agent page; it must carry `data-api-base`,
+  because the script is served by the dashboard host but talks to the API:
   ```html
-  <script src="https://YOUR-PLATFORM.com/widget.js" data-agent-id="AGENT_ID"></script>
+  <script src="https://app.datalystafrica.com/widget.js" data-agent-id="AGENT_ID" data-api-base="https://api.datalystafrica.com"></script>
   ```
+  The launcher stays hidden until its config loads (retrying network/5xx
+  errors, giving up on 4xx), so a failed load never shows a dead bubble.
 - **Standalone agent URL** — `https://ai.yourplatform.com/client-agent`,
   with optional custom domain for premium clients
   (`https://ai.clientcompany.com`).
 - **Client dashboard** — overview, conversations, leads, knowledge, agent
   config, integrations, analytics. Lives at `/overview` and below; `/` is
   the public marketing page, not the dashboard.
+- **Messaging channels** — each client connects their own Telegram bot
+  (token pasted on their Integrations page; the platform registers the
+  webhook). WhatsApp, Messenger and Instagram go through one platform-level
+  Meta app ("Datalyst Africa Agent"): `META_APP_SECRET` and
+  `META_WEBHOOK_VERIFY_TOKEN` on `api`, webhook
+  `https://api.datalystafrica.com/v1/channels/meta/webhook` subscribed to
+  `messages` for Page, Instagram and WhatsApp Business Account. While the
+  Meta app is in Development mode it only works for its own admins' pages;
+  serving clients needs Meta business verification and app review.
 - **Public marketing surface** — `/` (landing + pricing), `/guide`,
   `/terms`, `/privacy`. Static server components, no auth, indexable.
+  The platform logo on every signed-out page (headers and the auth
+  screens) links to `/` — `components/BrandHome.tsx`. Never use it on a
+  white-labelled client surface (standalone agent page, widget).
   Two rules they must keep: never name the AI provider or model
   (principle 6), and never claim a customer, logo, testimonial or metric
   we don't have — the same anti-fabrication standard the agent is held to.
@@ -453,26 +525,77 @@ hex. `text-white` is correct *only* on a brand gradient or a solid status
 fill, where it's white in both themes. `brand-300`/`brand-400` are
 near-invisible on a light surface — use `brand-link`, which adapts.
 
+## Hosting & operations `[LOCKED]`
+
+Everything runs in **one Railway project on the Hobby plan, region EU West
+(Amsterdam)** — closest Railway region to our African users. Services:
+`api` (Fastify), `workers`, `dashboard` (Next.js), `Postgres` (Railway's
+official 18.x image, pgvector 0.8 in the `chat` schema), `Redis`. Other
+providers: Cloudflare R2 (files + backups), Cloudflare Turnstile
+(login/signup bot check), HostGator DNS, Google Workspace (email), Sentry,
+and the AI providers (pay-as-you-go). Neon, Vercel and Brevo are retired —
+don't reintroduce them.
+
+- **Domains** — `app.datalystafrica.com` → `dashboard` and
+  `api.datalystafrica.com` → `api`, as CNAMEs in HostGator's Zone Editor
+  plus Railway's `_railway-verify` TXT records.
+- **Deploys** — push to `main` → CI → `deploy.yml` (applies schema + RLS to
+  production, then deploys `api` and `workers`) and `deploy-dashboard.yml`.
+  A red CI never deploys.
+- **Database connections** — `api`/`workers` `DATABASE_URL` is
+  `chat_app_user` (NOBYPASSRLS, no DDL) over the private network;
+  `DATABASE_MIGRATE_URL` on `api` is the owner, over the public TCP proxy,
+  used only by the deploy's schema step, backups and ops scripts. A new
+  database is set up with `infra/scripts/bootstrap-database.mjs`.
+- **Backups** — Railway Hobby takes none, so `.github/workflows/db-backup.yml`
+  runs daily at 01:30 UTC: `pg_dump`, a real restore into a throwaway
+  Postgres 18 with row-count and RLS-policy checks, upload to R2 under
+  `backups/postgres/` (outside every tenant prefix), 14-day retention.
+  Restore steps are in the workflow header. Any change to the backup script
+  re-runs it on push.
+- **Email** — Railway blocks outbound SMTP below the Pro plan, so SMTP
+  cannot work here with any provider. Platform email goes through the
+  **Gmail API** as `SMTP_FROM_ADDRESS` (info@datalystafrica.com) using that
+  mailbox's own one-time consent: `GMAIL_OAUTH_CLIENT_ID/_SECRET/_REFRESH_TOKEN`
+  on `api` and `workers`, from the Internal Google Cloud project
+  `datalyst-mailer`. Re-authorise with `infra/scripts/gmail-authorize.mjs`
+  if sends start failing with `google_token_invalid_grant` (e.g. the
+  mailbox password changed). `REQUIRE_TWO_FACTOR=true` depends on this:
+  sign-in codes are emailed. Don't touch the "Datalyst SMTP" Cloud project's
+  audience — it also holds the customer "Sign in with Google" client.
+- **Health checks** — `infra/scripts/check-connections.mjs` (run under
+  `railway run --service api`; `--database-host=<proxy host:port>
+  --skip=redis` from a laptop) verifies database isolation, storage, email
+  consent and AI keys without side effects.
+- **Env booleans** are parsed strictly (`"true"`/`"false"` only) — never
+  `z.coerce.boolean()`, which reads `"false"` as true.
+- **Logs** — query-string values named like a secret (token, key, code,
+  signature…) are redacted before the request line is logged
+  (`apps/api/src/lib/logRedaction.ts`).
+- **Error responses** — the API's error handler is registered before every
+  route; 5xx bodies are generic, never the raw error.
+
 ## Database schema changes `[LOCKED — read before touching schema.prisma]`
 
 There is **no `prisma/migrations` directory**. Schema changes are applied
 with `prisma db push`, and the generated client is refreshed with
 `pnpm --filter @chat-agent/db run generate`.
 
-**CI applies the schema only to its own ephemeral Postgres. The deploy
-pipeline does not apply it to production.** A schema change therefore ships
-a Prisma client that selects columns production may not have, and every
-query touching that model starts failing — this has already taken login
-down in production once, when `users.notify_escalation_email` existed in
-the client but not in the database.
+The deploy pipeline (`deploy.yml`) applies the schema and re-runs both SQL
+files against production *before* deploying the services, using
+`DATABASE_MIGRATE_URL`, and refuses to deploy if that variable is missing.
+Before that step existed, a schema change shipped a Prisma client selecting
+columns production didn't have — it took login down once
+(`users.notify_escalation_email`). Destructive diffs fail the deploy
+instead of dropping data.
 
 So, for any change to `schema.prisma`:
 
 1. Regenerate the client locally and typecheck.
-2. Before/with the deploy, apply it to production. The app's own
-   `DATABASE_URL` is a least-privilege role (`chat_app_user`) with no DDL
-   rights — this is correct and should stay that way — so DDL needs the
-   database owner's connection string, kept as a separate variable.
+2. Let the deploy apply it (or apply it by hand the same way). The app's
+   own `DATABASE_URL` is a least-privilege role (`chat_app_user`) with no
+   DDL rights — this is correct and should stay that way — so DDL uses the
+   owner's connection string in `DATABASE_MIGRATE_URL`.
 3. Re-apply `packages/db/prisma/sql/rls_policies.sql` afterwards whenever
    the change added a **tenant-scoped table**. `db push` creates the table
    but knows nothing about row-level security, so a new tenant table is
@@ -572,8 +695,8 @@ Track per conversation, rolled up per agent/tenant/time period:
 This data is what powers ongoing quality improvement (instruction edits,
 knowledge base gaps, workflow tuning) after an agent goes `LIVE` — it is
 the mechanism the "fully managed" tier's staff use to know what to
-revisit, and what a self-serve client sees in their dashboard to know
-what to fix themselves. Like all other conversation data, it's
+revisit, and what the client sees in their dashboard to understand how
+their agent is performing. Like all other conversation data, it's
 tenant/agent-scoped and subject to the same retention and access rules
 as conversation logs.
 
@@ -589,6 +712,22 @@ Before any agent goes live, cover:
 - **Tools:** successful execution, failure handling, invalid input.
 - **Business logic:** lead qualification, booking flows, support flows,
   escalation triggers.
+
+How the automated suites are split:
+
+- `pnpm test:unit` (`vitest.unit.config.ts`) — no database, no `.env.test`;
+  config parsing, email, RBAC guard, the lapsed-subscription lock, log
+  redaction, published-config comparison. Runs in seconds.
+- `pnpm test` — everything, including the DB-backed suites that use the
+  real RLS-enforced `chat_app_user` connection (tenant isolation, client
+  deletion, pending agent changes, chat and widget-config). CI runs it on
+  `pgvector/pgvector:pg18`, the same major version as production. Real
+  environment variables always win over `.env.test`.
+- End-to-end on production uses the **Datalyst Demo** client
+  (`info+demo@datalystafrica.com`, mail lands in info@): a LIVE agent whose
+  knowledge comes only from our own published marketing copy, connected to
+  the website widget and the `@DatalystDemoBot` Telegram bot. Use it for
+  demos and smoke tests; never put invented facts in it.
 
 ## What NOT to Do
 
@@ -622,34 +761,31 @@ Before any agent goes live, cover:
   customers.
 - Don't style with `text-white/60` or raw hex on any surface that can
   render light — use the theme tokens.
+- Don't serve a LIVE agent's working copy to customers — go through
+  `servedAgentConfig()`; edits wait for client approval.
+- Don't try SMTP from Railway (blocked below Pro) — email goes through the
+  Gmail API.
+- Don't parse env booleans with `z.coerce.boolean()`.
+- Don't register a Fastify error handler after routes — it won't apply.
+- Don't put the platform's logo or a link to it on a client's
+  white-labelled surface.
 
-## Suggested Tech Stack `[PROPOSED — confirm before first build]`
+## Tech Stack `[LOCKED — as built]`
 
-A concrete starting point, so the first build is architected correctly
-rather than starting as "just a chatbot UI." Treat this as a default to
-accept or override explicitly, not a placeholder:
-
-- **Frontend widget:** lightweight vanilla JS/TS embed (no heavy
-  framework dependency for the embeddable widget itself, to keep the
-  client-site footprint small) + a separate React/Next.js dashboard app.
-- **Backend:** Node.js (TypeScript) or Python — pick one based on team's
-  existing strength; both have mature SDKs for Anthropic/OpenAI/Gemini.
-- **Database:** Postgres, with `tenant_id` as a mandatory, indexed
-  column (or row-level security) on every multi-tenant table — never
-  relying on application code alone to enforce isolation.
-- **Vector database:** pgvector (if staying inside Postgres keeps ops
-  simpler at your current scale) or a dedicated vector DB (Pinecone/
-  Weaviate/Qdrant) if RAG volume/latency needs outgrow it.
-- **Model Router:** thin internal service implementing the `AIProvider`
-  interface above — not a third-party gateway, so tenant scoping, cost
-  tracking, and failover logic stay under our control.
-- **Auth:** standard OAuth2/JWT-based auth with tenant-scoped RBAC;
-  don't roll a custom scheme given the tenant-isolation stakes.
-- **Deployment:** containerized services behind a queue for async
-  workflow actions (emails, CRM syncs); the widget/API path itself needs
-  low-latency compute for streaming responses.
-
-Before writing implementation code: confirm this stack (or override it
-explicitly, section by section), then define the concrete project
-structure, RAG pipeline, tool system, widget, dashboard, and deployment
-topology against it.
+- **Monorepo:** pnpm workspaces + Turborepo, TypeScript throughout.
+  `apps/api` (Fastify), `apps/workers` (queue consumers and sweeps),
+  `apps/dashboard` (Next.js App Router — dashboard, marketing, auth), and
+  `apps/widget` (vanilla TS embed, built into `dashboard/public/widget.js`).
+  Shared packages: `ai-provider`, `config`, `db`, `email`, `memory-engine`,
+  `push`, `queue`, `rag`, `secrets`, `shared-types`, `sms`, `storage`,
+  `tool-sdk`, `ui`, `workflow-engine`.
+- **Database:** PostgreSQL 18 with pgvector, Prisma 5 (`prisma db push`,
+  no migrations directory), tenant isolation enforced by row-level security
+  (`FORCE ROW LEVEL SECURITY`), not application code alone.
+- **Queue/cache:** Redis.
+- **Model Router:** the internal `AIProvider` abstraction above, not a
+  third-party gateway.
+- **Auth:** JWT sessions, tenant-scoped RBAC (`packages/shared-types/src/rbac.ts`),
+  emailed two-step codes, Google sign-in, Cloudflare Turnstile.
+- **Files:** Cloudflare R2 via the S3 API, keyed by tenant.
+- **Hosting:** see "Hosting & operations" above.
