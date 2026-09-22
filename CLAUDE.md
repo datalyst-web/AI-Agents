@@ -169,9 +169,9 @@ rather than moving/preview aliases. Gemini's function/tool-calling
 support means it can participate fully in the Tool Engine in both roles,
 not just plain generation.
 
-**Production today:** OpenAI answers (`OPENAI_MODEL_ID`, default `gpt-5`)
-with Gemini as the working failover; Anthropic has no key yet, so the
-router skips it. Staff can see which providers are really connected on the
+**Production today:** OpenAI answers with `gpt-5-mini` (`OPENAI_MODEL_ID` on
+`api` and `workers`; the code default is `gpt-5`), with Gemini as the working
+failover; Anthropic has no key yet, so the router skips it. Staff can see which providers are really connected on the
 agent's AI Model card (`GET /v1/platform/ai-providers`, staff-only).
 
 **Reply speed `[LOCKED]`:** agents default to `reasoningEffort: "low"`
@@ -179,9 +179,11 @@ agent's AI Model card (`GET /v1/platform/ai-providers`, staff-only).
 knowledge-base questions ~3× faster than "medium" with the same answers,
 including refusing to invent facts, and costs less (reasoning tokens are
 billed). Raise it per agent only for complex multi-step tool work.
-`gpt-5-mini` gave the same answers at ~5× lower cost with similar speed —
-a candidate default if margins matter more than headroom; it's one env
-var (`OPENAI_MODEL_ID`) and reversible.
+Production switched to `gpt-5-mini` (2026-09-22): same knowledge answers at
+~5× lower cost. It did, unlike `gpt-5`, offer to book a table for an agent
+with no booking tool — so the system prompt now always states exactly which
+actions the agent has tools for (`capabilitiesText()` in `agentLoop.ts`).
+Keep that section whatever the model.
 
 ### Tenant / Client Isolation
 
@@ -497,9 +499,19 @@ invoiced and reported on separately.
   serving clients needs Meta business verification and app review.
 - **Public marketing surface** — `/` (landing + pricing), `/guide`,
   `/terms`, `/privacy`. Static server components, no auth, indexable.
-  The platform logo on every signed-out page (headers and the auth
-  screens) links to `/` — `components/BrandHome.tsx`. Never use it on a
-  white-labelled client surface (standalone agent page, widget).
+  The Datalyst logo appears only in the header (linking to `/`) and footer
+  of the marketing/guide/legal pages — `components/BrandHome.tsx`. The
+  sign-in style screens show a "Back to home" button instead, no logo.
+  Login and signup both use `components/TurnstileWidget.tsx` for the bot
+  check (the API requires it on both); it renders on every mount via
+  `onReady` — never `onLoad`, which fires only on first download and left
+  the CAPTCHA/Google button missing after in-app navigation.
+- **White-label inside the client dashboard `[LOCKED]`** — a client sees
+  only their own identity: their white-label name/logo, else their business
+  name (`tenantName` from `/me`) and initial. `/me` never sends the
+  platform's brand to non-staff. No "Powered by" in the widget, no AI
+  provider names (Billing's per-provider card is staff-only), no internal
+  terms ("model router", "CLAUDE.md") in client-visible copy.
   Two rules they must keep: never name the AI provider or model
   (principle 6), and never claim a customer, logo, testimonial or metric
   we don't have — the same anti-fabrication standard the agent is held to.
@@ -640,6 +652,10 @@ included-usage → limit → overage billing logic.
 
 ### How that logic is wired `[LOCKED]`
 
+- **Prices live in one place** — `PLAN_PRICE_USD` in `apps/api/src/lib/planLimits.ts`:
+  Starter $29, Growth $89, Scale $249 a month, Enterprise from $499 (not
+  self-checkout). Paynow checkout and Platform Analytics read it; keep the
+  marketing page's pricing table and the demo agent's knowledge in step.
 - **Allowances live in one place** — `apps/api/src/lib/planLimits.ts`.
   Changing what a plan includes means editing that table, never a
   migration or a per-tenant edit. A `UsageLimits` row is provisioned
