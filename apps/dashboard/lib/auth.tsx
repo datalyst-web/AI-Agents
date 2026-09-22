@@ -27,6 +27,8 @@ interface AuthUser {
   subscriptionState: "ACTIVE" | "TRIAL" | "PAST_DUE" | "SUSPENDED" | "CANCELLED" | null;
   /** Whole days left on a free trial, or null when not trialling. Drives the countdown banner in the dashboard layout. */
   trialDaysRemaining: number | null;
+  /** Trial over or subscription ended — the API then only allows Billing, Usage and Support. Never true for staff. */
+  subscriptionLapsed: boolean;
   /** Staff-set white-label console name/logo — see tenants.routes.ts branding endpoints. Null until staff set them. */
   brandName: string | null;
   logoUrl: string | null;
@@ -48,6 +50,8 @@ interface AuthContextValue {
   startImpersonation: (tenantId: string, tenantName: string, reason: string, durationMinutes?: number) => Promise<void>;
   endImpersonation: () => Promise<void>;
   setTheme: (theme: DashboardTheme) => Promise<void>;
+  /** Re-reads /me — e.g. after a payment, so a lapsed account unlocks without signing in again. */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -236,6 +240,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         startImpersonation,
         endImpersonation,
         setTheme,
+        refreshUser: async () => {
+          await refreshMe();
+        },
       }}
     >
       {children}

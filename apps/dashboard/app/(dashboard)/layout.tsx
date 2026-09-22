@@ -55,6 +55,12 @@ const CLIENT_NAV = [
   // defeat the audit trail's whole point.
   { href: "/audit-log", label: "Audit Log", icon: IconShield },
 ];
+// A client whose trial ended or subscription lapsed: the API refuses
+// everything else (plugins/auth.ts), so these are the only pages that work.
+const LAPSED_NAV = [
+  { href: "/billing", label: "Billing & Usage", icon: IconCard },
+  { href: "/support", label: "Support", icon: IconTicket },
+];
 const STAFF_NAV_BASE = [
   { href: "/managed-setup", label: "Managed Setup", icon: IconStaff },
   { href: "/support-queue", label: "Support Queue", icon: IconTicket },
@@ -85,7 +91,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   // staff retain the full nav while impersonating, per CLAUDE.md's "staff
   // use the exact same tenant-scoped tools a client would," just not a
   // reduced version of them.
-  const nav = isStaff && !impersonation ? staffNav : impersonation ? [...staffNav, ...TENANT_NAV] : CLIENT_NAV;
+  const lapsed = !isStaff && Boolean(user?.subscriptionLapsed);
+  const nav = lapsed ? LAPSED_NAV : isStaff && !impersonation ? staffNav : impersonation ? [...staffNav, ...TENANT_NAV] : CLIENT_NAV;
 
   // Below md, the sidebar is an off-canvas drawer instead of a permanent
   // column (there's no room for a fixed 256px rail next to real content on
@@ -110,6 +117,10 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     const brand = isStaff && !impersonation ? null : (user.brandName ?? user.platformBrandName);
     document.title = brand ?? "Datalyst Africa";
   }, [user, isStaff, impersonation, pathname]);
+
+  useEffect(() => {
+    if (!loading && lapsed && !LAPSED_NAV.some((item) => item.href === pathname)) router.replace("/billing");
+  }, [loading, lapsed, pathname, router]);
 
   useEffect(() => {
     if (!loading && isStaff && !impersonation && !staffNav.some((item) => item.href === pathname)) {
@@ -275,9 +286,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
             </button>
-            <span className="hidden rounded-full bg-success/10 px-2 py-1 text-xs font-medium text-success ring-1 ring-inset ring-success/25 sm:inline-block">
-              ● All systems live
-            </span>
+            {lapsed ? null : (
+              <span className="hidden rounded-full bg-success/10 px-2 py-1 text-xs font-medium text-success ring-1 ring-inset ring-success/25 sm:inline-block">
+                ● All systems live
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {user.subscriptionTier ? (
@@ -291,7 +304,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </header>
         <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-8">
           <div className="mx-auto max-w-6xl animate-fade-up">
-            <TrialBanner daysRemaining={user?.trialDaysRemaining ?? null} state={user?.subscriptionState ?? null} />
+            {lapsed ? (
+              <LapsedBanner trialEnded={user.subscriptionState === "TRIAL" || user.subscriptionState === "SUSPENDED"} />
+            ) : (
+              <TrialBanner daysRemaining={user?.trialDaysRemaining ?? null} state={user?.subscriptionState ?? null} />
+            )}
             {children}
           </div>
         </main>
@@ -505,6 +522,18 @@ function IconFlag({ className }: { className?: string }) {
  * read. Turns urgent in the final three days, matching when
  * trialExpirySweep sends its reminder email.
  */
+function LapsedBanner({ trialEnded }: { trialEnded: boolean }) {
+  return (
+    <div className="mb-6 rounded-xl2 bg-danger/10 px-5 py-4 text-sm text-danger ring-1 ring-inset ring-danger/25">
+      <p className="font-semibold">{trialEnded ? "Your free trial has ended." : "Your subscription has ended."}</p>
+      <p className="mt-1 opacity-85">
+        Your AI agent is paused and the rest of the dashboard is locked. Choose a plan below to reactivate — everything
+        you set up is still here, and it comes back the moment payment is confirmed.
+      </p>
+    </div>
+  );
+}
+
 function TrialBanner({ daysRemaining, state }: { daysRemaining: number | null; state: string | null }) {
   if (state !== "TRIAL" || daysRemaining === null || daysRemaining > 7) return null;
   const urgent = daysRemaining <= 3;

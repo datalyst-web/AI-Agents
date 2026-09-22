@@ -133,7 +133,7 @@ export async function buildApp(ctx: AppContext = buildAppContext()) {
     max: (request) => (rateLimitKey(request).startsWith("tenant:") ? env.API_RATE_LIMIT_PER_TENANT_PER_MIN : env.API_RATE_LIMIT_PER_MIN),
   });
   await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } });
-  await app.register(authPlugin);
+  await app.register(authPlugin, { prisma: ctx.prisma });
 
   app.get("/healthz", async () => ({ status: "ok", timestamp: new Date().toISOString() }));
   // Gated (unlike plain /healthz above, which stays public for load-balancer

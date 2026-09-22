@@ -192,6 +192,7 @@ export const api = {
       subscriptionState: "ACTIVE" | "TRIAL" | "PAST_DUE" | "SUSPENDED" | "CANCELLED" | null;
       trialEndsAt: string | null;
       trialDaysRemaining: number | null;
+      subscriptionLapsed: boolean;
       brandName: string | null;
       logoUrl: string | null;
       platformBrandName: string | null;

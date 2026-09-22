@@ -5,6 +5,7 @@ import type { AppContext } from "../lib/context.js";
 import { processCustomerMessage } from "../engine/agentLoop.js";
 import { verifyWidgetToken } from "../lib/widgetToken.js";
 import { checkUsageAllowance } from "../lib/usageEnforcement.js";
+import { isSubscriptionLapsed } from "../lib/subscriptionAccess.js";
 
 const SendMessageSchema = z.object({
   conversationId: z.string().uuid().optional(),
@@ -45,7 +46,7 @@ export async function registerChatRoutes(app: FastifyInstance, ctx: AppContext) 
     // here; withTenant (not the platform escape hatch) is the correct,
     // narrower scoping.
     const tenant = await withTenant(ctx.prisma, { tenantId: claim.tenantId }, (tx) => tx.tenant.findUniqueOrThrow({ where: { id: claim.tenantId } }));
-    if (tenant.subscriptionState === "SUSPENDED" || tenant.subscriptionState === "CANCELLED") {
+    if (isSubscriptionLapsed(tenant)) {
       // Never delete data on expiry — route to a graceful fallback instead (CLAUDE.md Client Lifecycle).
       reply.code(503).send({
         error: "agent_unavailable",

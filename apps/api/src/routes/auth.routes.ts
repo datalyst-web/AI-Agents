@@ -9,6 +9,7 @@ import type { AppContext } from "../lib/context.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { verifyTurnstileToken } from "../lib/turnstile.js";
 import { recordSubscriptionStateChange } from "../lib/subscriptionHistory.js";
+import { isSubscriptionLapsed } from "../lib/subscriptionAccess.js";
 import { issueTwoFactorCode, verifyTwoFactorCode, TWO_FACTOR_CODE_TTL_MINUTES } from "../lib/twoFactor.js";
 import { provisionUsageLimits, trialEndDate } from "../lib/planLimits.js";
 import { env } from "../env.js";
@@ -500,6 +501,14 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       brandName,
       logoUrl,
       trialEndsAt,
+      // Same rule the API enforces in plugins/auth.ts — the dashboard uses
+      // it to show only Billing/Support. Never true for staff: their own
+      // /me has no tenant, and while managing a client they're exempt.
+      subscriptionLapsed:
+        authUser.role !== "platform_admin" &&
+        authUser.role !== "setup_specialist" &&
+        subscriptionState !== null &&
+        isSubscriptionLapsed({ subscriptionState, trialEndsAt }),
       trialDaysRemaining:
         trialEndsAt && subscriptionState === "TRIAL"
           ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))

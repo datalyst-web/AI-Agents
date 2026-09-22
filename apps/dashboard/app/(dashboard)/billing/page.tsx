@@ -49,7 +49,7 @@ export default function BillingPage() {
 }
 
 function BillingPageContent() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
   const isOwner = user?.role === "tenant_owner";
@@ -149,6 +149,8 @@ function BillingPageContent() {
           if (payment.status === "PAID") {
             setReturnNotice({ tone: "success", text: `Payment confirmed — ${payment.description} is now active.` });
             refreshBilling();
+            // Lifts the lapsed-account lock (if any) straight away.
+            void refreshUser();
             return;
           }
           if (payment.status === "CANCELLED" || payment.status === "FAILED") {

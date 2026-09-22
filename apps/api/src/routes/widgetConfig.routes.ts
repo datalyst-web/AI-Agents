@@ -3,6 +3,7 @@ import { AgentPersonalitySchema } from "@chat-agent/shared-types";
 import { withPlatformContext } from "@chat-agent/db";
 import type { AppContext } from "../lib/context.js";
 import { signWidgetToken } from "../lib/widgetToken.js";
+import { isSubscriptionLapsed } from "../lib/subscriptionAccess.js";
 
 /**
  * Public, unauthenticated — this is what `<script data-agent-id="...">`
@@ -29,7 +30,7 @@ export async function registerWidgetConfigRoutes(app: FastifyInstance, ctx: AppC
       return;
     }
     const { agent, tenant } = resolved;
-    if (tenant.subscriptionState === "SUSPENDED" || tenant.subscriptionState === "CANCELLED") {
+    if (isSubscriptionLapsed(tenant)) {
       reply.code(404).send({ error: "agent_not_found_or_not_live" });
       return;
     }
