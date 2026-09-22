@@ -151,3 +151,16 @@ body {
     -webkit-backdrop-filter: blur(16px);
   }
 }
+
+/*
+ * The Datalyst Africa logo (public/brand/datalyst-africa-logo.png) has
+ * black lettering on a transparent background, which disappears on the
+ * dark theme — so there it sits on a white card. Light theme shows it as is.
+ */
+.brand-logo {
+  border-radius: 0.75rem;
+}
+[data-theme="dark"] .brand-logo {
+  background-color: white;
+  padding: 0.3rem 0.55rem;
+}

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { PublicThemeToggle } from "@/components/PublicThemeToggle";
-import { HeaderBrand } from "@/components/BrandHome";
+import { HeaderBrand, HeroBrand } from "@/components/BrandHome";
 
 /**
  * The public marketing page — the only route a prospect sees before
@@ -213,6 +213,7 @@ export default function LandingPage() {
       <div className="bg-mesh-ambient">
         <Section className="pb-20 pt-20 sm:pt-28">
           <div className="mx-auto max-w-3xl text-center">
+            <HeroBrand />
             <div className="inline-flex items-center gap-2 rounded-full bg-foreground/[0.06] px-3.5 py-1.5 text-xs font-medium text-foreground/70 ring-1 ring-inset ring-surface-border">
               <span className="h-1.5 w-1.5 rounded-full bg-success" />
               We build it. You approve it. It goes live.
