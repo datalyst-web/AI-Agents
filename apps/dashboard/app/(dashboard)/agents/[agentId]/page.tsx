@@ -1212,7 +1212,7 @@ export default function AgentDetailPage() {
 
       {tab === "Conversations" ? (
         <Card>
-          <CardHeader title="Recent conversations" subtitle="Outcome tracked per CLAUDE.md's Conversation Analytics & Quality section." />
+          <CardHeader title="Recent conversations" subtitle="How each conversation with your customers ended." />
           <div className="flex flex-wrap items-center gap-2 border-b border-surface-border px-5 py-3">
             <select
               value={conversationOutcomeFilter}

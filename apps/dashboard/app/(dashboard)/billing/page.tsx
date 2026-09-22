@@ -50,6 +50,9 @@ export default function BillingPage() {
 
 function BillingPageContent() {
   const { user, refreshUser } = useAuth();
+  // Which AI companies serve the platform is ours to know, not the client's
+  // (CLAUDE.md principle 6 covers the dashboard too) — staff only.
+  const isStaff = user?.role === "setup_specialist" || user?.role === "platform_admin";
   const searchParams = useSearchParams();
   const router = useRouter();
   const isOwner = user?.role === "tenant_owner";
@@ -288,9 +291,9 @@ function BillingPageContent() {
         </CardBody>
       </Card>
 
-      {usage ? (
+      {usage && isStaff ? (
         <Card>
-          <CardHeader title="By provider" subtitle="Provider identity is never shown to your customers — this view is for your own cost visibility." />
+          <CardHeader title="By provider" subtitle="Staff only — clients never see which AI providers serve them." />
           <CardBody>
             {Object.keys(usage.byProvider).length === 0 ? (
               <p className="py-4 text-center text-sm text-foreground/40">No requests yet this month.</p>

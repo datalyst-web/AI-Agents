@@ -130,7 +130,7 @@ export default function OverviewPage() {
       )}
 
       <Card>
-        <CardHeader title="Token usage" subtitle="Last 14 days, across all providers on your model router." />
+        <CardHeader title="Token usage" subtitle="Last 14 days." />
         <CardBody>
           {daily ? (
             daily.some((d) => d.totalTokens > 0) ? (
