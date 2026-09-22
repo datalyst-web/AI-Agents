@@ -73,8 +73,11 @@ const TRUST: { title: string; body: string }[] = [
   },
 ];
 
+// Prices must match PLAN_PRICE_USD in apps/api/src/lib/planLimits.ts,
+// which is what checkout actually charges.
 const PLANS: {
   tier: string;
+  pricePrefix?: string;
   price: string;
   cadence: string;
   blurb: string;
@@ -85,7 +88,7 @@ const PLANS: {
 }[] = [
   {
     tier: "Starter",
-    price: "$49",
+    price: "$29",
     cadence: "/month",
     blurb: "One agent on your website, for a business testing the water.",
     included: ["500 conversations/month", "500,000 AI tokens/month", "Website widget + shareable link", "Knowledge base from your docs & site", "Email escalation alerts"],
@@ -94,7 +97,7 @@ const PLANS: {
   },
   {
     tier: "Growth",
-    price: "$149",
+    price: "$89",
     cadence: "/month",
     blurb: "For businesses running real volume across more than one channel.",
     included: [
@@ -111,7 +114,7 @@ const PLANS: {
   },
   {
     tier: "Scale",
-    price: "$399",
+    price: "$249",
     cadence: "/month",
     blurb: "Multiple agents, multiple departments, higher volume.",
     included: [
@@ -127,8 +130,9 @@ const PLANS: {
   },
   {
     tier: "Enterprise",
-    price: "Custom",
-    cadence: "",
+    pricePrefix: "From",
+    price: "$499",
+    cadence: "/month",
     blurb: "Negotiated volume, custom domain, and a managed service agreement.",
     included: ["Volume pricing, no hard cap", "Your own domain for the agent", "Fully managed knowledge upkeep", "Priority support", "Custom integrations built for you"],
     cta: "Talk to us",
@@ -336,6 +340,7 @@ export default function LandingPage() {
                 ) : null}
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-foreground/60">{plan.tier}</h3>
                 <div className="mt-3 flex items-baseline gap-1">
+                  {plan.pricePrefix ? <span className="text-sm text-foreground/45">{plan.pricePrefix}</span> : null}
                   <span className="text-3xl font-semibold tracking-tightest text-foreground">{plan.price}</span>
                   <span className="text-sm text-foreground/45">{plan.cadence}</span>
                 </div>

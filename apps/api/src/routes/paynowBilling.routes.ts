@@ -7,7 +7,7 @@ import { requireTenantMatch, requirePermission } from "../lib/rbac.js";
 import { verifyActiveImpersonation } from "../lib/impersonation.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { recordSubscriptionStateChange } from "../lib/subscriptionHistory.js";
-import { provisionUsageLimits } from "../lib/planLimits.js";
+import { PLAN_PRICE_USD, SELF_CHECKOUT_TIERS, provisionUsageLimits } from "../lib/planLimits.js";
 import { initiateWebPayment, initiateMobilePayment, verifyAndParseStatusUpdate, isPaidStatus } from "../lib/paynow.js";
 import { env } from "../env.js";
 
@@ -22,11 +22,10 @@ import { env } from "../env.js";
  * These are placeholder launch prices — confirm/adjust before relying on
  * this for real revenue.
  */
-const SUBSCRIPTION_PRICING_USD: Partial<Record<"STARTER" | "GROWTH" | "SCALE", string>> = {
-  STARTER: "49.00",
-  GROWTH: "149.00",
-  SCALE: "399.00",
-};
+// From the single price table in lib/planLimits.ts.
+const SUBSCRIPTION_PRICING_USD: Partial<Record<"STARTER" | "GROWTH" | "SCALE", string>> = Object.fromEntries(
+  SELF_CHECKOUT_TIERS.map((tier) => [tier, PLAN_PRICE_USD[tier].toFixed(2)]),
+);
 
 const CheckoutSchema = z.object({ tier: z.enum(["STARTER", "GROWTH", "SCALE"]) });
 const MobileCheckoutSchema = CheckoutSchema.extend({

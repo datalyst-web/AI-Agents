@@ -13,8 +13,8 @@ import type { Prisma, SubscriptionState, SubscriptionTier } from "@chat-agent/db
  * contracts and must never be auto-cut off; their spend is watched via
  * Platform Analytics instead.
  *
- * Prices these correspond to live in paynowBilling.routes.ts's
- * SUBSCRIPTION_PRICING_USD ($49 / $149 / $399 / custom).
+ * Prices for these plans are PLAN_PRICE_USD below — the single source for
+ * what checkout charges and what Platform Analytics counts as revenue.
  */
 interface PlanAllowance {
   includedConversationsPerMonth: number;
@@ -56,6 +56,16 @@ const PLAN_ALLOWANCES: Record<SubscriptionTier, PlanAllowance> = {
  * banner and the marketing page all trace back here.
  */
 export const TRIAL_DAYS = 14;
+
+/**
+ * Monthly price per plan, in US dollars — what Paynow checkout charges.
+ * Keep the marketing page's pricing table (apps/dashboard/app/page.tsx)
+ * in step with this. Enterprise is negotiated per client ("from $499"),
+ * so it can't be bought through self-checkout; the figure here is only the
+ * floor used for revenue estimates.
+ */
+export const PLAN_PRICE_USD = { STARTER: 29, GROWTH: 89, SCALE: 249, ENTERPRISE: 499 } as const;
+export const SELF_CHECKOUT_TIERS = ["STARTER", "GROWTH", "SCALE"] as const;
 
 export function trialEndDate(from = new Date()): Date {
   return new Date(from.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);

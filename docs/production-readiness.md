@@ -81,7 +81,7 @@ plan. Do not provision that stack as part of the current launch.
    to an agreed test recipient.
 3. **Billing is not configured in production.** API settings have no
    `PAYNOW_INTEGRATION_ID` or `PAYNOW_INTEGRATION_KEY`. Launch prices in
-   `paynowBilling.routes.ts` are marked placeholders ($49/$149/$399).
+   `PLAN_PRICE_USD` in `apps/api/src/lib/planLimits.ts` ($29/$89/$249, Enterprise from $499).
    Obtain approved pricing and merchant configuration, then verify the
    payment lifecycle and webhook handling in the appropriate test flow.
 4. **Meta channels are incomplete.** `META_WEBHOOK_VERIFY_TOKEN` exists,

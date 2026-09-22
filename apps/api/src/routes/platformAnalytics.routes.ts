@@ -2,11 +2,11 @@ import type { FastifyInstance } from "fastify";
 import { withPlatformContext } from "@chat-agent/db";
 import type { AppContext } from "../lib/context.js";
 import { requirePermission } from "../lib/rbac.js";
+import { PLAN_PRICE_USD } from "../lib/planLimits.js";
 
-// Same as billing.routes' plan pricing table — kept in sync by hand since
-// there's no shared source of truth for plan price yet (see
-// paynowBilling.routes.ts's own PLAN_PRICE_USD constant).
-const PLAN_PRICE_USD: Record<string, number> = { STARTER: 49, GROWTH: 149, SCALE: 399, ENTERPRISE: 0 };
+// Revenue estimate from the single price table (Enterprise at its "from"
+// floor — the real figure is per contract).
+const PLAN_PRICE: Record<string, number> = PLAN_PRICE_USD;
 
 /**
  * Platform-wide business metrics — every tenant at once, not one at a
@@ -41,7 +41,7 @@ export async function registerPlatformAnalyticsRoutes(app: FastifyInstance, ctx:
       // MRR counts only ACTIVE subscriptions — a TRIAL/SUSPENDED/CANCELLED
       // tenant isn't recurring revenue yet (or anymore), even though it's
       // still "on" a paid tier value.
-      if (t.subscriptionState === "ACTIVE") mrr += PLAN_PRICE_USD[t.subscriptionTier] ?? 0;
+      if (t.subscriptionState === "ACTIVE") mrr += PLAN_PRICE[t.subscriptionTier] ?? 0;
     }
 
     // Real cohort-based churn, computed from SubscriptionStateChange
