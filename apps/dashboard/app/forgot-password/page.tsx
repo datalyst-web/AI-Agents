@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@chat-agent/ui";
 import { api, ApiError } from "@/lib/api";
 import { PublicThemeToggle } from "@/components/PublicThemeToggle";
+import { AuthBrandMark } from "@/components/BrandHome";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -34,12 +35,7 @@ export default function ForgotPasswordPage() {
       <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-brand-gradient opacity-20 blur-3xl" />
       <div className="relative w-full max-w-sm animate-fade-up">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-xl2 bg-brand-gradient shadow-glow-lg">
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
-              <path d="M2 8a6 6 0 1 1 6 6" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
-              <circle cx="12" cy="12" r="1.4" fill="white" />
-            </svg>
-          </div>
+          <AuthBrandMark />
           <h1 className="text-xl font-semibold tracking-tight text-foreground">Reset your password</h1>
           <p className="mt-1 text-sm text-foreground/50">We&apos;ll email you a link to get back in.</p>
         </div>

@@ -7,6 +7,7 @@ import { Button, PasswordInput } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 import { PublicThemeToggle } from "@/components/PublicThemeToggle";
+import { AuthBrandMark } from "@/components/BrandHome";
 
 // Baked in at build time (Vercel env), same pattern as NEXT_PUBLIC_API_BASE_URL
 // elsewhere in this app — must match the API's GOOGLE_CLIENT_ID exactly, since
@@ -196,12 +197,7 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-brand-gradient opacity-20 blur-3xl" />
       <div className="relative w-full max-w-sm animate-fade-up">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-xl2 bg-brand-gradient shadow-glow-lg">
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
-              <path d="M2 8a6 6 0 1 1 6 6" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
-              <circle cx="12" cy="12" r="1.4" fill="white" />
-            </svg>
-          </div>
+          <AuthBrandMark />
           <h1 className="text-xl font-semibold tracking-tight text-foreground">
             {challenge ? "Check your email" : "Welcome back"}
           </h1>

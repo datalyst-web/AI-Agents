@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { PublicThemeToggle } from "@/components/PublicThemeToggle";
+import { HeaderBrand } from "@/components/BrandHome";
 
 /**
  * The public marketing page — the only route a prospect sees before
@@ -176,10 +177,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-surface text-foreground">
       <header className="sticky top-0 z-20 border-b border-surface-border/60 bg-surface/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-xl bg-brand-gradient shadow-glow" />
-            <span className="text-sm font-semibold tracking-tight text-foreground">{BRAND}</span>
-          </div>
+          <HeaderBrand />
           <nav className="hidden items-center gap-8 text-sm text-foreground/60 md:flex">
             <a href="#capabilities" className="transition-colors hover:text-foreground">
               What it does
