@@ -29,6 +29,10 @@ interface AuthUser {
   trialDaysRemaining: number | null;
   /** Trial over or subscription ended — the API then only allows Billing, Usage and Support. Never true for staff. */
   subscriptionLapsed: boolean;
+  /** A trial client's owner/admin who hasn't filled in the business questionnaire yet — the dashboard sends them to /welcome. */
+  onboardingIntakeRequired: boolean;
+  /** Trials only: false while the 14 days wait for their assistant to go live. Null when not on a trial. */
+  trialStarted: boolean | null;
   /** Staff-set white-label console name/logo — see tenants.routes.ts branding endpoints. Null until staff set them. */
   brandName: string | null;
   logoUrl: string | null;

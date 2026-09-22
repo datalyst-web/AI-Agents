@@ -13,14 +13,17 @@ import { env } from "../env.js";
  * agent stops answering because chat.routes.ts already refuses SUSPENDED
  * tenants — no separate enforcement needed here.
  *
- * Also sends a heads-up email three days out, so the first thing a client
- * hears about their trial ending isn't their agent going quiet.
+ * Also emails a heads-up three days out and again on the last day, so the
+ * first thing a client hears about their trial ending isn't their agent
+ * going quiet. Trials whose clock hasn't started (trialEndsAt null — it
+ * starts when their agent first goes live) are skipped.
  */
 const REMINDER_DAYS_BEFORE = 3;
 
 export async function runTrialExpirySweep(ctx: WorkerContext): Promise<void> {
   const now = new Date();
   const reminderCutoff = new Date(now.getTime() + REMINDER_DAYS_BEFORE * 24 * 60 * 60 * 1000);
+  const lastDayCutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
   const trialing = await withPlatformContext(ctx.prisma, (tx) =>
     tx.tenant.findMany({
@@ -46,6 +49,31 @@ export async function runTrialExpirySweep(ctx: WorkerContext): Promise<void> {
           `Nothing has been deleted — your knowledge base, agent configuration and conversation history are all still here. ` +
           `Choose a plan and your agent starts answering again immediately.\n\n${env.DASHBOARD_BASE_URL}/billing`,
       });
+      continue;
+    }
+
+    // Last-day reminder, once: the final nudge before the agent pauses.
+    if (endsAt <= lastDayCutoff) {
+      const alreadyWarned = await withTenant(ctx.prisma, { tenantId: tenant.id }, (tx) =>
+        tx.auditLogEntry.findFirst({ where: { tenantId: tenant.id, action: "trial_last_day_reminder_sent" } }),
+      );
+      if (!alreadyWarned) {
+        await notifyOwners(ctx, tenant.id, {
+          subject: `Last day of your ${tenant.name} free trial`,
+          text:
+            `Your free trial ends within the next 24 hours, and your AI assistant will pause then.
+
+` +
+            `Choose a plan now to keep it answering your customers without a break — everything we built for you stays as it is:
+` +
+            `${env.DASHBOARD_BASE_URL}/billing`,
+        });
+        await withTenant(ctx.prisma, { tenantId: tenant.id }, (tx) =>
+          tx.auditLogEntry.create({
+            data: { id: randomUUID(), tenantId: tenant.id, actorUserId: SYSTEM_ACTOR_ID, actorIsStaff: false, action: "trial_last_day_reminder_sent" },
+          }),
+        );
+      }
       continue;
     }
 

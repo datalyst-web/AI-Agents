@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Script from "next/script";
 import { Button, PasswordInput } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
@@ -38,7 +39,13 @@ declare global {
 }
 
 export default function LoginPage() {
-  const { login, loginWithGoogle, completeTwoFactor } = useAuth();
+  const { user, loading: authLoading, login, loginWithGoogle, completeTwoFactor } = useAuth();
+  const router = useRouter();
+  // Someone already signed in has no business on this page — straight to
+  // their dashboard (and never into a second signup).
+  useEffect(() => {
+    if (!authLoading && user) router.replace("/overview");
+  }, [authLoading, user, router]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);

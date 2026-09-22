@@ -11,7 +11,7 @@ import { verifyTurnstileToken } from "../lib/turnstile.js";
 import { recordSubscriptionStateChange } from "../lib/subscriptionHistory.js";
 import { isSubscriptionLapsed } from "../lib/subscriptionAccess.js";
 import { issueTwoFactorCode, verifyTwoFactorCode, TWO_FACTOR_CODE_TTL_MINUTES } from "../lib/twoFactor.js";
-import { provisionUsageLimits, trialEndDate } from "../lib/planLimits.js";
+import { provisionUsageLimits } from "../lib/planLimits.js";
 import { env } from "../env.js";
 
 const LoginSchema = z.object({ email: z.string().email(), password: z.string().min(8), turnstileToken: z.string().optional() });
@@ -108,7 +108,9 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
     // nothing and an INSERT is rejected outright.
     const existing = await withPlatformContext(ctx.prisma, (tx) => tx.user.findUnique({ where: { email: body.email } }));
     if (existing) {
-      reply.code(409).send({ error: "email_already_registered" });
+      // One account per email address, ever — a second signup (a second free
+      // trial) is refused. Worded for a person; the code stays for callers.
+      reply.code(409).send({ error: "email_already_registered", message: "An account with this email already exists — please sign in instead." });
       return;
     }
 
@@ -132,7 +134,9 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
           // Setup Service) — a self-signup is the start of that process,
           // not someone opting to configure it themselves.
           managedSetupTier: "FULLY_MANAGED",
-          trialEndsAt: trialEndDate(),
+          // The 14 days start when their agent first goes LIVE (agents
+          // publish route), not now — building it takes our team time.
+          trialEndsAt: null,
         },
       });
       const user = await tx.user.create({
@@ -487,7 +491,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
     // withTenant(effectiveTenantId) and throw.
     const user = await withPlatformContext(ctx.prisma, (tx) => tx.user.findUniqueOrThrow({ where: { id: authUser.sub } }));
 
-    const { theme, subscriptionTier, subscriptionState, brandName, logoUrl, trialEndsAt, tenantName } = effectiveTenantId
+    const { theme, subscriptionTier, subscriptionState, brandName, logoUrl, trialEndsAt, tenantName, onboardingIntakeAt } = effectiveTenantId
       ? await withTenant(ctx.prisma, { tenantId: effectiveTenantId }, async (tx) => {
           const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: effectiveTenantId! } });
           return {
@@ -498,6 +502,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
             logoUrl: tenant.logoObjectKey ? `/v1/tenants/${tenant.id}/branding/logo` : null,
             trialEndsAt: tenant.trialEndsAt,
             tenantName: tenant.name,
+            onboardingIntakeAt: tenant.onboardingIntakeAt,
           };
         })
       : {
@@ -511,6 +516,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
           logoUrl: null,
           trialEndsAt: null,
           tenantName: null,
+          onboardingIntakeAt: null,
         };
     // Platform operator's own brand — always fetched regardless of tenant
     // scope, since it's the fallback the dashboard sidebar falls back to
@@ -542,6 +548,15 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
         trialEndsAt && subscriptionState === "TRIAL"
           ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
           : null,
+      // A trial client's owner/admin fills in the business questionnaire
+      // before anything else (onboarding.routes.ts); the dashboard routes
+      // them to /welcome until they have.
+      onboardingIntakeRequired:
+        (authUser.role === "tenant_owner" || authUser.role === "tenant_admin") &&
+        subscriptionState === "TRIAL" &&
+        !onboardingIntakeAt,
+      // False while the 14-day clock waits for their agent to go live.
+      trialStarted: subscriptionState === "TRIAL" ? trialEndsAt !== null : null,
       // The client's own business name — what their dashboard shows when
       // no custom white-label name has been set.
       tenantName,

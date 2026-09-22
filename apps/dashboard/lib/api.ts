@@ -151,7 +151,41 @@ export function isTwoFactorChallenge<T extends object>(r: T | TwoFactorChallenge
   return "requiresTwoFactor" in r;
 }
 
+/** The free-trial business questionnaire — answers as JSON plus files, sent as one multipart request. */
+async function submitIntake(tenantId: string, answers: unknown, documents: File[], logo: File | null) {
+  const form = new FormData();
+  form.append("answers", JSON.stringify(answers));
+  if (logo) form.append("logo", logo);
+  for (const file of documents) form.append("documents", file);
+  const token = getToken();
+  let resp: Response;
+  try {
+    resp = await fetch(`${API_BASE}/v1/tenants/${tenantId}/intake`, {
+      method: "POST",
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+  } catch {
+    throw new ApiError(0, "Couldn't reach the server. Check your internet connection and try again.");
+  }
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({ error: resp.statusText }));
+    throw new ApiError(resp.status, body.message ?? body.error ?? resp.statusText);
+  }
+  return resp.json() as Promise<{ ok: true; files: number }>;
+}
+
+export interface IntakeView {
+  submittedAt: string;
+  summary: string;
+  files: { index: number; name: string; size: number; kind: "document" | "logo" }[];
+}
+
 export const api = {
+  submitIntake,
+  getIntake: (tenantId: string) => apiFetch<IntakeView>(`/v1/platform/tenants/${tenantId}/intake`),
+  getIntakeFileUrl: (tenantId: string, index: number) =>
+    apiFetch<{ url: string; name: string }>(`/v1/platform/tenants/${tenantId}/intake/files/${index}`),
   login: (email: string, password: string, turnstileToken?: string) =>
     apiFetch<LoginResponse>("/v1/auth/login", {
       method: "POST",
@@ -194,6 +228,8 @@ export const api = {
       trialEndsAt: string | null;
       trialDaysRemaining: number | null;
       subscriptionLapsed: boolean;
+      onboardingIntakeRequired: boolean;
+      trialStarted: boolean | null;
       brandName: string | null;
       logoUrl: string | null;
       tenantName: string | null;
@@ -259,6 +295,7 @@ export const api = {
         brandName: string | null;
         logoUrl: string | null;
         dataResidencyRegion: string | null;
+        onboardingIntakeAt: string | null;
         agents: { id: string; name: string; status: "DRAFT" | "CONFIGURING" | "KNOWLEDGE_PROCESSING" | "TESTING" | "APPROVED" | "LIVE" }[];
       }[]
     >(
@@ -280,8 +317,12 @@ export const api = {
     apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}`, { method: "PATCH", body: JSON.stringify(body) }),
   startTesting: (tenantId: string, agentId: string) =>
     apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/start-testing`, { method: "POST" }),
-  deleteAgent: (tenantId: string, agentId: string) =>
-    apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}`, { method: "DELETE" }),
+  /** A LIVE agent also needs its exact name as confirmation. */
+  deleteAgent: (tenantId: string, agentId: string, confirmName?: string) =>
+    apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}`, {
+      method: "DELETE",
+      ...(confirmName ? { body: JSON.stringify({ confirmName }) } : {}),
+    }),
   approveAgent: (tenantId: string, agentId: string) =>
     apiFetch(`/v1/tenants/${tenantId}/agents/${agentId}/approve`, { method: "POST" }),
   publishAgent: (tenantId: string, agentId: string) =>

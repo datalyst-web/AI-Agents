@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button, PasswordInput } from "@chat-agent/ui";
 import { api, ApiError, isTwoFactorChallenge } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -10,7 +11,13 @@ import { BackToHome } from "@/components/BrandHome";
 import { TURNSTILE_SITE_KEY, TurnstileWidget, type TurnstileHandle } from "@/components/TurnstileWidget";
 
 export default function SignupPage() {
-  const { completeTwoFactor, establishSessionFromToken } = useAuth();
+  const { user, loading: authLoading, completeTwoFactor, establishSessionFromToken } = useAuth();
+  const router = useRouter();
+  // Someone already signed in has no business on this page — straight to
+  // their dashboard (and never into a second signup).
+  useEffect(() => {
+    if (!authLoading && user) router.replace("/overview");
+  }, [authLoading, user, router]);
   const [tenantName, setTenantName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

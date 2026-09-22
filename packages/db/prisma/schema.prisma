@@ -76,12 +76,20 @@ model Tenant {
   slug                 String            @unique
   subscriptionState    SubscriptionState @default(TRIAL)
   subscriptionTier     SubscriptionTier  @default(STARTER)
-  /// When a TRIAL tenant's free period ends. Set at signup (see
-  /// auth.routes.ts) and cleared once they convert to a paid plan.
+  /// When a TRIAL tenant's free period ends. Null while the trial hasn't
+  /// started: the 14 days begin when their agent first goes LIVE (set by
+  /// the publish route), so the time our team spends building it doesn't
+  /// come out of their trial. Cleared once they convert to a paid plan.
   /// trialExpirySweep suspends the tenant once this passes — suspend,
   /// never delete (CLAUDE.md Client Lifecycle), so converting later
   /// restores everything they built during the trial.
   trialEndsAt          DateTime?         @map("trial_ends_at")
+  /// The "tell us about your business" questionnaire a trial client fills
+  /// in right after signup: { answers, files: [{ name, key, size, contentType }] }.
+  /// Staff build the agent from it. Files live in R2 under the tenant's
+  /// "intake/" prefix. See tenants.routes.ts POST /intake.
+  onboardingIntake     Json?             @map("onboarding_intake")
+  onboardingIntakeAt   DateTime?         @map("onboarding_intake_at")
   // Every client is fully managed (CLAUDE.md, LOCKED) — SELF_SERVE survives
   // only for historical tenants. Only a DEFAULT change; existing rows keep
   // their value.

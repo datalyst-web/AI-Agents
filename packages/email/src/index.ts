@@ -16,11 +16,19 @@ import nodemailer, { type Transporter } from "nodemailer";
  * SendGrid/Mailgun/SES's SMTP relay) speaks it, so onboarding is "paste
  * four env vars" instead of picking and wiring a specific vendor.
  */
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 export interface EmailMessage {
   to: string;
   subject: string;
   text: string;
   html?: string;
+  /** Keep small — the whole message must stay within the provider's size limit. */
+  attachments?: EmailAttachment[];
 }
 
 export interface EmailProvider {
@@ -64,6 +72,7 @@ export class SmtpEmailProvider implements EmailProvider {
         subject: message.subject,
         text: message.text,
         html: message.html,
+        attachments: message.attachments,
       });
       return { sent: true };
     } catch (err) {
@@ -179,6 +188,7 @@ export class GmailApiEmailProvider implements EmailProvider {
         subject: message.subject,
         text: message.text,
         html: message.html,
+        attachments: message.attachments,
       });
       const raw = Buffer.from(composed.message as Buffer).toString("base64url");
       const resp = await this.fetch(GMAIL_SEND_URL, {

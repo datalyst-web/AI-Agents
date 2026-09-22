@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Card, CardBody, CardHeader, Badge, Button, Modal, CardRowSkeleton } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
-import { api, ApiError, API_BASE } from "@/lib/api";
+import { api, ApiError, API_BASE, type IntakeView } from "@/lib/api";
 
 type AgentStatus = "DRAFT" | "CONFIGURING" | "KNOWLEDGE_PROCESSING" | "TESTING" | "APPROVED" | "LIVE";
 interface QueueTenant {
@@ -15,6 +15,8 @@ interface QueueTenant {
   brandName: string | null;
   logoUrl: string | null;
   dataResidencyRegion: string | null;
+  /** When a trial client sent the welcome questionnaire (null if not yet / not a trial). */
+  onboardingIntakeAt: string | null;
   agents: { id: string; name: string; status: AgentStatus }[];
 }
 interface StaffAccount {
@@ -63,6 +65,9 @@ export default function ManagedSetupPage() {
   const [starting, setStarting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<QueueTenant | null>(null);
+  const [intakeTarget, setIntakeTarget] = useState<QueueTenant | null>(null);
+  const [intake, setIntake] = useState<IntakeView | null>(null);
+  const [intakeError, setIntakeError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<QueueTenant | null>(null);
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
   const [deleteReason, setDeleteReason] = useState("");
@@ -166,6 +171,26 @@ export default function ManagedSetupPage() {
       setError(err instanceof ApiError ? err.message : "Could not remove this client.");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function openIntake(t: QueueTenant) {
+    setIntakeTarget(t);
+    setIntake(null);
+    setIntakeError(null);
+    try {
+      setIntake(await api.getIntake(t.id));
+    } catch (err) {
+      setIntakeError(err instanceof ApiError ? err.message : "Could not load their answers.");
+    }
+  }
+
+  async function downloadIntakeFile(tenantId: string, index: number) {
+    try {
+      const { url } = await api.getIntakeFileUrl(tenantId, index);
+      window.open(url, "_blank", "noopener");
+    } catch (err) {
+      setIntakeError(err instanceof ApiError ? err.message : "Could not open that file.");
     }
   }
 
@@ -355,9 +380,22 @@ export default function ManagedSetupPage() {
                       <Badge tone="brand">{TIER_LABEL[t.managedSetupTier] ?? t.managedSetupTier}</Badge>
                       <Badge tone={t.subscriptionState === "ACTIVE" ? "success" : "neutral"}>{t.subscriptionState.toLowerCase()}</Badge>
                       <AgentPipelineBadge agents={t.agents} />
+                      {t.subscriptionState === "TRIAL" ? (
+                        <Badge tone={t.onboardingIntakeAt ? "info" : "warning"}>
+                          {t.onboardingIntakeAt ? "questionnaire received" : "awaiting questionnaire"}
+                        </Badge>
+                      ) : null}
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    {t.onboardingIntakeAt ? (
+                      <button
+                        onClick={() => void openIntake(t)}
+                        className="text-xs font-medium text-brand-link transition-colors hover:text-brand-link-hover"
+                      >
+                        Questionnaire
+                      </button>
+                    ) : null}
                     <button
                       onClick={() => openBranding(t)}
                       className="text-xs font-medium text-foreground/40 transition-colors hover:text-foreground/70"
@@ -647,6 +685,43 @@ export default function ManagedSetupPage() {
             {busyId === cancelTarget?.id ? "Removing…" : "Remove client"}
           </Button>
         </div>
+      </Modal>
+
+      <Modal
+        open={intakeTarget !== null}
+        onClose={() => setIntakeTarget(null)}
+        title={`${intakeTarget?.name ?? ""} — trial questionnaire`}
+        subtitle={intake ? `Sent ${new Date(intake.submittedAt).toLocaleString()}. Build their assistant from this, then publish — their 14-day trial starts at go-live.` : undefined}
+      >
+        {intakeError ? <p className="text-sm text-danger">{intakeError}</p> : null}
+        {!intake && !intakeError ? <p className="text-sm text-foreground/40">Loading…</p> : null}
+        {intake ? (
+          <div className="space-y-4">
+            <pre className="max-h-[50vh] overflow-auto whitespace-pre-wrap rounded-lg bg-foreground/[0.03] p-4 font-sans text-xs leading-relaxed text-foreground/80 ring-1 ring-inset ring-surface-border">
+              {intake.summary}
+            </pre>
+            <div>
+              <p className="text-xs font-medium text-foreground/60">Files</p>
+              {intake.files.length === 0 ? (
+                <p className="mt-1 text-xs text-foreground/40">None sent.</p>
+              ) : (
+                <ul className="mt-2 space-y-1.5">
+                  {intake.files.map((f) => (
+                    <li key={f.index} className="flex items-center justify-between rounded-lg bg-foreground/[0.03] px-3 py-2 text-xs ring-1 ring-inset ring-surface-border">
+                      <span className="truncate">
+                        {f.kind === "logo" ? <Badge tone="brand">logo</Badge> : null} <span className="ml-1">{f.name}</span>
+                        <span className="ml-2 text-foreground/35">{Math.max(1, Math.round(f.size / 1024))} KB</span>
+                      </span>
+                      <button onClick={() => void downloadIntakeFile(intakeTarget!.id, f.index)} className="ml-3 shrink-0 font-medium text-brand-link hover:underline">
+                        Download
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        ) : null}
       </Modal>
 
       <Modal

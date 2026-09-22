@@ -75,6 +75,20 @@ describe("GmailApiEmailProvider", () => {
     expect(raw).toContain("<p>HTML body</p>");
   });
 
+  it("includes attachments in the message it sends", async () => {
+    const google = fakeGoogle();
+    const provider = new GmailApiEmailProvider({ serviceAccount, fromAddress: FROM, fetchImpl: google.fetchImpl });
+    await provider.send({
+      to: "staff@example.org",
+      subject: "New trial",
+      text: "See attached",
+      attachments: [{ filename: "price-list.txt", content: Buffer.from("Haircut: $10"), contentType: "text/plain" }],
+    });
+    const raw = Buffer.from(JSON.parse(String(google.calls[1]!.init.body)).raw, "base64url").toString();
+    expect(raw).toMatch(/Content-Disposition: attachment; filename=price-list\.txt/);
+    expect(raw).toContain(Buffer.from("Haircut: $10").toString("base64"));
+  });
+
   it("reuses the access token until shortly before it expires", async () => {
     let now = 1_000_000;
     const google = fakeGoogle();

@@ -22,6 +22,8 @@ type ExtendedAuditAction =
   | "tenant_cancelled_by_staff"
   | "tenant_reactivated_by_staff"
   | "agent_changes_approved"
+  | "onboarding_intake_submitted"
+  | "trial_started"
   | "channel_connected"
   | "channel_disconnected"
   | "integration_connected"

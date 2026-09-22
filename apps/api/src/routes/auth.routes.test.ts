@@ -151,7 +151,7 @@ describe.skipIf(!process.env.CHAT_APP_DATABASE_URL)("auth routes — RLS entry-p
       payload: { tenantName: "RLS Dup Test Co Again", email, password: "another-password" },
     });
     expect(second.statusCode).toBe(409);
-    expect(JSON.parse(second.body)).toEqual({ error: "email_already_registered" });
+    expect(JSON.parse(second.body)).toMatchObject({ error: "email_already_registered" });
 
     await app.close();
   });

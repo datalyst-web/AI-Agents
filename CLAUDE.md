@@ -378,6 +378,28 @@ Support with a banner, and unlocks the moment Paynow confirms payment.
 Their agent stops answering at the same moment. Staff are never locked
 out. The check fails open on a database error.
 
+### Free trials `[LOCKED]`
+
+Self-signup is the free-trial path (clients who subscribe directly are
+onboarded by our team another way, not by this flow):
+
+1. Sign up (business name, email, password, CAPTCHA) → 6-digit email code.
+2. The dashboard sends the trial owner/admin to `/welcome` before anything
+   else: a 7-step questionnaire collecting everything staff need to build
+   and connect the assistant — business facts, assistant behaviour and
+   handover rules, products/prices, FAQs, policies, documents, logo and
+   brand, every channel (incl. "install it on my website for me" vs "send
+   me a guide"), calendar and tools. Stored on `Tenant.onboardingIntake`;
+   files in R2 under the tenant's `intake/` prefix
+   (`apps/api/src/routes/onboarding.routes.ts`).
+3. Every staff member is emailed all answers (files attached up to 4 MB);
+   Managed Setup shows a "Questionnaire" button per client.
+4. Staff build, the client approves, it's published. **The 14 days start at
+   first go-live** (`trialEndsAt` is null until then; the publish route sets
+   it and emails the client). Reminders at 3 days and on the last day; at
+   expiry the account locks to Billing until they pay (see "Lapsed
+   subscriptions"). One account per email — a repeat signup is refused.
+
 ### Deleting a client `[LOCKED]`
 
 "Remove" in Managed Setup cancels (reversible — Reactivate). Permanent

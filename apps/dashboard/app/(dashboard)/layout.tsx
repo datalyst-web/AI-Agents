@@ -92,6 +92,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   // use the exact same tenant-scoped tools a client would," just not a
   // reduced version of them.
   const lapsed = !isStaff && Boolean(user?.subscriptionLapsed);
+  // A new trial client fills in the business questionnaire (/welcome)
+  // before anything else — trials only; subscribers never see it.
+  const intakeRequired = !isStaff && Boolean(user?.onboardingIntakeRequired);
   const nav = lapsed ? LAPSED_NAV : isStaff && !impersonation ? staffNav : impersonation ? [...staffNav, ...TENANT_NAV] : CLIENT_NAV;
 
   // Below md, the sidebar is an off-canvas drawer instead of a permanent
@@ -129,6 +132,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   }, [loading, lapsed, pathname, router]);
 
   useEffect(() => {
+    if (!loading && intakeRequired && pathname !== "/welcome") router.replace("/welcome");
+    if (!loading && user && !intakeRequired && pathname === "/welcome") router.replace("/overview");
+  }, [loading, intakeRequired, user, pathname, router]);
+
+  useEffect(() => {
     if (!loading && isStaff && !impersonation && !staffNav.some((item) => item.href === pathname)) {
       router.push("/managed-setup");
     }
@@ -143,6 +151,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </div>
     );
   }
+
+  // The questionnaire is a full-screen welcome, without the dashboard chrome.
+  if (pathname === "/welcome") return <>{children}</>;
 
   // White-label: a client's dashboard (and staff managing that client) shows
   // only the client's own identity — their white-label name and logo, else
@@ -296,6 +307,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <div className="mx-auto max-w-6xl animate-fade-up">
             {lapsed ? (
               <LapsedBanner trialEnded={user.subscriptionState === "TRIAL" || user.subscriptionState === "SUSPENDED"} />
+            ) : !isStaff && user.subscriptionState === "TRIAL" && user.trialStarted === false ? (
+              <TrialNotStartedBanner />
             ) : (
               <TrialBanner daysRemaining={user?.trialDaysRemaining ?? null} state={user?.subscriptionState ?? null} />
             )}
@@ -512,6 +525,18 @@ function IconFlag({ className }: { className?: string }) {
  * read. Turns urgent in the final three days, matching when
  * trialExpirySweep sends its reminder email.
  */
+function TrialNotStartedBanner() {
+  return (
+    <div className="mb-6 rounded-xl2 bg-info/10 px-5 py-4 text-sm text-info ring-1 ring-inset ring-info/25">
+      <p className="font-semibold">Thanks — our team is building your AI assistant.</p>
+      <p className="mt-1 opacity-85">
+        We&apos;ll email you the moment it&apos;s ready. Your 14-day free trial starts the day it goes live, so you get the full 14
+        days with it.
+      </p>
+    </div>
+  );
+}
+
 function LapsedBanner({ trialEnded }: { trialEnded: boolean }) {
   return (
     <div className="mb-6 rounded-xl2 bg-danger/10 px-5 py-4 text-sm text-danger ring-1 ring-inset ring-danger/25">

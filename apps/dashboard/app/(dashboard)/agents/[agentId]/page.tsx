@@ -292,6 +292,7 @@ export default function AgentDetailPage() {
   const [agent, setAgent] = useState<AgentDetail | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
   const [knowledgeError, setKnowledgeError] = useState<string | null>(null);
   const [deletingKnowledgeId, setDeletingKnowledgeId] = useState<string | null>(null);
   const [knowledge, setKnowledge] = useState<KnowledgeSource[]>([]);
@@ -606,7 +607,7 @@ export default function AgentDetailPage() {
     setDeleting(true);
     setError(null);
     try {
-      await api.deleteAgent(user.tenantId, agentId);
+      await api.deleteAgent(user.tenantId, agentId, agent?.status === "LIVE" ? deleteConfirmName : undefined);
       router.push("/agents");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to delete agent.");
@@ -757,8 +758,15 @@ export default function AgentDetailPage() {
             </Button>
           ) : null}
           {pendingChanges && (agent.approvedAt || isStaff) ? <Button onClick={publish}>Publish changes</Button> : null}
-          {isStaff && agent.status !== "LIVE" ? (
-            <Button variant="ghost" className="!text-danger hover:!bg-danger/10" onClick={() => setDeleteModalOpen(true)}>
+          {isStaff ? (
+            <Button
+              variant="ghost"
+              className="!text-danger hover:!bg-danger/10"
+              onClick={() => {
+                setDeleteConfirmName("");
+                setDeleteModalOpen(true);
+              }}
+            >
               Delete
             </Button>
           ) : null}
@@ -804,11 +812,33 @@ export default function AgentDetailPage() {
         title={`Delete ${agent.name}?`}
         subtitle="This permanently removes the agent, its knowledge base, and its conversation history. This cannot be undone."
       >
+        {agent.status === "LIVE" ? (
+          <div className="mb-4 space-y-3">
+            <p className="rounded-lg bg-danger/10 px-3.5 py-2.5 text-sm text-danger ring-1 ring-inset ring-danger/20">
+              This agent is live — customers will stop getting answers on every channel it&apos;s connected to the moment it&apos;s deleted.
+            </p>
+            <label className="block text-sm">
+              <span className="text-foreground/70">
+                Type <span className="font-semibold text-foreground">{agent.name}</span> to confirm
+              </span>
+              <input
+                value={deleteConfirmName}
+                onChange={(e) => setDeleteConfirmName(e.target.value)}
+                autoComplete="off"
+                className="mt-1.5 w-full rounded-lg bg-surface-raised px-3 py-2 text-sm text-foreground ring-1 ring-inset ring-surface-border focus:outline-none focus:ring-danger/50"
+              />
+            </label>
+          </div>
+        ) : null}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setDeleteModalOpen(false)} disabled={deleting}>
             Cancel
           </Button>
-          <Button variant="danger" onClick={deleteAgent} disabled={deleting}>
+          <Button
+            variant="danger"
+            onClick={deleteAgent}
+            disabled={deleting || (agent.status === "LIVE" && deleteConfirmName.trim() !== agent.name.trim())}
+          >
             {deleting ? "Deleting…" : "Delete permanently"}
           </Button>
         </div>

@@ -114,7 +114,7 @@ export async function registerManagedSetupRoutes(app: FastifyInstance, ctx: AppC
     // logoObjectKey is an internal S3 key — never leak it, expose the
     // servable route instead (same transform as GET /v1/tenants/:tenantId).
     reply.send(
-      tenants.map(({ logoObjectKey, ...rest }) => ({
+      tenants.map(({ logoObjectKey, onboardingIntake: _intake, ...rest }) => ({
         ...rest,
         logoUrl: logoObjectKey ? `/v1/tenants/${rest.id}/branding/logo` : null,
         agents: (agentsByTenant.get(rest.id) ?? []).map(({ tenantId: _tenantId, ...a }) => a),

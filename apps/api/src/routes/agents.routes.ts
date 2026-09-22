@@ -9,6 +9,8 @@ import { verifyActiveImpersonation } from "../lib/impersonation.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { processCustomerMessage } from "../engine/agentLoop.js";
 import { hasUnpublishedChanges } from "../lib/publishedAgentConfig.js";
+import { trialEndDate } from "../lib/planLimits.js";
+import { env } from "../env.js";
 
 const CreateAgentSchema = z.object({
   name: z.string().min(1).max(120),
@@ -60,21 +62,23 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
    * handling elsewhere, which suspends rather than deletes — this is an
    * explicit, client-initiated action on their own agent, not an
    * expiry-driven one, so a real delete (not a status flag) is correct
-   * here. Never allowed on a LIVE agent — a client must consciously step
-   * it back to Draft/Testing first so an active customer-facing surface
-   * can never disappear out from under them by accident.
+   * here. A LIVE agent can be deleted too — there's no "take it out of Live"
+   * step, so refusing left live agents undeletable forever — but only with
+   * the agent's exact name typed as confirmation, since customers are
+   * talking to it right now.
    */
   app.delete(
     "/v1/tenants/:tenantId/agents/:agentId",
     { preHandler: [...scoped, requirePermission("agent:write")] },
     async (request, reply) => {
       const { agentId } = request.params as { agentId: string };
+      const confirmName = (request.body as { confirmName?: unknown } | undefined)?.confirmName;
       const actorUserId = request.tenantCtx!.impersonation?.staffUserId ?? request.authUser!.sub;
 
       await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
         const agent = await tx.agent.findFirstOrThrow({ where: { id: agentId, tenantId: request.tenantCtx!.tenantId } });
-        if (agent.status === "LIVE") {
-          throw Object.assign(new Error("Cannot delete a LIVE agent — publish it back to a prior version or take it out of Live first."), {
+        if (agent.status === "LIVE" && (typeof confirmName !== "string" || confirmName.trim() !== agent.name.trim())) {
+          throw Object.assign(new Error(`This agent is live. Type its name — "${agent.name}" — to confirm deleting it.`), {
             statusCode: 409,
           });
         }
@@ -320,6 +324,9 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
     async (request, reply) => {
       const { agentId } = request.params as { agentId: string };
       const isStaff = Boolean(request.tenantCtx!.impersonation);
+      // Assigned inside the transaction callback; the explicit type stops TS
+      // narrowing it to `null` for the code after the transaction.
+      let trialStartedUntil = null as Date | null;
 
       const result = await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
         const agent = await tx.agent.findFirstOrThrow({ where: { id: agentId, tenantId: request.tenantCtx!.tenantId } });
@@ -374,8 +381,48 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
           metadata: { version, autoPublishDelegated: staffMayAutoPublish },
         });
 
+        // A trial's 14 days start the first time their agent goes live —
+        // not at signup — so the time our team spends building it isn't
+        // taken out of their trial.
+        if (tenant.subscriptionState === "TRIAL" && !tenant.trialEndsAt) {
+          const trialEndsAt = trialEndDate();
+          await tx.tenant.update({ where: { id: tenant.id }, data: { trialEndsAt } });
+          await writeAuditLog(tx, request.tenantCtx!, {
+            actorUserId: request.tenantCtx!.impersonation?.staffUserId ?? request.authUser!.sub,
+            agentId,
+            action: "trial_started",
+            metadata: { trialEndsAt: trialEndsAt.toISOString() },
+          });
+          trialStartedUntil = trialEndsAt;
+        }
+
         return updated;
       });
+      if (trialStartedUntil && ctx.email) {
+        const until = trialStartedUntil;
+        const owners = await withTenant(ctx.prisma, request.tenantCtx!, (tx) =>
+          tx.user.findMany({
+            where: { tenantId: request.tenantCtx!.tenantId, isActive: true, role: { in: ["tenant_owner", "tenant_admin"] } },
+            select: { email: true },
+          }),
+        );
+        const endDate = until.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+        await Promise.all(
+          owners.map((o) =>
+            ctx.email.send({
+              to: o.email,
+              subject: "Your AI assistant is live — your 14-day free trial starts today",
+              text:
+                `Your AI assistant is now live and answering your customers.
+
+` +
+                `Your free trial runs until ${endDate}. We'll remind you before it ends; to keep it running after that, choose a plan here:
+` +
+                `${env.DASHBOARD_BASE_URL}/billing`,
+            }),
+          ),
+        );
+      }
       reply.send(result);
     },
   );
