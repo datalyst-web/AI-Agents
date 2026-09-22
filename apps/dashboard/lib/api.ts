@@ -147,7 +147,7 @@ export interface TwoFactorChallengeResponse {
 }
 export type LoginResponse = SessionResponse | TwoFactorChallengeResponse;
 
-export function isTwoFactorChallenge(r: LoginResponse): r is TwoFactorChallengeResponse {
+export function isTwoFactorChallenge<T extends object>(r: T | TwoFactorChallengeResponse): r is TwoFactorChallengeResponse {
   return "requiresTwoFactor" in r;
 }
 
@@ -168,8 +168,9 @@ export const api = {
     apiFetch<{ message: string }>("/v1/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
   resetPassword: (token: string, newPassword: string) =>
     apiFetch<{ message: string }>("/v1/auth/reset-password", { method: "POST", body: JSON.stringify({ token, newPassword }) }),
+  /** Emails a confirmation code (a challenge) before any session; a token only if two-step codes are switched off. */
   signup: (tenantName: string, email: string, password: string, turnstileToken?: string) =>
-    apiFetch<{ token: string; tenant: { id: string; slug: string; name: string } }>("/v1/auth/signup", {
+    apiFetch<({ token: string } | TwoFactorChallengeResponse) & { tenant: { id: string; slug: string; name: string } }>("/v1/auth/signup", {
       method: "POST",
       body: JSON.stringify({ tenantName, email, password, turnstileToken }),
     }),

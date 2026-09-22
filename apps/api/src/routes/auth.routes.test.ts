@@ -117,9 +117,18 @@ describe.skipIf(!process.env.CHAT_APP_DATABASE_URL)("auth routes — RLS entry-p
 
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
-    expect(body.token).toBeTruthy();
     expect(body.tenant.id).toBeTruthy();
     createdTenantIds.push(body.tenant.id);
+    // Signup proves the email address first: a code, not a session.
+    expect(body.requiresTwoFactor).toBe(true);
+    expect(body.token).toBeUndefined();
+
+    const code = extractTwoFactorCode(sentEmails.filter((m) => m.to === email).at(-1)!.text);
+    const verify = await app.inject({ method: "POST", url: "/v1/auth/verify-2fa", payload: { challenge: body.challenge, code } });
+    expect(verify.statusCode).toBe(200);
+    const verifyBody = JSON.parse(verify.body);
+    expect(verifyBody.token).toBeTruthy();
+    expect(verifyBody.user.tenantId).toBe(body.tenant.id);
 
     await app.close();
   });
@@ -175,7 +184,9 @@ describe.skipIf(!process.env.CHAT_APP_DATABASE_URL)("auth routes — RLS entry-p
     expect(loginBody.challenge).toBeTruthy();
     expect(loginBody.token).toBeUndefined();
 
-    const code = extractTwoFactorCode(sentEmails.find((m) => m.to === email)!.text);
+    // The latest code: signup already emailed one to this address, and
+    // issuing the login code replaced it.
+    const code = extractTwoFactorCode(sentEmails.filter((m) => m.to === email).at(-1)!.text);
     const verify = await app.inject({
       method: "POST",
       url: "/v1/auth/verify-2fa",
@@ -214,7 +225,7 @@ describe.skipIf(!process.env.CHAT_APP_DATABASE_URL)("auth routes — RLS entry-p
 
     const login = await app.inject({ method: "POST", url: "/v1/auth/login", payload: { email, password } });
     const { challenge } = JSON.parse(login.body);
-    const realCode = extractTwoFactorCode(sentEmails.find((m) => m.to === email)!.text);
+    const realCode = extractTwoFactorCode(sentEmails.filter((m) => m.to === email).at(-1)!.text);
     const wrongCode = realCode === "000000" ? "111111" : "000000";
 
     const badAttempt = await app.inject({ method: "POST", url: "/v1/auth/verify-2fa", payload: { challenge, code: wrongCode } });
@@ -242,7 +253,7 @@ describe.skipIf(!process.env.CHAT_APP_DATABASE_URL)("auth routes — RLS entry-p
 
     const login = await app.inject({ method: "POST", url: "/v1/auth/login", payload: { email, password } });
     const { challenge } = JSON.parse(login.body);
-    const realCode = extractTwoFactorCode(sentEmails.find((m) => m.to === email)!.text);
+    const realCode = extractTwoFactorCode(sentEmails.filter((m) => m.to === email).at(-1)!.text);
     const wrongCode = realCode === "000000" ? "111111" : "000000";
 
     let last: Awaited<ReturnType<typeof app.inject>> | undefined;

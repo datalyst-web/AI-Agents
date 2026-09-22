@@ -97,7 +97,11 @@ async function signupOwner(): Promise<{ app: FastifyInstance; token: string; ten
   });
   const body = JSON.parse(res.body);
   createdTenantIds.push(body.tenant.id);
-  return { app, token: body.token, tenantId: body.tenant.id };
+  // Signup emails a confirmation code before issuing a session.
+  const text = sentEmails.filter((m) => m.to === ownerEmail).at(-1)!.text;
+  const code = text.match(/Your sign-in code is (\d{6})/)![1];
+  const verify = await app.inject({ method: "POST", url: "/v1/auth/verify-2fa", payload: { challenge: body.challenge, code } });
+  return { app, token: JSON.parse(verify.body).token, tenantId: body.tenant.id };
 }
 
 describe.skipIf(!process.env.CHAT_APP_DATABASE_URL)("team routes — real chat_app_user connection", () => {

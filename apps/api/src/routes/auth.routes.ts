@@ -150,8 +150,25 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       return { tenant, user };
     });
 
-    const token = await reply.jwtSign({ sub: user.id, tenantId: tenant.id, role: "tenant_owner" });
-    reply.send({ token, tenant: { id: tenant.id, slug: tenant.slug, name: tenant.name } });
+    const tenantInfo = { id: tenant.id, slug: tenant.slug, name: tenant.name };
+    if (!env.REQUIRE_TWO_FACTOR) {
+      const token = await reply.jwtSign({ sub: user.id, tenantId: tenant.id, role: "tenant_owner" });
+      reply.send({ token, tenant: tenantInfo });
+      return;
+    }
+    // Prove the address belongs to whoever is signing up before handing out
+    // a session: signup used to log straight in, so anyone could open an
+    // account under someone else's email. Same emailed code as login.
+    const issued = await issueTwoFactorCode(ctx.prisma, ctx.email, user);
+    if (!issued.sent) {
+      request.log.error({ userId: user.id, error: issued.error }, "failed to send signup confirmation code");
+      reply.code(503).send({
+        error: "could_not_send_code",
+        message: "Your account was created, but we couldn't email your confirmation code. Please sign in in a few minutes to get a new one.",
+      });
+      return;
+    }
+    reply.send({ requiresTwoFactor: true, challenge: signTwoFactorChallenge(user.id), email: maskEmail(user.email), tenant: tenantInfo });
   });
 
   app.post("/v1/auth/login", { config: { rateLimit: { max: 15, timeWindow: "1 minute" } } }, async (request, reply) => {

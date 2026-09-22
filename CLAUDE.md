@@ -505,7 +505,9 @@ invoiced and reported on separately.
   Login and signup both use `components/TurnstileWidget.tsx` for the bot
   check (the API requires it on both); it renders on every mount via
   `onReady` — never `onLoad`, which fires only on first download and left
-  the CAPTCHA/Google button missing after in-app navigation.
+  the CAPTCHA/Google button missing after in-app navigation. Signup also
+  proves the email address: it creates the account but emails a 6-digit
+  code (the same step as login's two-step code) before any session.
 - **White-label inside the client dashboard `[LOCKED]`** — a client sees
   only their own identity: their white-label name/logo, else their business
   name (`tenantName` from `/me`) and initial. `/me` never sends the

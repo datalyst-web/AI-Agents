@@ -47,6 +47,8 @@ interface AuthContextValue {
   login: (email: string, password: string, turnstileToken?: string) => Promise<TwoFactorChallengeResponse | null>;
   loginWithGoogle: (credential: string, turnstileToken?: string) => Promise<TwoFactorChallengeResponse | null>;
   completeTwoFactor: (challenge: string, code: string) => Promise<void>;
+  /** Starts a session from a token issued directly (signup when two-step codes are switched off). */
+  establishSessionFromToken: (token: string) => Promise<void>;
   acceptInvite: (token: string, displayName: string, password: string) => Promise<void>;
   logout: () => void;
   startImpersonation: (tenantId: string, tenantName: string, reason: string, durationMinutes?: number) => Promise<void>;
@@ -237,6 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         loginWithGoogle,
         completeTwoFactor,
+        establishSessionFromToken: establishSession,
         acceptInvite,
         logout,
         startImpersonation,

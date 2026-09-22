@@ -1,16 +1,16 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, PasswordInput } from "@chat-agent/ui";
-import { api, setToken, ApiError } from "@/lib/api";
+import { api, ApiError, isTwoFactorChallenge } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { PublicThemeToggle } from "@/components/PublicThemeToggle";
 import { BackToHome } from "@/components/BrandHome";
 import { TURNSTILE_SITE_KEY, TurnstileWidget, type TurnstileHandle } from "@/components/TurnstileWidget";
 
 export default function SignupPage() {
-  const router = useRouter();
+  const { completeTwoFactor, establishSessionFromToken } = useAuth();
   const [tenantName, setTenantName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,6 +18,10 @@ export default function SignupPage() {
   const [busy, setBusy] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const turnstileRef = useRef<TurnstileHandle>(null);
+  // Set once the account is created and a confirmation code has been
+  // emailed; its presence swaps the form for the code prompt.
+  const [challenge, setChallenge] = useState<{ challenge: string; email: string } | null>(null);
+  const [code, setCode] = useState("");
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -28,13 +32,27 @@ export default function SignupPage() {
     setBusy(true);
     setError(null);
     try {
-      const { token } = await api.signup(tenantName, email, password, turnstileToken ?? undefined);
-      setToken(token);
-      router.push("/overview");
+      const result = await api.signup(tenantName, email, password, turnstileToken ?? undefined);
+      if (isTwoFactorChallenge(result)) setChallenge({ challenge: result.challenge, email: result.email });
+      else await establishSessionFromToken(result.token);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Signup failed.");
       // Tokens are single-use — get a fresh one for the next attempt.
       turnstileRef.current?.reset();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onSubmitCode(e: FormEvent) {
+    e.preventDefault();
+    if (!challenge) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await completeTwoFactor(challenge.challenge, code);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "That code didn't work.");
     } finally {
       setBusy(false);
     }
@@ -49,11 +67,48 @@ export default function SignupPage() {
       <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-brand-gradient opacity-20 blur-3xl" />
       <div className="relative w-full max-w-sm animate-fade-up">
         <div className="mb-8 text-center">
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">Start your trial</h1>
-          <p className="mt-1 text-sm text-foreground/50">14 days free — our team builds your AI employee for you</p>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">{challenge ? "Confirm your email" : "Start your trial"}</h1>
+          <p className="mt-1 text-sm text-foreground/50">
+            {challenge ? (
+              <>We sent a 6-digit code to {challenge.email}</>
+            ) : (
+              "14 days free — our team builds your AI employee for you"
+            )}
+          </p>
         </div>
 
         <div className="rounded-xl3 bg-brand-gradient-soft p-px shadow-card">
+          {challenge ? (
+            <form onSubmit={onSubmitCode} className="space-y-3.5 rounded-[calc(1.75rem-1px)] bg-surface-raised/95 p-6 backdrop-blur">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-foreground/60">6-digit code</label>
+                <input
+                  autoFocus
+                  required
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  placeholder="000000"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-center text-lg font-semibold tracking-[0.4em] text-foreground outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+                />
+              </div>
+              {error ? <p className="text-xs text-danger">{error}</p> : null}
+              <Button type="submit" disabled={busy || code.length !== 6} className="w-full">
+                {busy ? "Verifying..." : "Confirm and continue"}
+              </Button>
+              <p className="text-center text-[11px] leading-relaxed text-foreground/35">
+                Your account is created. The code expires in 10 minutes — check your spam folder if it hasn&apos;t arrived. If it
+                expires,{" "}
+                <Link href="/login" className="text-foreground/55 underline underline-offset-2 hover:text-foreground/80">
+                  sign in
+                </Link>{" "}
+                to get a new one.
+              </p>
+            </form>
+          ) : (
           <form onSubmit={onSubmit} className="space-y-3.5 rounded-[calc(1.75rem-1px)] bg-surface-raised/95 p-6 backdrop-blur">
             <div>
               <label className="mb-1 block text-xs font-medium text-foreground/60">Business name</label>
@@ -95,6 +150,7 @@ export default function SignupPage() {
               .
             </p>
           </form>
+          )}
         </div>
         <p className="mt-5 text-center text-xs text-foreground/40">
           Already have an account?{" "}
