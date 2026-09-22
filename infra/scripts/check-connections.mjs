@@ -1,5 +1,11 @@
 // Read-only production diagnostics. Run with service environment variables:
-// railway run --service api --environment production --no-local -- node infra/scripts/check-connections.mjs
+//   railway run --service api --environment production -- node infra/scripts/check-connections.mjs [options]
+// Options:
+//   --only=<prefix>        run only checks whose name starts with <prefix>
+//   --skip=<a,b>           skip checks whose name starts with any of these
+//   --database-host=<h[:port]>  reach the database through its public TCP
+//                          proxy (DATABASE_URL uses Railway's private network,
+//                          which isn't reachable from a laptop)
 // Does not read client records, send email, write objects, or print secrets.
 import { createRequire } from "node:module";
 
@@ -10,6 +16,7 @@ const requireEmail = createRequire(new URL("../../packages/email/package.json", 
 const env = process.env;
 const only = process.argv.find((arg) => arg.startsWith("--only="))?.slice(7);
 const databaseHost = process.argv.find((arg) => arg.startsWith("--database-host="))?.slice(16);
+const skip = (process.argv.find((arg) => arg.startsWith("--skip="))?.slice(7) ?? "").split(",").filter(Boolean);
 let failed = false;
 const watchdog = setTimeout(() => {
   console.log(JSON.stringify({ check: "deadline", status: "failed" }));
@@ -18,6 +25,7 @@ const watchdog = setTimeout(() => {
 
 async function check(name, action) {
   if (only && !name.startsWith(only)) return;
+  if (skip.some((prefix) => name.startsWith(prefix))) return;
   try {
     const detail = await action();
     console.log(JSON.stringify({ check: name, status: "passed", ...detail }));
@@ -44,7 +52,13 @@ await Promise.all([
     if (!env.DATABASE_URL) throw new Error("Missing configuration");
     const { PrismaClient } = requireDb("@prisma/client");
     const databaseUrl = new URL(env.DATABASE_URL);
-    if (databaseHost) databaseUrl.hostname = databaseHost;
+    if (databaseHost) {
+      const [host, port] = databaseHost.split(":");
+      databaseUrl.hostname = host;
+      if (port) databaseUrl.port = port;
+      // Railway's public proxy requires TLS; the private network doesn't.
+      databaseUrl.searchParams.set("sslmode", "require");
+    }
     databaseUrl.searchParams.set("connect_timeout", "20");
     const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl.toString() } }, log: [] });
     try {
@@ -103,7 +117,25 @@ await Promise.all([
       client.destroy();
     }
   }),
-  check("smtp authentication (no message sent)", async () => {
+  check("email sender credentials (no message sent)", async () => {
+    // Mirrors createEmailProviderFromEnv's order (packages/email).
+    if (env.GMAIL_OAUTH_CLIENT_ID && env.GMAIL_OAUTH_CLIENT_SECRET && env.GMAIL_OAUTH_REFRESH_TOKEN) {
+      const resp = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: env.GMAIL_OAUTH_CLIENT_ID,
+          client_secret: env.GMAIL_OAUTH_CLIENT_SECRET,
+          refresh_token: env.GMAIL_OAUTH_REFRESH_TOKEN,
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok || !body.access_token) throw Object.assign(new Error("Gmail consent rejected"), { code: String(body.error ?? resp.status).toUpperCase().replace(/[^A-Z0-9_]/g, "_") });
+      return { provider: "gmail_api", mode: "oauth", sendScope: String(body.scope ?? "").includes("gmail.send") };
+    }
+    if (env.GMAIL_SERVICE_ACCOUNT_JSON) return { provider: "gmail_api", mode: "service_account", verified: false };
     if (![env.SMTP_HOST, env.SMTP_USER, env.SMTP_PASSWORD, env.SMTP_FROM_ADDRESS].every(Boolean)) throw new Error("Missing configuration");
     const nodemailer = requireEmail("nodemailer");
     const transporter = nodemailer.createTransport({
@@ -113,9 +145,26 @@ await Promise.all([
     });
     try {
       await transporter.verify();
+      return { provider: "smtp" };
     } finally {
       transporter.close();
     }
+  }),
+  check("ai provider keys (model list only, no cost)", async () => {
+    // Staff-only diagnostic — names providers, never prints keys.
+    const probes = {
+      openai: env.OPENAI_API_KEY && (() => fetch("https://api.openai.com/v1/models", { headers: { authorization: `Bearer ${env.OPENAI_API_KEY}` } })),
+      anthropic: env.ANTHROPIC_API_KEY && (() => fetch("https://api.anthropic.com/v1/models", { headers: { "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" } })),
+      gemini: env.GEMINI_API_KEY && (() => fetch("https://generativelanguage.googleapis.com/v1beta/models", { headers: { "x-goog-api-key": env.GEMINI_API_KEY } })),
+    };
+    const result = {};
+    for (const [name, probe] of Object.entries(probes)) {
+      if (!probe) { result[name] = "not configured"; continue; }
+      const resp = await probe();
+      result[name] = resp.ok ? "ok" : `rejected (${resp.status})`;
+    }
+    if (!Object.values(result).includes("ok")) throw new Error("No working AI provider");
+    return { providers: result };
   }),
 ]);
 
