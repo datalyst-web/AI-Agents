@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { PublicThemeToggle } from "@/components/PublicThemeToggle";
-import { HeaderBrand } from "@/components/BrandHome";
+import { FooterBrand, HeaderBrand } from "@/components/BrandHome";
 
 /**
  * Shared chrome for the public content pages (guide, terms, privacy) —
@@ -32,10 +32,11 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
       </header>
       <main className="mx-auto w-full max-w-3xl px-6 py-14">{children}</main>
       <footer className="border-t border-surface-border/60 py-8">
-        <div className="mx-auto w-full max-w-3xl px-6 text-xs text-foreground/40">
+        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-6 text-xs text-foreground/40">
           <Link href="/" className="transition-colors hover:text-foreground/70">
             ← Back to home
           </Link>
+          <FooterBrand />
         </div>
       </footer>
     </div>

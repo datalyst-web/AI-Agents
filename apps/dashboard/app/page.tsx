@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { PublicThemeToggle } from "@/components/PublicThemeToggle";
-import { HeaderBrand, HeroBrand } from "@/components/BrandHome";
+import { FooterBrand, HeaderBrand } from "@/components/BrandHome";
 
 /**
  * The public marketing page — the only route a prospect sees before
@@ -213,7 +213,6 @@ export default function LandingPage() {
       <div className="bg-mesh-ambient">
         <Section className="pb-20 pt-20 sm:pt-28">
           <div className="mx-auto max-w-3xl text-center">
-            <HeroBrand />
             <div className="inline-flex items-center gap-2 rounded-full bg-foreground/[0.06] px-3.5 py-1.5 text-xs font-medium text-foreground/70 ring-1 ring-inset ring-surface-border">
               <span className="h-1.5 w-1.5 rounded-full bg-success" />
               We build it. You approve it. It goes live.
@@ -399,14 +398,11 @@ export default function LandingPage() {
 
       <footer className="border-t border-surface-border/60 py-10">
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-6 sm:flex-row">
-          <div className="flex items-center gap-2.5">
-            <div className="h-6 w-6 rounded-lg bg-brand-gradient" />
-            <div>
-              <span className="block text-xs text-foreground/45">
-                © {new Date().getFullYear()} {BRAND}
-              </span>
-              <span className="block text-[11px] italic text-brand-link">what gets measured, gets managed</span>
-            </div>
+          <div className="flex flex-col items-center gap-2 sm:items-start">
+            <FooterBrand />
+            <span className="text-xs text-foreground/45">
+              © {new Date().getFullYear()} {BRAND}
+            </span>
           </div>
           <div className="flex items-center gap-6 text-xs text-foreground/45">
             <Link href="/guide" className="transition-colors hover:text-foreground/70">

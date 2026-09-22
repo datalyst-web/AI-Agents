@@ -7,7 +7,7 @@ import { Button, PasswordInput } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 import { PublicThemeToggle } from "@/components/PublicThemeToggle";
-import { AuthBrandMark } from "@/components/BrandHome";
+import { BackToHome } from "@/components/BrandHome";
 
 // Baked in at build time (Vercel env), same pattern as NEXT_PUBLIC_API_BASE_URL
 // elsewhere in this app — must match the API's GOOGLE_CLIENT_ID exactly, since
@@ -181,6 +181,7 @@ export default function LoginPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+      <BackToHome />
       <div className="absolute right-4 top-4 z-10">
         <PublicThemeToggle />
       </div>
@@ -197,7 +198,6 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-brand-gradient opacity-20 blur-3xl" />
       <div className="relative w-full max-w-sm animate-fade-up">
         <div className="mb-8 text-center">
-          <AuthBrandMark />
           <h1 className="text-xl font-semibold tracking-tight text-foreground">
             {challenge ? "Check your email" : "Welcome back"}
           </h1>

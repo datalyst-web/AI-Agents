@@ -1,10 +1,9 @@
 import Link from "next/link";
 
 /**
- * The Datalyst Africa logo on the signed-out pages (marketing, guide, legal,
- * and the sign-in/sign-up/reset/invite screens). In headers and above the
- * auth forms it is always a link to the home page, so a visitor can get back
- * from any of them.
+ * The Datalyst Africa logo on the signed-out marketing pages (home, guide,
+ * legal): in the header, where it links home, and in the footer. The
+ * sign-in style screens show a "Back to home" button instead of a logo.
  *
  * Deliberately NOT used on client-facing surfaces (the standalone agent
  * page, the widget) — those are white-labelled for each client and must
@@ -43,25 +42,26 @@ export function HeaderBrand() {
   );
 }
 
-/** Logo above the form on the sign-in style screens. */
-export function AuthBrandMark() {
+/** Footer logo on the public pages (not a link — the header one is). */
+export function FooterBrand() {
+  return <Logo heightClass="h-12" />;
+}
+
+/**
+ * Top-left "Back to home" button on the sign-in style screens (login,
+ * signup, password reset, invite). These pages carry no logo on purpose —
+ * the logo belongs in the site header only.
+ */
+export function BackToHome() {
   return (
     <Link
       href="/"
-      aria-label={HOME_LABEL}
-      title="Back to the home page"
-      className="mx-auto mb-5 block w-fit rounded-xl transition-transform hover:scale-[1.03]"
+      className="absolute left-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-foreground/60 ring-1 ring-inset ring-surface-border transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
     >
-      <Logo heightClass="h-16" eager />
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M10 3 5 8l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      Back to home
     </Link>
-  );
-}
-
-/** Large logo at the top of the home page, above the tagline. */
-export function HeroBrand() {
-  return (
-    <div className="mb-8 flex justify-center">
-      <Logo heightClass="h-24 sm:h-28" eager />
-    </div>
   );
 }

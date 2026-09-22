@@ -7,7 +7,7 @@ import { Button, PasswordInput } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
 import { api, ApiError } from "@/lib/api";
 import { PublicThemeToggle } from "@/components/PublicThemeToggle";
-import { AuthBrandMark } from "@/components/BrandHome";
+import { BackToHome } from "@/components/BrandHome";
 
 const ROLE_LABEL: Record<string, string> = {
   tenant_admin: "an admin",
@@ -121,13 +121,13 @@ function AcceptInviteForm() {
 export default function AcceptInvitePage() {
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
+      <BackToHome />
       <div className="absolute right-4 top-4 z-10">
         <PublicThemeToggle />
       </div>
       <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-brand-gradient opacity-20 blur-3xl" />
       <div className="relative w-full max-w-sm animate-fade-up">
         <div className="mb-8 text-center">
-          <AuthBrandMark />
           <h1 className="text-xl font-semibold tracking-tight text-foreground">You&apos;re invited</h1>
         </div>
 
