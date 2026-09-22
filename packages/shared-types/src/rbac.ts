@@ -101,6 +101,10 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "agent:read",
     "agent:write",
     "agent:test",
+    // Restores a version the client already approved — the dashboard's
+    // "Roll back to this version" button. No role held this before, so the
+    // button always failed with 403.
+    "agent:rollback",
     "knowledge:read",
     "knowledge:write",
     "knowledge:delete",
