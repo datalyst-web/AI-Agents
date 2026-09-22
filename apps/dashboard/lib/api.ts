@@ -215,6 +215,12 @@ export const api = {
     }),
   cancelClient: (tenantId: string) => apiFetch(`/v1/platform/tenants/${tenantId}/cancel`, { method: "POST" }),
   reactivateClient: (tenantId: string) => apiFetch(`/v1/platform/tenants/${tenantId}/reactivate`, { method: "POST" }),
+  /** Permanent. platform_admin only, and only for a client already removed (cancelled). */
+  deleteClient: (tenantId: string, confirmName: string, reason: string) =>
+    apiFetch<{ deleted: true; filesDeleted: number; filesCleanupIncomplete: boolean }>(`/v1/platform/tenants/${tenantId}`, {
+      method: "DELETE",
+      body: JSON.stringify({ confirmName, reason }),
+    }),
   // Per-client white-label branding — staff-only, edited directly from the
   // Managed Setup queue (no impersonation session required).
   updateClientBranding: (tenantId: string, brandName: string | null) =>

@@ -63,6 +63,12 @@ export default function ManagedSetupPage() {
   const [starting, setStarting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<QueueTenant | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<QueueTenant | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const isPlatformAdmin = user?.role === "platform_admin";
 
   const [brandingTarget, setBrandingTarget] = useState<QueueTenant | null>(null);
   const [clientBrandName, setClientBrandName] = useState("");
@@ -158,6 +164,34 @@ export default function ManagedSetupPage() {
       refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not remove this client.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function openDelete(t: QueueTenant) {
+    setDeleteTarget(t);
+    setDeleteConfirmName("");
+    setDeleteReason("");
+    setDeleteError(null);
+  }
+
+  async function deleteClient(e: FormEvent) {
+    e.preventDefault();
+    if (!deleteTarget) return;
+    setBusyId(deleteTarget.id);
+    setDeleteError(null);
+    try {
+      const result = await api.deleteClient(deleteTarget.id, deleteConfirmName, deleteReason);
+      setNotice(
+        result.filesCleanupIncomplete
+          ? `${deleteTarget.name} was deleted, but some of their stored files couldn't be removed. This has been recorded — let your developer know.`
+          : `${deleteTarget.name} and all of their data were permanently deleted.`,
+      );
+      setDeleteTarget(null);
+      refresh();
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : "Could not delete this client.");
     } finally {
       setBusyId(null);
     }
@@ -298,6 +332,7 @@ export default function ManagedSetupPage() {
         </p>
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}
+      {notice ? <p className="text-xs text-success">{notice}</p> : null}
 
       <Card>
         <CardHeader
@@ -330,13 +365,24 @@ export default function ManagedSetupPage() {
                       Branding
                     </button>
                     {t.subscriptionState === "CANCELLED" ? (
-                      <button
-                        onClick={() => reactivateClient(t.id)}
-                        disabled={busyId === t.id}
-                        className="text-xs font-medium text-brand-link transition-colors hover:text-brand-link-hover disabled:opacity-50"
-                      >
-                        {busyId === t.id ? "Reactivating…" : "Reactivate"}
-                      </button>
+                      <>
+                        <button
+                          onClick={() => reactivateClient(t.id)}
+                          disabled={busyId === t.id}
+                          className="text-xs font-medium text-brand-link transition-colors hover:text-brand-link-hover disabled:opacity-50"
+                        >
+                          {busyId === t.id ? "Reactivating…" : "Reactivate"}
+                        </button>
+                        {isPlatformAdmin ? (
+                          <button
+                            onClick={() => openDelete(t)}
+                            disabled={busyId === t.id}
+                            className="text-xs font-medium text-danger/80 transition-colors hover:text-danger disabled:opacity-50"
+                          >
+                            Delete
+                          </button>
+                        ) : null}
+                      </>
                     ) : (
                       <button
                         onClick={() => setCancelTarget(t)}
@@ -601,6 +647,54 @@ export default function ManagedSetupPage() {
             {busyId === cancelTarget?.id ? "Removing…" : "Remove client"}
           </Button>
         </div>
+      </Modal>
+
+      <Modal
+        open={deleteTarget !== null}
+        onClose={() => (busyId ? undefined : setDeleteTarget(null))}
+        title={`Permanently delete ${deleteTarget?.name ?? ""}?`}
+        subtitle="This can't be undone. Their account, logins, agent, knowledge base, conversations, leads, billing history and uploaded files are all erased. To keep their data, use Reactivate or leave them removed."
+      >
+        <form onSubmit={deleteClient} className="space-y-4">
+          <label className="block text-sm">
+            <span className="text-foreground/70">
+              Type <span className="font-semibold text-foreground">{deleteTarget?.name}</span> to confirm
+            </span>
+            <input
+              value={deleteConfirmName}
+              onChange={(e) => setDeleteConfirmName(e.target.value)}
+              autoComplete="off"
+              className="mt-1.5 w-full rounded-lg bg-surface-raised px-3 py-2 text-sm text-foreground ring-1 ring-inset ring-surface-border focus:outline-none focus:ring-danger/50"
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="text-foreground/70">Reason (kept on record)</span>
+            <textarea
+              value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              rows={2}
+              placeholder="e.g. Client asked us to close their account and erase their data"
+              className="mt-1.5 w-full rounded-lg bg-surface-raised px-3 py-2 text-sm text-foreground ring-1 ring-inset ring-surface-border placeholder:text-foreground/30 focus:outline-none focus:ring-danger/50"
+            />
+          </label>
+          {deleteError ? <p className="text-sm text-danger">{deleteError}</p> : null}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setDeleteTarget(null)} disabled={busyId === deleteTarget?.id}>
+              Keep this client
+            </Button>
+            <Button
+              type="submit"
+              variant="danger"
+              disabled={
+                busyId === deleteTarget?.id ||
+                deleteConfirmName.trim() !== (deleteTarget?.name ?? "").trim() ||
+                deleteReason.trim().length < 3
+              }
+            >
+              {busyId === deleteTarget?.id ? "Deleting…" : "Delete permanently"}
+            </Button>
+          </div>
+        </form>
       </Modal>
 
       <Modal

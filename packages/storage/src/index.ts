@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /**
@@ -56,6 +56,36 @@ export class ObjectStore {
 
   async deleteObject(key: string): Promise<void> {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  /**
+   * Deletes every object under `prefix` — used when a client is deleted.
+   * The prefix must end with "/" so one tenant id can never match the
+   * start of another's. Keeps going past individual failures and reports
+   * counts, so a partial cleanup is visible rather than silent.
+   */
+  async deletePrefix(prefix: string): Promise<{ deleted: number; failed: number }> {
+    if (!prefix.endsWith("/") || prefix.split("/").filter(Boolean).length < 2) {
+      throw new Error("deletePrefix needs a specific tenant prefix ending in '/'");
+    }
+    let deleted = 0;
+    let failed = 0;
+    let continuationToken: string | undefined;
+    do {
+      const page = await this.client.send(
+        new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix, ContinuationToken: continuationToken }),
+      );
+      const keys = (page.Contents ?? []).map((o) => o.Key).filter((k): k is string => Boolean(k));
+      if (keys.length > 0) {
+        const result = await this.client.send(
+          new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true } }),
+        );
+        failed += result.Errors?.length ?? 0;
+        deleted += keys.length - (result.Errors?.length ?? 0);
+      }
+      continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (continuationToken);
+    return { deleted, failed };
   }
 
   async presignedDownloadUrl(key: string, expiresInSeconds = 300): Promise<string> {

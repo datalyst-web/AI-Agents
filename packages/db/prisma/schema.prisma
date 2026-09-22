@@ -1137,6 +1137,25 @@ model IncidentLogEntry {
   @@schema("chat")
 }
 
+/// Platform-level, not tenant-scoped — the permanent record that a client
+/// was deleted, by whom and why. Deleting a tenant cascades away its own
+/// audit log, so this is the only trace left; it deliberately has no
+/// relation to Tenant (and no tenant_id column, so RLS never applies to
+/// it). See DELETE /v1/platform/tenants/:tenantId.
+model TenantDeletionRecord {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  deletedTenantId String   @map("deleted_tenant_id") @db.Uuid
+  tenantName      String   @map("tenant_name")
+  deletedByUserId String   @map("deleted_by_user_id") @db.Uuid
+  reason          String
+  filesDeleted    Int      @default(0) @map("files_deleted")
+  filesFailed     Int      @default(0) @map("files_failed")
+  deletedAt       DateTime @default(now()) @map("deleted_at")
+
+  @@map("tenant_deletion_records")
+  @@schema("chat")
+}
+
 /// Platform-level, not tenant-scoped — a feature flag is a platform
 /// operator decision about what a given plan tier can access, not
 /// something any individual tenant configures.

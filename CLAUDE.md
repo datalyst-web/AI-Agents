@@ -486,8 +486,10 @@ So, for any change to `schema.prisma`:
 
 Platform-level tables that carry no `tenant_id` (`feature_flags`,
 `prompt_templates`, `branding_presets`, `incident_log_entries`,
-`push_subscriptions`, `platform_settings`) are deliberately excluded from
-the RLS list; access to them is gated by role in the route instead.
+`push_subscriptions`, `platform_settings`, `tenant_deletion_records`) are
+deliberately excluded from the RLS list; access to them is gated by role in
+the route instead. `tenant_deletion_records` names its column
+`deleted_tenant_id`, not `tenant_id`, because it must outlive the tenant.
 
 ## Security Requirements
 

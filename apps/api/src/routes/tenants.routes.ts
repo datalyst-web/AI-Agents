@@ -127,8 +127,10 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
   );
 
   /**
-   * "Remove" a client = cancel, never a hard delete — CLAUDE.md "On
-   * expiry, suspend the agent — never delete client data." A dedicated,
+   * "Remove" a client = cancel, not a hard delete — CLAUDE.md "On
+   * expiry, suspend the agent — never delete client data." Permanent
+   * deletion is a separate, platform_admin-only step (DELETE below) that
+   * requires this one first. A dedicated,
    * narrow action (not the broad PATCH above, which stays
    * platform_admin-only) so day-to-day staff can do this without also
    * getting billing-tier-edit rights.
@@ -167,6 +169,77 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
         writeAuditLog(tx, { tenantId }, { actorUserId: request.authUser!.sub, action: "tenant_reactivated_by_staff" }),
       );
       reply.send(updated);
+    },
+  );
+
+  /**
+   * Permanently deletes a client — everything, not a suspension. Distinct
+   * from "Remove" above, which is the reversible default and what expiry
+   * does automatically (CLAUDE.md: never delete on expiry). This is a
+   * deliberate human decision, so it's fenced three ways:
+   * - platform_admin only (not setup_specialist);
+   * - the client must already be CANCELLED (Remove first, then Delete);
+   * - the caller must send the client's exact name and a reason.
+   *
+   * Every tenant table cascades from Tenant (directly, or via its parent
+   * agent/document/conversation), so one delete removes all rows. The
+   * client's own audit log goes with it, which is why the deletion is
+   * recorded in the platform-level tenant_deletion_records instead.
+   * Stored files (documents, logos) are removed afterwards; a partial
+   * cleanup is reported and recorded, never hidden.
+   */
+  app.delete(
+    "/v1/platform/tenants/:tenantId",
+    { preHandler: [app.authenticate, requireStaff()] },
+    async (request, reply) => {
+      if (request.authUser!.role !== "platform_admin") {
+        reply.code(403).send({ error: "forbidden", message: "Only a platform admin can permanently delete a client." });
+        return;
+      }
+      const { tenantId } = request.params as { tenantId: string };
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId)) {
+        reply.code(404).send({ error: "tenant_not_found" });
+        return;
+      }
+      const body = z
+        .object({ confirmName: z.string(), reason: z.string().trim().min(3, "Say why this client is being deleted.").max(500) })
+        .parse(request.body);
+
+      const tenant = await withPlatformContext(ctx.prisma, (tx) =>
+        tx.tenant.findUnique({ where: { id: tenantId }, select: { name: true, subscriptionState: true } }),
+      );
+      if (!tenant) {
+        reply.code(404).send({ error: "tenant_not_found" });
+        return;
+      }
+      if (tenant.subscriptionState !== "CANCELLED") {
+        reply.code(409).send({ error: "must_remove_first", message: "Remove this client first. Only removed clients can be deleted." });
+        return;
+      }
+      if (body.confirmName.trim() !== tenant.name.trim()) {
+        reply.code(400).send({ error: "name_mismatch", message: `Type the client's name exactly — "${tenant.name}" — to confirm.` });
+        return;
+      }
+
+      const record = await withPlatformContext(ctx.prisma, async (tx) => {
+        await tx.tenant.delete({ where: { id: tenantId } });
+        return tx.tenantDeletionRecord.create({
+          data: { deletedTenantId: tenantId, tenantName: tenant.name, deletedByUserId: request.authUser!.sub, reason: body.reason },
+        });
+      });
+
+      let files = { deleted: 0, failed: 0 };
+      try {
+        files = await ctx.objectStore.deletePrefix(`${ctx.objectStore.tenantKey(tenantId)}/`);
+      } catch (err) {
+        request.log.error({ err, tenantId }, "tenant deleted but stored files could not be listed for cleanup");
+        files = { deleted: 0, failed: -1 };
+      }
+      await withPlatformContext(ctx.prisma, (tx) =>
+        tx.tenantDeletionRecord.update({ where: { id: record.id }, data: { filesDeleted: files.deleted, filesFailed: files.failed } }),
+      );
+      request.log.warn({ tenantId, deletedBy: request.authUser!.sub, files }, "tenant permanently deleted");
+      reply.send({ deleted: true, filesDeleted: files.deleted, filesCleanupIncomplete: files.failed !== 0 });
     },
   );
 
