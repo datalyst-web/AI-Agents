@@ -2,6 +2,8 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { roleHasPermission, type Permission } from "@chat-agent/shared-types";
 import type { TenantContext } from "@chat-agent/shared-types";
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Resolves the TenantContext for a request against the :tenantId route
  * param, enforcing that a non-platform user can only ever act on their own
@@ -94,6 +96,13 @@ export function requireTenantMatch() {
     const routeTenantId = (request.params as { tenantId?: string }).tenantId;
     if (!routeTenantId) {
       reply.code(400).send({ error: "missing_tenant_id" });
+      return;
+    }
+    // platform_admin may address any tenant, so without this a malformed id
+    // (e.g. the dashboard's literal "null" when no tenant is in scope) went
+    // straight into a uuid column and came back as a 500.
+    if (!UUID_PATTERN.test(routeTenantId)) {
+      reply.code(404).send({ error: "tenant_not_found" });
       return;
     }
     const ctx = resolveTenantContext(request, routeTenantId);

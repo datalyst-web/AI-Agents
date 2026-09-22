@@ -36,7 +36,9 @@ export default function OverviewPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    // Staff with no client in view have no tenant; the layout redirects
+    // them to Managed Setup, so there's nothing to load here meanwhile.
+    if (!user?.tenantId) return;
     setError(null);
     const onFail = (err: unknown) => setError(err instanceof ApiError ? err.message : "Could not load your dashboard.");
     api

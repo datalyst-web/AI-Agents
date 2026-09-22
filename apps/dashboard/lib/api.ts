@@ -66,20 +66,41 @@ export class ApiError extends Error {
  */
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
-  const resp = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      // Only set content-type when there's an actual body — Fastify's JSON
-      // body parser throws FST_ERR_CTP_EMPTY_JSON_BODY (400) on a request
-      // that declares application/json but sends nothing, which broke
-      // every bodyless call (deleteAgent, startTesting, publishAgent,
-      // approveAgent, endImpersonation, ...) even though they looked fine
-      // tested via curl (curl doesn't set this header without -d).
-      ...(init.body ? { "content-type": "application/json" } : {}),
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-      ...init.headers,
-    },
-  });
+  const send = () =>
+    fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers: {
+        // Only set content-type when there's an actual body — Fastify's JSON
+        // body parser throws FST_ERR_CTP_EMPTY_JSON_BODY (400) on a request
+        // that declares application/json but sends nothing, which broke
+        // every bodyless call (deleteAgent, startTesting, publishAgent,
+        // approveAgent, endImpersonation, ...) even though they looked fine
+        // tested via curl (curl doesn't set this header without -d).
+        ...(init.body ? { "content-type": "application/json" } : {}),
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...init.headers,
+      },
+    });
+  let resp: Response;
+  try {
+    resp = await send();
+  } catch {
+    // fetch() only rejects when no response arrived at all — a dropped
+    // connection, which is routine on mobile data. A read is safe to repeat
+    // once; a write isn't (the server may already have applied it), so a
+    // failed write surfaces immediately for the user to decide.
+    const method = (init.method ?? "GET").toUpperCase();
+    try {
+      if (method !== "GET") throw new Error("not retried");
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      resp = await send();
+    } catch {
+      // status 0 = no HTTP response. As an ApiError, every page's existing
+      // `err instanceof ApiError ? err.message : ...` shows this reason
+      // instead of a vague "could not load".
+      throw new ApiError(0, "Couldn't reach the server. Check your internet connection and try again.");
+    }
+  }
   if (!resp.ok) {
     const body = await resp.json().catch(() => ({ error: resp.statusText }));
     // Some routes (e.g. test-message) return both a stable `error` code

@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 // Pure configuration checks must never load .env.test or contact a database.
 export default defineConfig({
   test: {
-    include: ["packages/config/src/**/*.test.ts", "packages/email/src/**/*.test.ts"],
+    include: ["packages/config/src/**/*.test.ts", "packages/email/src/**/*.test.ts", "apps/api/src/lib/rbac.test.ts"],
     environment: "node",
   },
 });
