@@ -74,21 +74,25 @@ async function createLiveAgent() {
     });
     return a;
   });
+  // Fully managed: staff edit and roll back (a client has no agent:write);
+  // the client approves and publishes.
   const token = app.jwt.sign({ sub: ownerId, tenantId: tenant.id, role: "tenant_owner" } as never);
-  return { tenantId: tenant.id, agentId: agent.id, token };
+  const staffToken = app.jwt.sign({ sub: randomUUID(), role: "platform_admin" } as never);
+  return { tenantId: tenant.id, agentId: agent.id, token, staffToken };
 }
 
 describe.skipIf(!process.env.CHAT_APP_DATABASE_URL)("pending changes on a LIVE agent (real chat_app_user connection)", () => {
   it("holds an edit back from customers until it's approved and published", async () => {
-    const { tenantId, agentId, token } = await createLiveAgent();
+    const { tenantId, agentId, token, staffToken } = await createLiveAgent();
     const auth = { authorization: `Bearer ${token}` };
+    const staff = { authorization: `Bearer ${staffToken}` };
     const base = `/v1/tenants/${tenantId}/agents/${agentId}`;
     const customerGreeting = async () => (await app.inject({ method: "GET", url: `/v1/widget-config/${agentId}` })).json().greeting;
     const detail = async () => (await app.inject({ method: "GET", url: base, headers: auth })).json();
 
     expect((await detail()).hasUnpublishedChanges).toBe(false);
 
-    const edit = await app.inject({ method: "PATCH", url: base, headers: auth, payload: { personality: { greeting: "Hello from the new draft" } } });
+    const edit = await app.inject({ method: "PATCH", url: base, headers: staff, payload: { personality: { greeting: "Hello from the new draft" } } });
     expect(edit.statusCode).toBe(200);
     expect(await detail()).toMatchObject({ status: "LIVE", version: "v1.0", hasUnpublishedChanges: true, approvedAt: null });
     expect(await customerGreeting()).toBe("Hello from the approved version");
@@ -119,18 +123,19 @@ describe.skipIf(!process.env.CHAT_APP_DATABASE_URL)("pending changes on a LIVE a
   });
 
   it("serves the rolled-back version, and keeps later edits pending", async () => {
-    const { tenantId, agentId, token } = await createLiveAgent();
+    const { tenantId, agentId, token, staffToken } = await createLiveAgent();
     const auth = { authorization: `Bearer ${token}` };
+    const staff = { authorization: `Bearer ${staffToken}` };
     const base = `/v1/tenants/${tenantId}/agents/${agentId}`;
-    await app.inject({ method: "PATCH", url: base, headers: auth, payload: { personality: { greeting: "Second version" } } });
+    await app.inject({ method: "PATCH", url: base, headers: staff, payload: { personality: { greeting: "Second version" } } });
     await app.inject({ method: "POST", url: `${base}/approve`, headers: auth });
     await app.inject({ method: "POST", url: `${base}/publish`, headers: auth });
 
-    const rolled = await app.inject({ method: "POST", url: `${base}/rollback`, headers: auth, payload: { toVersion: "v1.0" } });
+    const rolled = await app.inject({ method: "POST", url: `${base}/rollback`, headers: staff, payload: { toVersion: "v1.0" } });
     expect(rolled.statusCode).toBe(200);
     expect((await app.inject({ method: "GET", url: `/v1/widget-config/${agentId}` })).json().greeting).toBe("Hello from the approved version");
 
-    await app.inject({ method: "PATCH", url: base, headers: auth, payload: { personality: { greeting: "Edit after rollback" } } });
+    await app.inject({ method: "PATCH", url: base, headers: staff, payload: { personality: { greeting: "Edit after rollback" } } });
     expect((await app.inject({ method: "GET", url: `/v1/widget-config/${agentId}` })).json().greeting).toBe("Hello from the approved version");
     expect((await app.inject({ method: "GET", url: base, headers: auth })).json().hasUnpublishedChanges).toBe(true);
   });
