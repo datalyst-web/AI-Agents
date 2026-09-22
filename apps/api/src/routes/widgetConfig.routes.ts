@@ -4,6 +4,7 @@ import { withPlatformContext } from "@chat-agent/db";
 import type { AppContext } from "../lib/context.js";
 import { signWidgetToken } from "../lib/widgetToken.js";
 import { isSubscriptionLapsed } from "../lib/subscriptionAccess.js";
+import { servedAgentConfig } from "../lib/publishedAgentConfig.js";
 
 /**
  * Public, unauthenticated — this is what `<script data-agent-id="...">`
@@ -35,7 +36,9 @@ export async function registerWidgetConfigRoutes(app: FastifyInstance, ctx: AppC
       return;
     }
 
-    const personality = AgentPersonalitySchema.parse(agent.personality);
+    // The published greeting/name, not unapproved edits (lib/publishedAgentConfig.ts).
+    const served = await withPlatformContext(ctx.prisma, (tx) => servedAgentConfig(tx, agent));
+    const personality = AgentPersonalitySchema.parse(served.personality);
     const token = signWidgetToken({ tenantId: agent.tenantId, agentId: agent.id });
 
     reply.send({

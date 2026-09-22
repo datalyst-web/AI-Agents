@@ -20,6 +20,7 @@ import { scoreSentiment, shouldEscalateOnSentiment } from "./sentiment.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { encryptChannelCredential } from "../lib/channelCrypto.js";
 import { env } from "../env.js";
+import { servedAgentConfig } from "../lib/publishedAgentConfig.js";
 
 // Identifier types whose raw value is the destination for an outbound
 // message (a Telegram chat_id, a WhatsApp/Messenger/Instagram sender id) —
@@ -85,6 +86,12 @@ export interface IncomingMessage {
   };
   /** The server-generated id from a previous PendingConfirmationResponse, echoed back by the client. */
   confirmToolCallId?: string;
+  /**
+   * Answer with the agent's working copy (unpublished edits) instead of the
+   * published version customers get. Only the dashboard's test chat sets
+   * this — see lib/publishedAgentConfig.ts.
+   */
+  useWorkingCopy?: boolean;
 }
 
 export interface PendingConfirmationResponse {
@@ -208,8 +215,9 @@ export async function processCustomerMessage(
     if (agent.status !== "LIVE" && agent.status !== "TESTING") {
       throw new Error(`Agent ${agent.id} is not reachable in status ${agent.status}.`);
     }
-    const personality = AgentPersonalitySchema.parse(agent.personality);
-    const modelRouting = ModelRoutingPreferenceSchema.parse(agent.modelRouting);
+    const config = input.useWorkingCopy ? agent : await servedAgentConfig(tx, agent);
+    const personality = AgentPersonalitySchema.parse(config.personality);
+    const modelRouting = ModelRoutingPreferenceSchema.parse(config.modelRouting);
 
     let customerIdentityId: string | undefined;
     let priorFacts: { fact: string }[] = [];
@@ -290,7 +298,7 @@ export async function processCustomerMessage(
     const toolRegistry = await buildToolRegistryForAgent(tx, deps.secrets, {
       tenantId: input.tenantId,
       agentId: input.agentId,
-      enabledToolIds: agent.enabledToolIds,
+      enabledToolIds: config.enabledToolIds,
       googleCalendar:
         env.GOOGLE_CALENDAR_CLIENT_ID && env.GOOGLE_CALENDAR_CLIENT_SECRET
           ? { clientId: env.GOOGLE_CALENDAR_CLIENT_ID, clientSecret: env.GOOGLE_CALENDAR_CLIENT_SECRET }

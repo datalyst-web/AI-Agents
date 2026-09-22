@@ -8,6 +8,7 @@ import { requireTenantMatch, requirePermission, requirePublishPermission } from 
 import { verifyActiveImpersonation } from "../lib/impersonation.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { processCustomerMessage } from "../engine/agentLoop.js";
+import { hasUnpublishedChanges } from "../lib/publishedAgentConfig.js";
 
 const CreateAgentSchema = z.object({
   name: z.string().min(1).max(120),
@@ -29,7 +30,8 @@ const UpdateAgentSchema = z.object({
 });
 
 function nextVersion(current: string): string {
-  const match = /^v(\d+)\.(\d+)$/.exec(current);
+  // No end anchor: "v1.3-rollback" continues as v1.4, not back to v1.0.
+  const match = /^v(\d+)\.(\d+)/.exec(current);
   if (!match) return "v1.0";
   const [, major, minor] = match;
   return `v${major}.${Number(minor) + 1}`;
@@ -44,9 +46,11 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
 
   app.get("/v1/tenants/:tenantId/agents/:agentId", { preHandler: scoped }, async (request) => {
     const { agentId } = request.params as { agentId: string };
-    return withTenant(ctx.prisma, request.tenantCtx!, (tx) =>
-      tx.agent.findFirstOrThrow({ where: { id: agentId, tenantId: request.tenantCtx!.tenantId } }),
-    );
+    return withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
+      const agent = await tx.agent.findFirstOrThrow({ where: { id: agentId, tenantId: request.tenantCtx!.tenantId } });
+      // Edits to a LIVE agent wait for client approval before customers see them.
+      return { ...agent, hasUnpublishedChanges: await hasUnpublishedChanges(tx, agent) };
+    });
   });
 
   /**
@@ -114,6 +118,8 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
             customerMessage: body.message,
             customerIdentifier: { type: "authenticated_account", value: `test:${request.authUser!.sub}` },
             confirmToolCallId: body.confirmToolCallId,
+            // Testing is how staff and the client review unpublished edits.
+            useWorkingCopy: true,
           },
         );
         reply.send(result);
@@ -263,7 +269,11 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
     },
   );
 
-  /** Client explicitly approves a Testing-stage agent before it can go LIVE. */
+  /**
+   * Client explicitly approves either a Testing-stage agent (first launch)
+   * or pending changes to a LIVE agent (lib/publishedAgentConfig.ts). A LIVE
+   * agent stays LIVE on its published version until the changes are published.
+   */
   app.post(
     "/v1/tenants/:tenantId/agents/:agentId/approve",
     { preHandler: [...scoped, requirePublishPermission()] },
@@ -275,6 +285,17 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
       }
       const updated = await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
         const agent = await tx.agent.findFirstOrThrow({ where: { id: agentId, tenantId: request.tenantCtx!.tenantId } });
+        if (agent.status === "LIVE") {
+          if (!(await hasUnpublishedChanges(tx, agent))) {
+            throw Object.assign(new Error("There are no changes waiting for approval."), { statusCode: 409 });
+          }
+          const approved = await tx.agent.update({
+            where: { id: agentId },
+            data: { approvedByClientUserId: request.authUser!.sub, approvedAt: new Date() },
+          });
+          await writeAuditLog(tx, request.tenantCtx!, { actorUserId: request.authUser!.sub, agentId, action: "agent_changes_approved" });
+          return approved;
+        }
         if (agent.status !== "TESTING") {
           throw Object.assign(new Error("Agent must be in TESTING status to be approved."), { statusCode: 409 });
         }
@@ -304,7 +325,13 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
         const agent = await tx.agent.findFirstOrThrow({ where: { id: agentId, tenantId: request.tenantCtx!.tenantId } });
         const tenant = await tx.tenant.findFirstOrThrow({ where: { id: request.tenantCtx!.tenantId } });
 
-        const clientApproved = agent.status === "APPROVED";
+        // A LIVE agent can be published again only to release pending
+        // changes to its working copy (lib/publishedAgentConfig.ts).
+        const pendingLiveChanges = agent.status === "LIVE" && (await hasUnpublishedChanges(tx, agent));
+        if (agent.status === "LIVE" && !pendingLiveChanges) {
+          throw Object.assign(new Error("Nothing new to publish — this version is already live."), { statusCode: 409 });
+        }
+        const clientApproved = agent.status === "APPROVED" || (pendingLiveChanges && agent.approvedAt !== null);
         const staffMayAutoPublish = isStaff && tenant.delegatesAutoPublish;
 
         if (isStaff && !clientApproved && !staffMayAutoPublish) {
@@ -314,7 +341,7 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
           );
         }
         if (!isStaff && !clientApproved) {
-          throw Object.assign(new Error("Agent must be APPROVED (Testing-stage sign-off) before publishing to LIVE."), {
+          throw Object.assign(new Error(pendingLiveChanges ? "Approve the pending changes before publishing them." : "Agent must be APPROVED (Testing-stage sign-off) before publishing to LIVE."), {
             statusCode: 409,
           });
         }
@@ -382,8 +409,30 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
             modelRouting: snapshot.modelRouting as object,
             enabledToolIds: snapshot.enabledToolIds,
             version: `${snapshot.version}-rollback`,
+            approvedByClientUserId: null,
+            approvedAt: null,
           },
         });
+        // The rolled-back config becomes the published copy customers get
+        // (lib/publishedAgentConfig.ts) — without this, edits made after a
+        // rollback would reach customers without approval.
+        if (updated.status === "LIVE") {
+          await tx.agentVersionSnapshot.create({
+            data: {
+              id: randomUUID(),
+              agentId,
+              tenantId: request.tenantCtx!.tenantId,
+              version: updated.version,
+              personality: snapshot.personality as object,
+              modelRouting: snapshot.modelRouting as object,
+              enabledToolIds: snapshot.enabledToolIds,
+              knowledgeSnapshotId: snapshot.knowledgeSnapshotId,
+              status: "LIVE",
+              publishedAt: new Date(),
+              rolledBackFromVersion: toVersion,
+            },
+          });
+        }
         await writeAuditLog(tx, request.tenantCtx!, {
           actorUserId: request.tenantCtx!.impersonation?.staffUserId ?? request.authUser!.sub,
           agentId,

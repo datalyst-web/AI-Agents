@@ -11,6 +11,9 @@ interface AgentDetail {
   name: string;
   status: string;
   version: string;
+  /** LIVE only: saved edits customers don't get until approved and published. */
+  hasUnpublishedChanges?: boolean;
+  approvedAt?: string | null;
   personality: { name: string; greeting: string; systemInstructions: string; tone: string };
   modelRouting: {
     preferredProvider: "anthropic" | "openai" | "gemini";
@@ -718,6 +721,7 @@ export default function AgentDetailPage() {
     );
   }
   if (!agent) return <p className="text-sm text-foreground/40">Loading...</p>;
+  const pendingChanges = agent.status === "LIVE" && Boolean(agent.hasUnpublishedChanges);
 
   return (
     <div className="space-y-6">
@@ -742,6 +746,17 @@ export default function AgentDetailPage() {
             </Button>
           ) : null}
           {agent.status === "APPROVED" ? <Button onClick={publish}>Publish to Live</Button> : null}
+          {pendingChanges && !agent.approvedAt ? (
+            <Button
+              variant="secondary"
+              onClick={approve}
+              disabled={Boolean(impersonation)}
+              title={impersonation ? "Only the client can approve changes — see the note below." : undefined}
+            >
+              Approve changes
+            </Button>
+          ) : null}
+          {pendingChanges && (agent.approvedAt || isStaff) ? <Button onClick={publish}>Publish changes</Button> : null}
           {isStaff && agent.status !== "LIVE" ? (
             <Button variant="ghost" className="!text-danger hover:!bg-danger/10" onClick={() => setDeleteModalOpen(true)}>
               Delete
@@ -756,6 +771,23 @@ export default function AgentDetailPage() {
           Only <span className="text-foreground/70">{impersonation.tenantName}</span> can approve this stage — ask them to log in
           and approve, or have them delegate auto-publish authority in their account settings if that&apos;s already agreed.
         </p>
+      ) : null}
+      {pendingChanges ? (
+        <div className="rounded-xl bg-warning/10 px-4 py-3 text-xs text-warning ring-1 ring-inset ring-warning/25">
+          {agent.approvedAt ? (
+            <>Changes approved — click <span className="font-semibold">Publish changes</span> to make them live. Until then customers still get {agent.version}.</>
+          ) : impersonation ? (
+            <>
+              Saved as pending changes. Customers still get {agent.version} until{" "}
+              <span className="font-semibold">{impersonation.tenantName}</span> tests and approves them (or has delegated auto-publish).
+            </>
+          ) : (
+            <>
+              There are updates to your agent that your customers don&apos;t see yet. Try them in the{" "}
+              <span className="font-semibold">Test Agent</span> tab, then click <span className="font-semibold">Approve changes</span>.
+            </>
+          )}
+        </div>
       ) : null}
       {agent.status === "DRAFT" && !isStaff ? (
         <p className="text-xs text-foreground/40">Your AI Setup Team is configuring this agent — check back soon.</p>
