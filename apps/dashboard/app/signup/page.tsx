@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, PasswordInput } from "@chat-agent/ui";
 import { api, setToken, ApiError } from "@/lib/api";
 import { PublicThemeToggle } from "@/components/PublicThemeToggle";
 import { BackToHome } from "@/components/BrandHome";
+import { TURNSTILE_SITE_KEY, TurnstileWidget, type TurnstileHandle } from "@/components/TurnstileWidget";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -15,17 +16,25 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError("Please complete the CAPTCHA.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const { token } = await api.signup(tenantName, email, password);
+      const { token } = await api.signup(tenantName, email, password, turnstileToken ?? undefined);
       setToken(token);
       router.push("/overview");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Signup failed.");
+      // Tokens are single-use — get a fresh one for the next attempt.
+      turnstileRef.current?.reset();
     } finally {
       setBusy(false);
     }
@@ -69,6 +78,7 @@ export default function SignupPage() {
               <label className="mb-1 block text-xs font-medium text-foreground/60">Password</label>
               <PasswordInput required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
+            <TurnstileWidget ref={turnstileRef} onToken={setTurnstileToken} />
             {error ? <p className="text-xs text-danger">{error}</p> : null}
             <Button type="submit" disabled={busy} className="w-full">
               {busy ? "Creating account..." : "Create account"}

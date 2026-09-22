@@ -21,7 +21,10 @@ const SignupSchema = z.object({
   tenantName: z.string().min(1).max(120),
   email: z.string().email(),
   password: z.string().min(8),
+  turnstileToken: z.string().optional(),
 });
+// The bot check expired or wasn't passed — worded for a person, not a code.
+const CAPTCHA_FAILED = { error: "captcha_failed", message: "The security check didn't go through. Please tick it again and retry." };
 const VerifyTwoFactorSchema = z.object({ challenge: z.string().min(10), code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code.") });
 const ForgotPasswordSchema = z.object({ email: z.string().email() });
 const ResetPasswordSchema = z.object({ token: z.string().min(1), newPassword: z.string().min(8) });
@@ -91,6 +94,12 @@ function hashInviteToken(rawToken: string): string {
 export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) {
   app.post("/v1/auth/signup", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = SignupSchema.parse(request.body);
+    // Signup creates a tenant, so it gets the same bot check as login —
+    // it had none, leaving free-trial signup open to scripted account spam.
+    if (!(await verifyTurnstileToken(body.turnstileToken, request.ip))) {
+      reply.code(400).send(CAPTCHA_FAILED);
+      return;
+    }
 
     // No tenant exists yet for a signing-up user, so this — and the tenant/
     // user creation below — must use the platform-context escape hatch
@@ -148,7 +157,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
   app.post("/v1/auth/login", { config: { rateLimit: { max: 15, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = LoginSchema.parse(request.body);
     if (!(await verifyTurnstileToken(body.turnstileToken, request.ip))) {
-      reply.code(400).send({ error: "captcha_failed" });
+      reply.code(400).send(CAPTCHA_FAILED);
       return;
     }
     // The caller's tenant isn't known until we've looked the user up by
@@ -200,7 +209,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
     }
     const body = GoogleLoginSchema.parse(request.body);
     if (!(await verifyTurnstileToken(body.turnstileToken, request.ip))) {
-      reply.code(400).send({ error: "captcha_failed" });
+      reply.code(400).send(CAPTCHA_FAILED);
       return;
     }
 

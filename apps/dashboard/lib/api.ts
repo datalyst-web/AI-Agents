@@ -168,10 +168,10 @@ export const api = {
     apiFetch<{ message: string }>("/v1/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
   resetPassword: (token: string, newPassword: string) =>
     apiFetch<{ message: string }>("/v1/auth/reset-password", { method: "POST", body: JSON.stringify({ token, newPassword }) }),
-  signup: (tenantName: string, email: string, password: string) =>
+  signup: (tenantName: string, email: string, password: string, turnstileToken?: string) =>
     apiFetch<{ token: string; tenant: { id: string; slug: string; name: string } }>("/v1/auth/signup", {
       method: "POST",
-      body: JSON.stringify({ tenantName, email, password }),
+      body: JSON.stringify({ tenantName, email, password, turnstileToken }),
     }),
   lookupInvite: (token: string) =>
     apiFetch<{ email: string; role: string; tenantName: string }>(`/v1/auth/invites/${encodeURIComponent(token)}`),

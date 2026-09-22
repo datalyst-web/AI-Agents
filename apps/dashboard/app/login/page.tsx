@@ -8,14 +8,12 @@ import { useAuth } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 import { PublicThemeToggle } from "@/components/PublicThemeToggle";
 import { BackToHome } from "@/components/BrandHome";
+import { TURNSTILE_SITE_KEY, TurnstileWidget, type TurnstileHandle } from "@/components/TurnstileWidget";
 
 // Baked in at build time (Vercel env), same pattern as NEXT_PUBLIC_API_BASE_URL
 // elsewhere in this app — must match the API's GOOGLE_CLIENT_ID exactly, since
 // the backend verifies the token's audience against its own copy of this id.
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-// Public by design (Cloudflare's own docs: the site key is meant to ship to
-// the browser) — only TURNSTILE_SECRET_KEY on the API side is sensitive.
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 /** The theme currently painted on the page — set before first paint by app/layout.tsx's bootstrap script, light by default. */
 function pageTheme(): "light" | "dark" {
@@ -36,13 +34,6 @@ declare global {
         };
       };
     };
-    turnstile?: {
-      render: (
-        container: HTMLElement,
-        options: { sitekey: string; callback: (token: string) => void; "error-callback"?: () => void; theme?: string },
-      ) => string;
-      reset: (widgetId?: string) => void;
-    };
   }
 }
 
@@ -55,14 +46,12 @@ export default function LoginPage() {
   const [googleScriptLoaded, setGoogleScriptLoaded] = useState(false);
   const googleButtonRef = useRef<HTMLDivElement>(null);
 
-  const [turnstileScriptLoaded, setTurnstileScriptLoaded] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-  const turnstileContainerRef = useRef<HTMLDivElement>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
   // Set once a password/Google login succeeds and a code has been emailed;
   // its presence is what swaps the form for the code prompt.
   const [challenge, setChallenge] = useState<{ challenge: string; email: string } | null>(null);
   const [code, setCode] = useState("");
-  const turnstileWidgetId = useRef<string | undefined>(undefined);
   // The Google button's own effect below must NOT re-run (re-initializing/
   // re-rendering the button) every time the CAPTCHA token changes, so its
   // callback reads the latest token from this ref rather than closing over
@@ -76,8 +65,7 @@ export default function LoginPage() {
   // for the next attempt — without this, a wrong password on attempt 1
   // would silently fail attempt 2 as well with a stale/already-spent token.
   function resetTurnstile() {
-    setTurnstileToken(null);
-    if (window.turnstile && turnstileWidgetId.current) window.turnstile.reset(turnstileWidgetId.current);
+    turnstileRef.current?.reset();
   }
 
   async function onSubmit(e: FormEvent) {
@@ -119,20 +107,6 @@ export default function LoginPage() {
       setBusy(false);
     }
   }
-
-  useEffect(() => {
-    if (!turnstileScriptLoaded || !TURNSTILE_SITE_KEY || !turnstileContainerRef.current || !window.turnstile) return;
-    turnstileWidgetId.current = window.turnstile.render(turnstileContainerRef.current, {
-      sitekey: TURNSTILE_SITE_KEY,
-      // Matches the page as it is when the widget mounts. Hardcoded "dark"
-      // painted a black box on the (now default) light login page. Not
-      // re-rendered on a later theme toggle: that would discard a CAPTCHA the
-      // visitor has already solved, which is worse than a mismatched frame.
-      theme: pageTheme(),
-      callback: (token) => setTurnstileToken(token),
-      "error-callback": () => setTurnstileToken(null),
-    });
-  }, [turnstileScriptLoaded]);
 
   useEffect(() => {
     if (!googleScriptLoaded || !GOOGLE_CLIENT_ID || !googleButtonRef.current || !window.google) return;
@@ -186,14 +160,9 @@ export default function LoginPage() {
         <PublicThemeToggle />
       </div>
       {GOOGLE_CLIENT_ID ? (
-        <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onLoad={() => setGoogleScriptLoaded(true)} />
-      ) : null}
-      {TURNSTILE_SITE_KEY ? (
-        <Script
-          src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-          strategy="afterInteractive"
-          onLoad={() => setTurnstileScriptLoaded(true)}
-        />
+        // onReady, not onLoad: onLoad fires only on the script's first download, so
+        // arriving by in-app navigation (e.g. after signing out) never rendered the button.
+        <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onReady={() => setGoogleScriptLoaded(true)} />
       ) : null}
       <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-brand-gradient opacity-20 blur-3xl" />
       <div className="relative w-full max-w-sm animate-fade-up">
@@ -267,7 +236,7 @@ export default function LoginPage() {
                 </div>
                 <PasswordInput required value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
-              {TURNSTILE_SITE_KEY ? <div ref={turnstileContainerRef} className="flex justify-center pt-1" /> : null}
+              <TurnstileWidget ref={turnstileRef} onToken={setTurnstileToken} />
               {error ? <p className="text-xs text-danger">{error}</p> : null}
               <Button type="submit" disabled={busy} className="w-full">
                 {busy ? "Signing in..." : "Sign in"}
