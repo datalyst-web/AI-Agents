@@ -160,7 +160,7 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
             status: "DRAFT",
             version: "v0.1",
             personality: body.personality,
-            modelRouting: body.modelRouting ?? { failoverChain: ["anthropic", "openai", "gemini"], reasoningEffort: "medium" },
+            modelRouting: body.modelRouting ?? { failoverChain: ["anthropic", "openai", "gemini"], reasoningEffort: "low" },
             enabledToolIds: [],
             crossAgentMemoryPeerIds: [],
             createdBySource: actorSource,

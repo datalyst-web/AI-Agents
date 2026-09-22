@@ -46,7 +46,13 @@ export const ModelRoutingPreferenceSchema = z.object({
     "gemini",
   ]),
   maxCostPerConversationUsd: z.number().positive().optional(),
-  reasoningEffort: z.enum(["low", "medium", "high"]).default("medium"),
+  /**
+   * How much the model thinks before replying. "low" by default: measured on
+   * production (2026-09-22) it answered knowledge-base questions ~3x faster
+   * than "medium" (1.7-2.3s vs 4.7-6.6s) with the same answers, including
+   * refusing to invent a fact. Staff can raise it per agent.
+   */
+  reasoningEffort: z.enum(["low", "medium", "high"]).default("low"),
 });
 export type ModelRoutingPreference = z.infer<typeof ModelRoutingPreferenceSchema>;
 

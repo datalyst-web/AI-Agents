@@ -1025,6 +1025,27 @@ export default function AgentDetailPage() {
                 </div>
               ) : null}
 
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-foreground/60">Reply speed</label>
+                <select
+                  value={agent.modelRouting.reasoningEffort ?? "low"}
+                  onChange={(e) =>
+                    setAgent({
+                      ...agent,
+                      modelRouting: { ...agent.modelRouting, reasoningEffort: e.target.value as AgentDetail["modelRouting"]["reasoningEffort"] },
+                    })
+                  }
+                  className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-500"
+                >
+                  <option value="low" className="bg-surface-raised text-foreground">Fast — recommended for answering questions</option>
+                  <option value="medium" className="bg-surface-raised text-foreground">Balanced — thinks longer, slower replies</option>
+                  <option value="high" className="bg-surface-raised text-foreground">Thorough — for complex multi-step tasks, slowest</option>
+                </select>
+                <p className="mt-1.5 text-xs text-foreground/40">
+                  How long the AI thinks before replying. Fast answers in about 2 seconds; Balanced takes roughly 5.
+                </p>
+              </div>
+
               <Button onClick={saveModelRouting}>Save model settings</Button>
             </CardBody>
           </Card>

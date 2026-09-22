@@ -70,7 +70,7 @@ async function main() {
         },
         modelRouting: {
           failoverChain: ["anthropic", "openai", "gemini"],
-          reasoningEffort: "medium",
+          reasoningEffort: "low",
         },
         enabledToolIds: [],
         crossAgentMemoryPeerIds: [],
