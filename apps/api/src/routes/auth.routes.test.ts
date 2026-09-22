@@ -282,7 +282,15 @@ describe.skipIf(!process.env.CHAT_APP_DATABASE_URL)("auth routes — RLS entry-p
       payload: { tenantName: "RLS 2FA Purpose Co", email, password },
     });
     createdTenantIds.push(JSON.parse(signup.body).tenant.id);
-    const sessionToken = JSON.parse(signup.body).token;
+    // A real session token: signup's emailed code, completed.
+    const signupCode = extractTwoFactorCode(sentEmails.filter((m) => m.to === email).at(-1)!.text);
+    const completed = await app.inject({
+      method: "POST",
+      url: "/v1/auth/verify-2fa",
+      payload: { challenge: JSON.parse(signup.body).challenge, code: signupCode },
+    });
+    const sessionToken = JSON.parse(completed.body).token;
+    expect(sessionToken).toBeTruthy();
 
     const res = await app.inject({
       method: "POST",
