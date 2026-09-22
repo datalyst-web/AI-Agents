@@ -5,6 +5,7 @@ import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import authPlugin from "./plugins/auth.js";
+import { redactingRequestSerializer } from "./lib/logRedaction.js";
 import { requirePermission } from "./lib/rbac.js";
 import { buildAppContext, type AppContext } from "./lib/context.js";
 import { env } from "./env.js";
@@ -65,7 +66,9 @@ import { registerPaynowBillingRoutes } from "./routes/paynowBilling.routes.js";
 
 export async function buildApp(ctx: AppContext = buildAppContext()) {
   const app = Fastify({
-    logger: { level: env.LOG_LEVEL },
+    // Secrets in query strings (webhook verify tokens, OAuth codes) are
+    // blanked before the request line is logged — see lib/logRedaction.ts.
+    logger: { level: env.LOG_LEVEL, serializers: { req: redactingRequestSerializer } },
     trustProxy: true,
   });
 
