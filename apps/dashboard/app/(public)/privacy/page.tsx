@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { LegalTitle, Clause, Bullets, PlaceholderNotice } from "../_components";
 
 export const metadata: Metadata = {
@@ -178,6 +179,13 @@ export default function PrivacyPage() {
         <p>
           You can delete a specific customer&apos;s stored memory from your dashboard at any time; that action is recorded in your
           audit log.
+        </p>
+        <p>
+          If you are a member of the public who has chatted with one of these assistants, our{" "}
+          <Link href="/data-deletion" className="font-medium text-brand-link underline underline-offset-2">
+            data deletion page
+          </Link>{" "}
+          explains what is held about you and the three ways to have it erased.
         </p>
         <p>
           The regulator for our jurisdiction is the Postal and Telecommunications Regulatory Authority of Zimbabwe (POTRAZ), the Data Protection Authority under Zimbabwe&apos;s Cyber and Data Protection Act.

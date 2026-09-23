@@ -2,6 +2,7 @@ import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { withTenant, withPlatformContext } from "@chat-agent/db";
+import { createForgetRequest, eraseCustomerData, hashIdentifier } from "@chat-agent/memory-engine";
 import type { AppContext } from "../lib/context.js";
 import { requireTenantMatch, requirePermission } from "../lib/rbac.js";
 import { verifyActiveImpersonation } from "../lib/impersonation.js";
@@ -10,6 +11,7 @@ import { encryptChannelCredential, decryptChannelCredential } from "../lib/chann
 import { telegramCall, graphApiGet, graphApiSend } from "../lib/channelSend.js";
 import { checkUsageAllowance } from "../lib/usageEnforcement.js";
 import { processCustomerMessage } from "../engine/agentLoop.js";
+import { verifyMetaSignedRequest } from "../lib/metaSignedRequest.js";
 import { env } from "../env.js";
 
 const ConnectTelegramSchema = z.object({ botToken: z.string().min(20) });
@@ -505,6 +507,104 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
       }
 
       reply.code(200).send();
+    });
+
+    /**
+     * Meta's data-deletion callback, required before an app handling user
+     * data passes review: a person removes our app from their Facebook/
+     * Instagram settings and Meta POSTs a signed_request here, expecting
+     * `{ url, confirmation_code }` back so they can check what happened.
+     *
+     * Meta posts this form-encoded, hence the scoped parser (the metaScope
+     * JSON parser above only covers application/json).
+     */
+    metaScope.addContentTypeParser(
+      "application/x-www-form-urlencoded",
+      { parseAs: "string" },
+      (_req, body, done) => {
+        try {
+          done(null, Object.fromEntries(new URLSearchParams(body as string)));
+        } catch (err) {
+          done(err as Error, undefined);
+        }
+      },
+    );
+
+    metaScope.post("/v1/channels/meta/data-deletion", async (request, reply) => {
+      const body = (request.body ?? {}) as { signed_request?: unknown };
+      const metaUserId = verifyMetaSignedRequest(body.signed_request, env.META_APP_SECRET);
+      if (!metaUserId) {
+        reply.code(400).send({ error: "invalid_signed_request" });
+        return;
+      }
+
+      // One Meta user id can appear under several tenants (the same person
+      // messaging two of our clients' Pages) — each is its own identity row
+      // and each must be erased. Platform context, because this request
+      // arrives with no tenant attached and legitimately spans tenants;
+      // the hash lookup is exact, so it can't reach anyone else's data.
+      const identifierHash = hashIdentifier(metaUserId);
+      let confirmationCode: string | null = null;
+      try {
+        await withPlatformContext(ctx.prisma, async (tx) => {
+          const identities = await tx.customerIdentity.findMany({
+            where: { identifierType: { in: ["facebook_psid", "instagram_igsid"] }, identifierHash },
+            select: { id: true, tenantId: true, agentId: true },
+          });
+          for (const identity of identities) {
+            const forgetRequest = await createForgetRequest(tx, {
+              tenantId: identity.tenantId,
+              agentId: identity.agentId,
+              customerIdentityId: identity.id,
+            });
+            await eraseCustomerData(tx, { tenantId: identity.tenantId, customerIdentityId: identity.id });
+            await tx.memoryForgetRequest.update({
+              where: { id: forgetRequest.id },
+              data: { fulfilledAt: new Date() },
+            });
+            // The first request id doubles as the code we hand back, so the
+            // status page below can prove the erasure actually ran.
+            confirmationCode ??= forgetRequest.id;
+          }
+        });
+      } catch (err) {
+        request.log.error(err, "meta data deletion failed");
+        reply.code(500).send({ error: "deletion_failed" });
+        return;
+      }
+
+      // Nobody by that id has ever messaged one of our agents: there is
+      // nothing to erase, which is still a completed request as far as Meta
+      // (and the person) is concerned.
+      const code = confirmationCode ?? `none-${randomUUID()}`;
+      const url = new URL("/data-deletion", env.DASHBOARD_BASE_URL);
+      url.searchParams.set("code", code);
+      reply.code(200).send({ url: url.toString(), confirmation_code: code });
+    });
+
+    /**
+     * Backs the public /data-deletion status page. Confirms only that a
+     * given code corresponds to a completed erasure — never who it was, or
+     * which of our clients they had talked to.
+     */
+    metaScope.get("/v1/channels/meta/data-deletion/:code", async (request, reply) => {
+      const { code } = request.params as { code: string };
+      if (code.startsWith("none-")) {
+        reply.send({ status: "completed", heldData: false });
+        return;
+      }
+      const record = await withPlatformContext(ctx.prisma, (tx) =>
+        tx.memoryForgetRequest.findUnique({ where: { id: code }, select: { fulfilledAt: true } }),
+      ).catch(() => null);
+      if (!record) {
+        reply.code(404).send({ status: "unknown" });
+        return;
+      }
+      reply.send({
+        status: record.fulfilledAt ? "completed" : "pending",
+        heldData: true,
+        completedAt: record.fulfilledAt,
+      });
     });
   });
 }

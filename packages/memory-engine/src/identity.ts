@@ -10,7 +10,7 @@ export type IdentifierType =
   | "facebook_psid"
   | "instagram_igsid";
 
-function hashIdentifier(value: string): string {
+export function hashIdentifier(value: string): string {
   // Identifiers (emails, cookies) are hashed at rest — never stored raw —
   // per the CustomerIdentity.identifierHash column comment in schema.prisma.
   return createHash("sha256").update(value.trim().toLowerCase()).digest("hex");
