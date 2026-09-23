@@ -31,6 +31,22 @@ const UpdateAgentSchema = z.object({
   enabledToolIds: z.array(z.string().uuid()).optional(),
 });
 
+/** The people on a client's account who should hear about their assistant. */
+async function notifyClientOwners(
+  ctx: AppContext,
+  tenantCtx: { tenantId: string; impersonation?: unknown },
+  message: { subject: string; text: string },
+): Promise<void> {
+  if (!ctx.email) return;
+  const owners = await withTenant(ctx.prisma, tenantCtx as never, (tx) =>
+    tx.user.findMany({
+      where: { tenantId: tenantCtx.tenantId, isActive: true, role: { in: ["tenant_owner", "tenant_admin"] } },
+      select: { email: true },
+    }),
+  );
+  await Promise.all(owners.map((o) => ctx.email.send({ to: o.email, ...message })));
+}
+
 function nextVersion(current: string): string {
   // No end anchor: "v1.3-rollback" continues as v1.4, not back to v1.0.
   const match = /^v(\d+)\.(\d+)/.exec(current);
@@ -269,6 +285,18 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
         });
         return result;
       });
+
+      // "Your assistant is configured" — the milestone every client waits
+      // for, trial or subscribed: staff have finished building it and it's
+      // ready for the client to try and approve.
+      await notifyClientOwners(ctx, request.tenantCtx!, {
+        subject: `${updated.name} is ready for you to try`,
+        text:
+          `Good news — our team has finished configuring your AI assistant.\n\n` +
+          `Open your dashboard, try it in the Test Agent tab, and approve it when you're happy. ` +
+          `It only goes live to your customers once you approve it.\n\n` +
+          `${env.DASHBOARD_BASE_URL}/agents`,
+      });
       reply.send(updated);
     },
   );
@@ -398,30 +426,25 @@ export async function registerAgentRoutes(app: FastifyInstance, ctx: AppContext)
 
         return updated;
       });
-      if (trialStartedUntil && ctx.email) {
-        const until = trialStartedUntil;
-        const owners = await withTenant(ctx.prisma, request.tenantCtx!, (tx) =>
-          tx.user.findMany({
-            where: { tenantId: request.tenantCtx!.tenantId, isActive: true, role: { in: ["tenant_owner", "tenant_admin"] } },
-            select: { email: true },
-          }),
-        );
-        const endDate = until.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-        await Promise.all(
-          owners.map((o) =>
-            ctx.email.send({
-              to: o.email,
-              subject: "Your AI assistant is live — your 14-day free trial starts today",
-              text:
-                `Your AI assistant is now live and answering your customers.
-
-` +
-                `Your free trial runs until ${endDate}. We'll remind you before it ends; to keep it running after that, choose a plan here:
-` +
-                `${env.DASHBOARD_BASE_URL}/billing`,
-            }),
-          ),
-        );
+      // Every client hears when their assistant goes live; a trial also gets
+      // its dates, since the 14 days start at this moment.
+      if (trialStartedUntil) {
+        const endDate = trialStartedUntil.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+        await notifyClientOwners(ctx, request.tenantCtx!, {
+          subject: "Your AI assistant is live — your 14-day free trial starts today",
+          text:
+            `Your AI assistant is now live and answering your customers.\n\n` +
+            `Your free trial runs until ${endDate}. We'll remind you before it ends; to keep it running after that, choose a plan here:\n` +
+            `${env.DASHBOARD_BASE_URL}/billing`,
+        });
+      } else {
+        await notifyClientOwners(ctx, request.tenantCtx!, {
+          subject: `${result.name} is now live`,
+          text:
+            `Your AI assistant is live and answering your customers.\n\n` +
+            `You can watch conversations come in, see what it couldn't answer, and take over any chat yourself from your dashboard:\n` +
+            `${env.DASHBOARD_BASE_URL}/overview`,
+        });
       }
       reply.send(result);
     },

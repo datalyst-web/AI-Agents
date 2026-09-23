@@ -764,9 +764,24 @@ function Celebration({ onContinue }: { onContinue: () => void }) {
       </div>
       <h1 className="mt-8 text-3xl font-semibold tracking-tightest">You&apos;re all set! 🎉</h1>
       <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-foreground/55">
-        Our team has everything they need and is building your AI assistant now. We&apos;ll email you the moment it&apos;s ready —
-        your 14-day free trial starts that day.
+        Our team has everything they need and is building your AI assistant now.
       </p>
+      <div className="mx-auto mt-6 max-w-md rounded-xl2 bg-foreground/[0.03] p-5 text-left ring-1 ring-inset ring-surface-border">
+        <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-500/60" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-brand-gradient" />
+          </span>
+          Waiting for configuration
+        </p>
+        <ul className="mt-3 space-y-2 text-sm text-foreground/60">
+          <li>• We build your knowledge base, write your assistant&apos;s instructions and connect your channels.</li>
+          <li>
+            • We email you <span className="font-medium text-foreground/80">within 24 hours</span> when it&apos;s ready to try.
+          </li>
+          <li>• You approve it, then it goes live — and your 14-day free trial starts that day.</li>
+        </ul>
+      </div>
       <div className="mt-8 flex justify-center">
         <PrimaryButton onClick={onContinue}>Go to my dashboard →</PrimaryButton>
       </div>

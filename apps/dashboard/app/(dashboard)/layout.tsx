@@ -528,10 +528,10 @@ function IconFlag({ className }: { className?: string }) {
 function TrialNotStartedBanner() {
   return (
     <div className="mb-6 rounded-xl2 bg-info/10 px-5 py-4 text-sm text-info ring-1 ring-inset ring-info/25">
-      <p className="font-semibold">Thanks — our team is building your AI assistant.</p>
+      <p className="font-semibold">Waiting for configuration — our team is building your AI assistant.</p>
       <p className="mt-1 opacity-85">
-        We&apos;ll email you the moment it&apos;s ready. Your 14-day free trial starts the day it goes live, so you get the full 14
-        days with it.
+        We&apos;ll email you within 24 hours when it&apos;s ready for you to try and approve. Your 14-day free trial starts the day
+        it goes live, so you get the full 14 days with it.
       </p>
     </div>
   );
