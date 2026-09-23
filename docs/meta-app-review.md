@@ -1,62 +1,146 @@
-# Meta App Review — submission guide
+# Meta App Review — step by step
 
-Written for whoever submits the Datalyst Africa app in the Meta dashboard.
+WhatsApp, Messenger and Instagram all run through **one Meta app**. Right
+now that app is in Development mode, which means it only works on pages
+*you* are an admin of. To connect a client's Facebook Page or WhatsApp
+number, Meta has to review and approve the app first.
 
-Messenger, Instagram and WhatsApp all run through **one Meta app**. Until
-that app passes review it only works for people with a role on it (you),
-so a client's Page can't be connected. This is the checklist for getting
-it approved.
+This guide walks through that, start to finish, assuming no prior
+experience with the Meta dashboard.
 
-## What the platform already provides
+**Roughly how long:** business verification takes 2–5 days of waiting.
+The rest is about 3 hours of your own work. App review itself is usually
+2–7 days. So plan for two weeks, not two days.
 
-| Meta asks for | Where it lives |
+Meta renames buttons fairly often. If a label here doesn't match what you
+see, look for the closest equivalent — the order of the steps stays right
+even when the wording drifts.
+
+---
+
+## What our platform already provides
+
+You don't have to build any of this — it's live. You just need to paste
+these into Meta's forms when asked.
+
+| Meta asks for | Paste this |
 | --- | --- |
-| Webhook URL | `https://api.datalystafrica.com/v1/channels/meta/webhook` |
-| Verify token | `META_WEBHOOK_VERIFY_TOKEN` on the Railway `api` service |
-| Signature checking | Every inbound event is HMAC-verified against `META_APP_SECRET` |
-| **Data deletion callback** | `https://api.datalystafrica.com/v1/channels/meta/data-deletion` |
-| **Data deletion instructions** | `https://app.datalystafrica.com/data-deletion` |
-| Privacy policy | `https://app.datalystafrica.com/privacy` |
-| Terms of service | `https://app.datalystafrica.com/terms` |
+| Webhook callback URL | `https://api.datalystafrica.com/v1/channels/meta/webhook` |
+| Verify token | The `META_WEBHOOK_VERIFY_TOKEN` value (see below) |
+| User data deletion callback | `https://api.datalystafrica.com/v1/channels/meta/data-deletion` |
+| Data deletion instructions URL | `https://app.datalystafrica.com/data-deletion` |
+| Privacy policy URL | `https://app.datalystafrica.com/privacy` |
+| Terms of service URL | `https://app.datalystafrica.com/terms` |
 
-The deletion callback is new. When someone removes the app from their
-Facebook or Instagram settings, Meta posts a signed request to it; we
-erase that person's conversations, remembered facts and stored handle
-across every tenant they had talked to, and hand back a confirmation code
-they can check on the public page. Nothing identifying survives — only a
-dated record that the erasure ran.
+To read the verify token, run this and copy the value — don't paste it
+anywhere public:
 
-## Before you open the review form
+```
+railway variables --service api
+```
 
-1. **Business verification.** Meta will not grant messaging permissions to
-   an unverified business. Business Manager → Security Centre → Start
-   verification. Expect to upload the company registration certificate and
-   a document showing the business address, and to confirm a phone number
-   or the `datalystafrica.com` domain. This is the slowest step — a few
-   days — so start it first.
-2. **Verify the domain.** Business Manager → Brand Safety → Domains → add
-   `datalystafrica.com` and confirm with the DNS TXT record. We already
-   control the zone in Cloudflare.
-3. **Fill in the app's Basic Settings.** App icon (1024×1024), category
-   "Business", the privacy policy, terms and the deletion URLs from the
-   table above, and a working contact email.
-4. **Add the products** you are asking permission for: Messenger,
-   Instagram, WhatsApp — each has its own setup tab where the webhook URL
-   and verify token go.
+---
 
-## Permissions to request
+## Stage 1 — Business verification (do this first, today)
 
-Ask only for these; every extra one invites a rejection.
+This is the long pole. Everything else can happen while you wait.
 
-- `pages_messaging` — replying to people who message a client's Facebook Page.
-- `pages_show_list` / `pages_manage_metadata` — required to subscribe a Page to the webhook.
-- `instagram_manage_messages` + `instagram_basic` — the same for an Instagram business account.
-- `whatsapp_business_messaging` + `whatsapp_business_management` — the WhatsApp Cloud API path.
+1. Go to **business.facebook.com** and sign in with the Facebook account
+   that owns the app.
+2. Click the **gear icon** (Business Settings), bottom left.
+3. In the left menu, find **Security Centre** (sometimes under "Business
+   Info").
+4. Click **Start Verification**.
+5. Fill in the legal business details — the name must match your
+   registration documents *exactly*, including "(Pvt) Ltd" or whatever
+   form your registration uses.
+6. Upload the documents it asks for. Usually two:
+   - Your certificate of incorporation / business registration.
+   - Something showing the business address — a utility bill or bank
+     statement in the business's name, dated within 90 days.
+7. Confirm you own the business by phone, email or the domain.
 
-## What to write in the use-case box
+**Then wait.** Meta emails you. If it's rejected, the email says which
+document failed — usually a name mismatch or a document too old. Fix that
+one thing and resubmit; there's no penalty.
 
-Keep it in the reviewer's language — what the person messaging sees, not
-our architecture:
+---
+
+## Stage 2 — Verify the domain
+
+Do this while Stage 1 is pending.
+
+1. Business Settings → **Brand Safety** → **Domains**.
+2. Click **Add**, type `datalystafrica.com`, click Add.
+3. Choose the **DNS TXT record** method. Meta shows you a long string
+   starting `facebook-domain-verification=`.
+4. Open HostGator → cPanel → **Zone Editor** → the `datalystafrica.com`
+   zone → **Add Record**:
+   - Type: **TXT**
+   - Name: `datalystafrica.com` (or leave blank / `@` depending on what
+     HostGator shows)
+   - Value: the whole string Meta gave you
+5. Save, wait about 15 minutes, go back to Meta and click **Verify**.
+
+If it fails, it's nearly always DNS not having propagated yet. Wait an
+hour and click Verify again.
+
+---
+
+## Stage 3 — Fill in the app's basic settings
+
+1. Go to **developers.facebook.com/apps** and open the app
+   ("Datalyst Africa Agent").
+2. Left menu → **App Settings** → **Basic**.
+3. Fill in:
+   - **App icon** — a 1024×1024 PNG of the Datalyst logo.
+   - **Privacy Policy URL** — from the table above.
+   - **Terms of Service URL** — from the table above.
+   - **User data deletion** — choose **Data deletion callback URL** (not
+     the "instructions URL" option) and paste the callback URL from the
+     table. Our server answers it automatically.
+   - **Category** — Business.
+   - **Business verification** — link the app to the verified business
+     from Stage 1 once that's approved.
+4. Click **Save changes** at the bottom.
+
+**How to know it worked:** Meta pings the deletion URL when you save. If
+it accepts the URL without an error, our endpoint answered correctly.
+
+---
+
+## Stage 4 — Add the products and webhooks
+
+In the app dashboard, **Add Product** and add Messenger, Instagram and
+WhatsApp. For each one, find its **Webhooks** section and:
+
+1. Click **Add Callback URL** (or Edit).
+2. Callback URL: `https://api.datalystafrica.com/v1/channels/meta/webhook`
+3. Verify token: the `META_WEBHOOK_VERIFY_TOKEN` value.
+4. Click **Verify and Save**. It should succeed immediately — Meta calls
+   our server and our server answers the challenge.
+5. Then **Subscribe** to the `messages` field.
+
+If "Verify and Save" fails, the token doesn't match. Re-read it from
+Railway; no spaces, no quotes.
+
+---
+
+## Stage 5 — Request the permissions
+
+Left menu → **App Review** → **Permissions and Features**. Find each of
+these and click **Request Advanced Access**:
+
+- `pages_messaging` — reply to people who message a client's Page
+- `pages_show_list` and `pages_manage_metadata` — needed to connect a Page
+- `instagram_basic` and `instagram_manage_messages` — the same for Instagram
+- `whatsapp_business_messaging` and `whatsapp_business_management` — WhatsApp
+
+**Ask for these and nothing else.** Every extra permission is another
+thing the reviewer has to be convinced of, and a reason to reject.
+
+Each one asks how you'll use it. Paste this, adjusting the wording to the
+specific permission:
 
 > Datalyst Africa provides small and medium businesses in Zimbabwe with an
 > AI assistant that answers customer enquiries. A business connects its own
@@ -67,52 +151,86 @@ our architecture:
 > staff when it can't help. We only ever message a person who messaged the
 > business first, and only in that conversation.
 
-## The screencast
+---
 
-Rejections are almost always about the video, not the code. Record one
-continuous screen capture, no cuts, showing:
+## Stage 6 — Record the screencast
 
-1. The Datalyst Africa dashboard, signing in as staff.
-2. Integrations → connecting a **test** Facebook Page (use a Page you own).
-3. Switching to Messenger as an ordinary customer, sending a real question.
+**This is where most submissions fail.** Not the code — the video. The
+reviewer has to *see* each permission being used.
+
+Record one continuous screen capture, no cuts, no editing. Windows Game
+Bar (**Win + G**) records fine. Narrate or add captions.
+
+Show, in this order:
+
+1. Signing in at `app.datalystafrica.com`.
+2. The **Integrations** page, connecting a test Facebook Page — use a Page
+   you own, not a client's.
+3. Switch to Messenger as an ordinary customer. Send a real question, like
+   "What are your opening hours?"
 4. The assistant's reply arriving in Messenger.
-5. The same conversation appearing in the business's dashboard.
-6. Removing the app under Facebook → Settings → Apps and Websites, then
-   opening the confirmation link and showing the deletion status page.
+5. That same conversation appearing in the dashboard under Conversations.
+6. **The deletion flow:** Facebook → Settings → Apps and Websites → remove
+   the app → open the confirmation link Facebook gives you → show the
+   status page at `app.datalystafrica.com/data-deletion` saying the data
+   was deleted.
 
-Step 6 is what satisfies the data-deletion requirement; reviewers look for it.
+Step 6 is what proves the data-deletion requirement. Reviewers look for it
+specifically, and it is now fully working on our side.
 
-## Reviewer test instructions
+Upload the video to the submission, or to an unlisted YouTube link.
 
-Give them a real account — a reviewer who can't reproduce it rejects it.
+---
 
-> 1. Sign in at https://app.datalystafrica.com with the test credentials
+## Stage 7 — Give the reviewer a test account
+
+A reviewer who can't reproduce your video rejects the submission.
+
+Create a throwaway client in Managed Setup for this — **never use a real
+client's account.** Then in the "App Review" instructions box, write:
+
+> 1. Sign in at https://app.datalystafrica.com with the credentials
 >    supplied in this submission.
 > 2. Open "Integrations" to see the connected channels for this account.
 > 3. Message the Facebook Page "<test page name>" with a question such as
->    "What are your opening hours?" and the assistant will reply within a
->    few seconds.
+>    "What are your opening hours?" — the assistant replies within a few
+>    seconds.
 > 4. The conversation appears under "Conversations" in the dashboard.
-> 5. To test data deletion, remove the app at
->    Facebook → Settings → Apps and Websites, then open the confirmation
->    link Facebook shows you.
+> 5. To test data deletion, remove the app at Facebook → Settings → Apps
+>    and Websites, then open the confirmation link Facebook shows you.
 
-Create a throwaway tenant for this and put its login in the submission —
-never a real client's account.
+Put the email and password in the credentials fields Meta provides.
+
+---
+
+## Stage 8 — Submit, then wait
+
+Click **Submit for Review**. Typically 2–7 days.
+
+While waiting, don't change the app's settings — an edit mid-review can
+reset it.
+
+---
 
 ## After approval
 
-- Switch the app from Development to **Live** (toggle at the top of the app dashboard).
-- Connect each client's Page/IG/WhatsApp through Integrations while
-  impersonating their tenant, as with any other managed setup work.
-- Meta expires long-lived Page tokens on password changes at the client's
-  end; a channel that starts failing shows its error on the Integrations
-  card, which is the first place to look.
+1. In the app dashboard, flip the toggle at the top from **Development**
+   to **Live**. Nothing works for real clients until you do this.
+2. Connect each client's Page / Instagram / WhatsApp through Integrations,
+   inside a Managed Setup session, the same as any other setup work.
+3. Meta expires Page tokens when the client changes their Facebook
+   password. When a channel stops working, its error shows on the
+   Integrations card — that's the first place to look.
 
 ## If it's rejected
 
-The rejection email names the permission and the reason. In order of
-likelihood: the screencast didn't show the permission actually in use; the
-reviewer's test account couldn't sign in; or business verification wasn't
-finished. Fix and resubmit — there is no penalty for resubmitting, and the
-second review is usually faster.
+The email names the permission and the reason. In order of likelihood:
+
+1. **The screencast didn't show the permission in use.** Re-record showing
+   that exact permission doing something visible.
+2. **The reviewer couldn't sign in.** Test the credentials yourself in a
+   private browser window before resubmitting.
+3. **Business verification isn't finished.** Finish Stage 1 first.
+
+Fix the one thing named and resubmit. There's no penalty, and second
+reviews are usually faster.
