@@ -521,7 +521,19 @@ invoiced and reported on separately.
   `https://api.datalystafrica.com/v1/channels/meta/webhook` subscribed to
   `messages` for Page, Instagram and WhatsApp Business Account. While the
   Meta app is in Development mode it only works for its own admins' pages;
-  serving clients needs Meta business verification and app review.
+  serving clients needs Meta business verification and app review —
+  `docs/meta-app-review.md` is the submission checklist.
+- **Data deletion `[LOCKED]`** — `POST /v1/channels/meta/data-deletion`
+  (Meta's callback, required for app review) verifies the `signed_request`
+  against `META_APP_SECRET` and erases that person across **every** tenant
+  they messaged: conversations, remembered facts, and the encrypted handle
+  (`eraseCustomerData()` in `packages/memory-engine`). The
+  `CustomerIdentity` row itself is kept — after the erase it holds only a
+  one-way hash, and deleting it would cascade away the
+  `MemoryForgetRequest` rows that are our proof the erasure happened.
+  Public instructions and status live at `/data-deletion`; don't let that
+  page, or the status endpoint behind it, reveal anything beyond "that
+  erasure ran" — never who, or which client they had talked to.
 - **Public marketing surface** — `/` (landing + pricing), `/guide`,
   `/terms`, `/privacy`. Static server components, no auth, indexable.
   The Datalyst logo appears only in the header (linking to `/`) and footer
