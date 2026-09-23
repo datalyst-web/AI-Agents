@@ -632,8 +632,15 @@ interface ChatResponse {
         background: radial-gradient(circle, var(--header-glow), transparent 70%); pointer-events: none; }
       .avatar-wrap { position: relative; width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
         background: linear-gradient(135deg, var(--brand-1), var(--brand-3)); display: flex; align-items: center; justify-content: center;
-        box-shadow: 0 0 0 2px rgba(128,128,128,0.15); }
-      .avatar { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+        box-shadow: 0 0 0 2px rgba(128,128,128,0.15); overflow: hidden; }
+      /* A client's logo is rarely a square mark — most are wide wordmarks.
+         object-fit: cover fills the circle by cropping, which turns a wide
+         logo into an unrecognisable sliver (reported on the Datalyst mark
+         itself). contain shows the whole logo, letterboxed on a white disc
+         so it reads on any header colour — the same treatment the header's
+         "white logo tile" pattern already uses elsewhere in the dashboard. */
+      .avatar { position: absolute; inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); border-radius: 50%;
+        object-fit: contain; background: #fff; }
       .avatar-fallback { color: rgba(255,255,255,0.9); }
       .header-text { flex: 1; min-width: 0; position: relative; }
       .name { color: var(--text-primary); font-weight: 600; font-size: 14.5px; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
