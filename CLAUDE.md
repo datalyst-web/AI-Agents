@@ -510,9 +510,12 @@ invoiced and reported on separately.
 - **Client dashboard** — overview, conversations, leads, knowledge, agent
   config, integrations, analytics. Lives at `/overview` and below; `/` is
   the public marketing page, not the dashboard.
-- **Messaging channels** — each client connects their own Telegram bot
-  (token pasted on their Integrations page; the platform registers the
-  webhook). WhatsApp, Messenger and Instagram go through one platform-level
+- **Messaging channels** — staff connect these for the client (fully
+  managed): the client sends us their Telegram bot token / WhatsApp number
+  / page, and staff connect it inside a Managed Setup session. A client's
+  Integrations page shows status only — `channel:connect` is staff-only.
+  The one exception is Google Calendar, where only the account owner can
+  complete Google's consent screen, so clients keep that single button. WhatsApp, Messenger and Instagram go through one platform-level
   Meta app ("Datalyst Africa Agent"): `META_APP_SECRET` and
   `META_WEBHOOK_VERIFY_TOKEN` on `api`, webhook
   `https://api.datalystafrica.com/v1/channels/meta/webhook` subscribed to

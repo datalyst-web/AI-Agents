@@ -41,10 +41,9 @@ export const PermissionSchema = z.enum([
   // Tools & integrations
   "tool:configure",
   "tool:execute_high_risk",
-  // Deployment channels (Telegram, WhatsApp, ...) — deliberately a
-  // client action, not staff-configurable: connecting one means handing
-  // over the client's own bot token / phone number, which staff never
-  // has. See CLAUDE.md Deployment Surfaces.
+  // Deployment channels (Telegram, WhatsApp, ...) — staff-only under the
+  // fully-managed model: the client sends us their bot token / number and
+  // our team connects it. Their dashboard shows status only.
   "channel:connect",
   // Business-tool integrations (HubSpot CRM, Google Calendar, Zendesk) —
   // same reasoning as channel:connect: connecting one hands over the
@@ -141,7 +140,6 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "team:remove",
     "analytics:read",
     "tenant:customize",
-    "channel:connect",
     "integration:connect",
   ],
   tenant_admin: [
@@ -156,7 +154,6 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "team:invite",
     "analytics:read",
     "tenant:customize",
-    "channel:connect",
     "integration:connect",
   ],
   tenant_agent_editor: [
@@ -166,7 +163,6 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "conversation:read",
     "conversation:write",
     "analytics:read",
-    "channel:connect",
     "integration:connect",
   ],
   tenant_viewer: ["agent:read", "knowledge:read", "conversation:read", "analytics:read"],

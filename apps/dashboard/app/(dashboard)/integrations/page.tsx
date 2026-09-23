@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { Card, CardBody, CardHeader, Badge, Button, Modal, CardRowSkeleton } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
 import { api, ApiError } from "@/lib/api";
@@ -99,7 +100,13 @@ export default function IntegrationsPage() {
 }
 
 function IntegrationsPageContent() {
-  const { user } = useAuth();
+  const { user, impersonation } = useAuth();
+  // Fully managed (CLAUDE.md, LOCKED): clients configure nothing — our team
+  // connects every channel and tool for them. A client sees the status of
+  // each one; the connect/disconnect actions are staff-only (which, for a
+  // client's account, means staff inside a Managed Setup session).
+  const isStaff = user?.role === "setup_specialist" || user?.role === "platform_admin";
+  const canConnect = isStaff || Boolean(impersonation);
   const searchParams = useSearchParams();
   const router = useRouter();
   const [agent, setAgent] = useState<Agent | null | undefined>(undefined);
@@ -304,9 +311,23 @@ function IntegrationsPageContent() {
       <div>
         <h1 className="text-xl font-semibold text-foreground">Integrations</h1>
         <p className="mt-1 text-sm text-foreground/50">
-          Connect the channels your customers already use. Your agent replies on every connected channel the same way it does on your website widget.
+          {canConnect
+            ? "Connect the channels your customers already use. Your agent replies on every connected channel the same way it does on your website widget."
+            : "Where your assistant is answering. Your agent replies on every connected channel the same way it does on your website widget."}
         </p>
       </div>
+      {canConnect ? null : (
+        <div className="rounded-xl2 bg-info/10 px-5 py-4 text-sm text-info ring-1 ring-inset ring-info/25">
+          <p className="font-semibold">We connect these for you.</p>
+          <p className="mt-1 opacity-85">
+            Nothing to set up on your side — tell us which channels you want from the{" "}
+            <Link href="/support" className="font-medium underline underline-offset-2">
+              Support
+            </Link>{" "}
+            page and our team connects them, usually within a day.
+          </p>
+        </div>
+      )}
       {notice ? <p className="text-xs text-success">{notice}</p> : null}
       {error ? <p className="text-xs text-danger">{error}</p> : null}
 
@@ -317,7 +338,7 @@ function IntegrationsPageContent() {
       ) : agent === null ? (
         <Card>
           <CardBody className="py-10 text-center text-sm text-foreground/50">
-            Create your agent first, then come back here to connect channels.
+            {canConnect ? "Create your agent first, then come back here to connect channels." : "Your assistant is being built — channels appear here once it's ready."}
           </CardBody>
         </Card>
       ) : (
@@ -330,13 +351,15 @@ function IntegrationsPageContent() {
                 <CardHeader
                   title={cm.label}
                   subtitle={cm.blurb}
-                  action={active ? <Badge tone={STATUS_TONE[active.status]}>Connected</Badge> : <Badge tone="neutral">Not connected</Badge>}
+                  action={active ? <Badge tone={STATUS_TONE[active.status]}>Connected</Badge> : <Badge tone="neutral"><span className="whitespace-nowrap">Not connected</span></Badge>}
                 />
                 <CardBody className="flex flex-wrap items-center justify-between gap-3">
                   <div className="text-xs text-foreground/40">
                     {active ? active.externalLabel ?? "Connected" : "—"}
                   </div>
-                  {active ? (
+                  {!canConnect ? (
+                    <span className="text-xs text-foreground/35">{active ? "Live" : "Ask us to connect this"}</span>
+                  ) : active ? (
                     <button
                       onClick={() => disconnect(channel)}
                       disabled={busyChannel === channel}
@@ -378,11 +401,19 @@ function IntegrationsPageContent() {
                     <CardHeader
                       title={bm.label}
                       subtitle={bm.blurb}
-                      action={active ? <Badge tone="success">Connected</Badge> : <Badge tone="neutral">Not connected</Badge>}
+                      action={active ? <Badge tone="success">Connected</Badge> : <Badge tone="neutral"><span className="whitespace-nowrap">Not connected</span></Badge>}
                     />
                     <CardBody className="flex flex-wrap items-center justify-between gap-3">
                       <div className="text-xs text-foreground/40">{active?.label ?? "—"}</div>
-                      {active ? (
+                      {!canConnect && vendor === "google_calendar" && !active ? (
+                        // Only the calendar's owner can complete Google's
+                        // consent screen — staff can't do this one for them.
+                        <Button variant="secondary" disabled={busyVendor === vendor} onClick={connectGoogleCalendar}>
+                          {busyVendor === vendor ? "Redirecting…" : "Allow calendar access"}
+                        </Button>
+                      ) : !canConnect ? (
+                        <span className="text-xs text-foreground/35">{active ? "Live" : "Ask us to connect this"}</span>
+                      ) : active ? (
                         <button
                           onClick={() => disconnectBiz(vendor)}
                           disabled={busyVendor === vendor}
