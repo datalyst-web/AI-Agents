@@ -108,7 +108,7 @@ async function createTenantWithCustomer(metaUserId: string) {
         encryptedExternalHandle: "encrypted-handle-placeholder",
       },
     });
-    await tx.conversation.create({
+    const conversation = await tx.conversation.create({
       data: { tenantId: tenant.id, agentId: agent.id, channel: "FACEBOOK_MESSENGER", customerIdentityId: identity.id },
     });
     await tx.crossConversationMemoryFact.create({
@@ -116,9 +116,10 @@ async function createTenantWithCustomer(metaUserId: string) {
         tenantId: tenant.id,
         agentId: agent.id,
         customerIdentityId: identity.id,
-        factType: "preference",
-        factValue: "Prefers morning appointments",
-        statedByCustomer: true,
+        fact: "Prefers morning appointments",
+        sourceConversationId: conversation.id,
+        sourceMessageId: randomUUID(),
+        confidence: 0.9,
       },
     });
     return { tenantId: tenant.id, agentId: agent.id, identityId: identity.id };
