@@ -224,6 +224,7 @@ interface ChatResponse {
     if (open) launcher.classList.remove("invite");
     if (open) {
       panel.hidden = false;
+      positionPanel(); // follow the launcher if the visitor has moved it
       // next frame, so the "hidden -> visible" transition actually animates
       requestAnimationFrame(() => panel.classList.add("open"));
       input.focus();
@@ -273,7 +274,117 @@ interface ChatResponse {
   csatEl.addEventListener("mouseleave", () => csatStars.forEach((s) => s.classList.remove("filled")));
   csatSkipBtn.addEventListener("click", () => void submitCsat(null));
 
-  launcher.addEventListener("click", () => toggle(!opened));
+  /**
+   * The launcher can be dragged out of the way — it sits over the host
+   * site's own content, and on a small screen it can cover exactly the
+   * button someone is reaching for. Its position is remembered per site.
+   *
+   * A drag must not also fire a click (which would open the chat), so
+   * movement past DRAG_SLOP swallows the click that follows.
+   */
+  const DRAG_SLOP = 6;
+  const POS_KEY = `chat-agent:pos:${agentId}`;
+  let dragging = false;
+  let moved = false;
+  let grabX = 0;
+  let grabY = 0;
+
+  function clampToViewport(x: number, y: number) {
+    const size = launcher.offsetWidth || 60;
+    const margin = 8;
+    return {
+      x: Math.min(Math.max(x, margin), Math.max(margin, window.innerWidth - size - margin)),
+      y: Math.min(Math.max(y, margin), Math.max(margin, window.innerHeight - size - margin)),
+    };
+  }
+
+  function placeLauncher(x: number, y: number) {
+    const p = clampToViewport(x, y);
+    launcher.classList.add("placed");
+    launcher.style.left = `${p.x}px`;
+    launcher.style.top = `${p.y}px`;
+    launcher.style.right = "auto";
+    launcher.style.bottom = "auto";
+    positionPanel();
+    return p;
+  }
+
+  /** Keeps the panel tucked against whichever corner the launcher now sits in. */
+  function positionPanel() {
+    if (launcher.style.left === "") return; // never dragged — CSS corner still applies
+    const rect = launcher.getBoundingClientRect();
+    const pw = Math.min(372, window.innerWidth - 32);
+    const ph = Math.min(580, window.innerHeight - 120);
+    const above = rect.top > window.innerHeight / 2;
+    const left = Math.min(Math.max(rect.left + rect.width / 2 - pw / 2, 16), Math.max(16, window.innerWidth - pw - 16));
+    const top = above ? Math.max(16, rect.top - ph - 12) : Math.min(rect.bottom + 12, window.innerHeight - ph - 16);
+    panel.style.left = `${left}px`;
+    panel.style.top = `${Math.max(16, top)}px`;
+    panel.style.right = "auto";
+    panel.style.bottom = "auto";
+    panel.style.transformOrigin = above ? "bottom center" : "top center";
+  }
+
+  try {
+    const saved = JSON.parse(localStorage.getItem(POS_KEY) || "null") as { x: number; y: number } | null;
+    if (saved && typeof saved.x === "number" && typeof saved.y === "number") placeLauncher(saved.x, saved.y);
+  } catch {
+    // Private mode, blocked storage — the CSS corner position is fine.
+  }
+
+  launcher.addEventListener("pointerdown", (e) => {
+    const rect = launcher.getBoundingClientRect();
+    dragging = true;
+    moved = false;
+    grabX = e.clientX - rect.left;
+    grabY = e.clientY - rect.top;
+    launcher.setPointerCapture(e.pointerId);
+  });
+
+  launcher.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    if (!moved && Math.abs(e.clientX - grabX - launcher.getBoundingClientRect().left) < DRAG_SLOP
+              && Math.abs(e.clientY - grabY - launcher.getBoundingClientRect().top) < DRAG_SLOP) return;
+    moved = true;
+    launcher.classList.add("dragging");
+    launcher.classList.remove("invite");
+    placeLauncher(e.clientX - grabX, e.clientY - grabY);
+  });
+
+  launcher.addEventListener("pointerup", (e) => {
+    if (!dragging) return;
+    dragging = false;
+    launcher.classList.remove("dragging");
+    if (launcher.hasPointerCapture(e.pointerId)) launcher.releasePointerCapture(e.pointerId);
+    if (moved) {
+      // The inline values, not getBoundingClientRect(): the rect includes the
+      // hover/drag scale transform, so saving it would shift the button a
+      // little further every time someone moved it.
+      try {
+        localStorage.setItem(
+          POS_KEY,
+          JSON.stringify({ x: parseFloat(launcher.style.left), y: parseFloat(launcher.style.top) }),
+        );
+      } catch {
+        // Not being able to remember where they put it is not worth an error.
+      }
+    }
+  });
+
+  // A resize can leave the launcher off-screen (rotating a phone, resizing
+  // a window), so pull it back into view.
+  window.addEventListener("resize", () => {
+    if (launcher.style.left === "") return;
+    placeLauncher(parseFloat(launcher.style.left), parseFloat(launcher.style.top));
+  });
+
+  launcher.addEventListener("click", () => {
+    if (moved) {
+      moved = false; // this click is the tail of a drag — not a request to open
+      return;
+    }
+    toggle(!opened);
+  });
   closeBtn.addEventListener("click", () => {
     if (!maybeShowCsat()) toggle(false);
   });
@@ -484,6 +595,13 @@ interface ChatResponse {
         transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.25s ease, background-position 0.3s ease;
       }
       .launcher.invite { animation: launcherPop 0.55s cubic-bezier(0.34,1.56,0.64,1) both, sonarPing 1.6s ease-out 3, bobIdle 3.2s ease-in-out 0.6s infinite; }
+      /* Draggable: touch-action stops a drag from scrolling the host page. */
+      .launcher { cursor: grab; touch-action: none; }
+      .launcher.dragging { cursor: grabbing; transition: none; transform: scale(1.04); }
+      /* Once it has been moved by hand, the entrance pop and idle bob stop:
+         re-adding them after a drag replays the pop from scale(0.4), which
+         reads as the button breaking. */
+      .launcher.placed, .launcher.dragging { animation: none !important; }
       .launcher:hover { animation-play-state: paused; transform: scale(1.07); background-position: right center; box-shadow: 0 6px 18px rgba(18,165,224,0.4), 0 16px 40px rgba(18,165,224,0.32), 0 0 0 1px rgba(255,255,255,0.1) inset; }
       .launcher:active { transform: scale(0.96); }
       .launcher.open { animation: none; transform: scale(1); }
@@ -499,8 +617,14 @@ interface ChatResponse {
         display: flex; flex-direction: column; overflow: hidden; z-index: 999999;
         opacity: 0; transform: translateY(16px) scale(0.97); transform-origin: bottom ${side};
         transition: opacity 0.22s cubic-bezier(0.16,1,0.3,1), transform 0.22s cubic-bezier(0.16,1,0.3,1), background 0.2s ease;
+        /* The closed panel keeps its box (display:flex beats [hidden], and it
+           has to stay laid out to animate open). Invisible is not the same as
+           gone: without this it silently swallowed every click in a 372x580
+           area of the host's own page — a button behind it could not be
+           pressed. Only the open panel takes pointer input. */
+        pointer-events: none;
       }
-      .panel.open { opacity: 1; transform: translateY(0) scale(1); }
+      .panel.open { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
 
       .header { position: relative; display: flex; align-items: center; gap: 11px; padding: 16px; overflow: hidden;
         background: linear-gradient(180deg, rgba(128,128,128,0.06), rgba(128,128,128,0) 100%); border-bottom: 1px solid var(--header-border); }
