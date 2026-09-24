@@ -15,8 +15,17 @@ const UpdateTenantSchema = z.object({
   subscriptionState: SubscriptionStateSchema.optional(),
   subscriptionTier: SubscriptionTierSchema.optional(),
   managedSetupTier: ManagedSetupTierSchema.optional(),
-  delegatesAutoPublish: z.boolean().optional(),
+  // delegatesAutoPublish is deliberately NOT settable here — it removes the
+  // client's approval gate, so it only changes through /publish-authority
+  // below, which demands a recorded basis and writes an audit entry.
 });
+
+const PublishAuthoritySchema = z
+  .object({ enabled: z.boolean(), basis: z.string().trim().max(500).default("") })
+  .refine((v) => !v.enabled || v.basis.length >= 10, {
+    message: "Say why (at least a sentence) — e.g. who authorised it and when.",
+    path: ["basis"],
+  });
 
 const CreateClientSchema = z.object({
   tenantName: z.string().min(1).max(120),
@@ -57,6 +66,36 @@ export async function registerTenantRoutes(app: FastifyInstance, ctx: AppContext
           await provisionUsageLimits(tx, tenantId, updated.subscriptionTier, updated.subscriptionState);
         }
         return updated;
+      });
+      reply.send(updated);
+    },
+  );
+
+  /**
+   * The client's approval gate (CLAUDE.md "Published vs working copy") only
+   * comes off when the client has delegated publishing authority in
+   * writing. This is where that gets recorded: platform_admin only, a basis
+   * is mandatory when granting, and both grant and revoke are audited — so
+   * "why could staff publish without approval?" always has an answer.
+   */
+  app.post(
+    "/v1/platform/tenants/:tenantId/publish-authority",
+    { preHandler: [app.authenticate, requirePermission("platform:manage_tenants")] },
+    async (request, reply) => {
+      const { tenantId } = request.params as { tenantId: string };
+      const body = PublishAuthoritySchema.parse(request.body);
+      const updated = await withPlatformContext(ctx.prisma, async (tx) => {
+        const tenant = await tx.tenant.update({
+          where: { id: tenantId },
+          data: { delegatesAutoPublish: body.enabled },
+          select: { id: true, delegatesAutoPublish: true },
+        });
+        await writeAuditLog(tx, { tenantId }, {
+          actorUserId: request.authUser!.sub,
+          action: "auto_publish_delegation_updated",
+          metadata: { enabled: body.enabled, basis: body.basis || null },
+        });
+        return tenant;
       });
       reply.send(updated);
     },

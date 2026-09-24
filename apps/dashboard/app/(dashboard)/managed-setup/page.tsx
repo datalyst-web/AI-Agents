@@ -17,6 +17,8 @@ interface QueueTenant {
   dataResidencyRegion: string | null;
   /** When a trial client sent the welcome questionnaire (null if not yet / not a trial). */
   onboardingIntakeAt: string | null;
+  /** The client has authorised staff to publish without their approval. Only a platform admin can change it. */
+  delegatesAutoPublish: boolean;
   agents: { id: string; name: string; status: AgentStatus }[];
 }
 interface StaffAccount {
@@ -72,6 +74,9 @@ export default function ManagedSetupPage() {
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
   const [deleteReason, setDeleteReason] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [authorityTarget, setAuthorityTarget] = useState<QueueTenant | null>(null);
+  const [authorityBasis, setAuthorityBasis] = useState("");
+  const [authorityError, setAuthorityError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const isPlatformAdmin = user?.role === "platform_admin";
 
@@ -169,6 +174,24 @@ export default function ManagedSetupPage() {
       refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not remove this client.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function savePublishAuthority() {
+    if (!authorityTarget) return;
+    const enable = !authorityTarget.delegatesAutoPublish;
+    setBusyId(authorityTarget.id);
+    setAuthorityError(null);
+    try {
+      await api.setPublishAuthority(authorityTarget.id, enable, authorityBasis.trim());
+      setNotice(enable ? `${authorityTarget.name} can now be published by staff without their approval.` : `${authorityTarget.name} must approve changes again.`);
+      setAuthorityTarget(null);
+      setAuthorityBasis("");
+      refresh();
+    } catch (err) {
+      setAuthorityError(err instanceof ApiError ? err.message : "Could not save this.");
     } finally {
       setBusyId(null);
     }
@@ -402,6 +425,21 @@ export default function ManagedSetupPage() {
                     >
                       Branding
                     </button>
+                    {isPlatformAdmin ? (
+                      <button
+                        onClick={() => {
+                          setAuthorityTarget(t);
+                          setAuthorityBasis("");
+                          setAuthorityError(null);
+                        }}
+                        className={`text-xs font-medium transition-colors ${
+                          t.delegatesAutoPublish ? "text-success hover:text-success/80" : "text-foreground/40 hover:text-foreground/70"
+                        }`}
+                        title="Whether we may publish this client's changes without their approval"
+                      >
+                        {t.delegatesAutoPublish ? "Publishing authorised" : "Publish authority"}
+                      </button>
+                    ) : null}
                     {t.subscriptionState === "CANCELLED" ? (
                       <>
                         <button
@@ -669,6 +707,44 @@ export default function ManagedSetupPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={authorityTarget !== null}
+        onClose={() => setAuthorityTarget(null)}
+        title={authorityTarget?.delegatesAutoPublish ? `Take back publishing authority — ${authorityTarget?.name ?? ""}` : `Publishing authority — ${authorityTarget?.name ?? ""}`}
+        subtitle={
+          authorityTarget?.delegatesAutoPublish
+            ? "Staff will need this client to approve changes again before anything reaches their customers."
+            : "Only for a client who has agreed we may publish for them. Until then every change waits for their own approval — that gate is what protects them."
+        }
+      >
+        <div className="space-y-3">
+          {authorityTarget?.delegatesAutoPublish ? null : (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-foreground/60">Who authorised this, and when?</label>
+              <input
+                value={authorityBasis}
+                onChange={(e) => setAuthorityBasis(e.target.value)}
+                placeholder="e.g. Approved by the owner in writing (WhatsApp/email), 24 Sep 2026"
+                className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+              />
+              <p className="mt-1.5 text-xs text-foreground/40">Saved to their audit trail with your name.</p>
+            </div>
+          )}
+          {authorityError ? <p className="text-xs text-danger">{authorityError}</p> : null}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="ghost" onClick={() => setAuthorityTarget(null)} disabled={busyId === authorityTarget?.id}>
+              Cancel
+            </Button>
+            <Button
+              onClick={savePublishAuthority}
+              disabled={busyId === authorityTarget?.id || (!authorityTarget?.delegatesAutoPublish && authorityBasis.trim().length < 10)}
+            >
+              {busyId === authorityTarget?.id ? "Saving…" : authorityTarget?.delegatesAutoPublish ? "Take back authority" : "Record authority"}
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       <Modal

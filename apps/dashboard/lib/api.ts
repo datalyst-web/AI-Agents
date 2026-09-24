@@ -256,6 +256,12 @@ export const api = {
     }),
   cancelClient: (tenantId: string) => apiFetch(`/v1/platform/tenants/${tenantId}/cancel`, { method: "POST" }),
   reactivateClient: (tenantId: string) => apiFetch(`/v1/platform/tenants/${tenantId}/reactivate`, { method: "POST" }),
+  /** platform_admin only. Granting needs a written basis; both directions are audited server-side. */
+  setPublishAuthority: (tenantId: string, enabled: boolean, basis: string) =>
+    apiFetch<{ id: string; delegatesAutoPublish: boolean }>(`/v1/platform/tenants/${tenantId}/publish-authority`, {
+      method: "POST",
+      body: JSON.stringify({ enabled, basis }),
+    }),
   /** Permanent. platform_admin only, and only for a client already removed (cancelled). */
   deleteClient: (tenantId: string, confirmName: string, reason: string) =>
     apiFetch<{ deleted: true; filesDeleted: number; filesCleanupIncomplete: boolean }>(`/v1/platform/tenants/${tenantId}`, {
@@ -299,6 +305,7 @@ export const api = {
         logoUrl: string | null;
         dataResidencyRegion: string | null;
         onboardingIntakeAt: string | null;
+        delegatesAutoPublish: boolean;
         agents: { id: string; name: string; status: "DRAFT" | "CONFIGURING" | "KNOWLEDGE_PROCESSING" | "TESTING" | "APPROVED" | "LIVE" }[];
       }[]
     >(
