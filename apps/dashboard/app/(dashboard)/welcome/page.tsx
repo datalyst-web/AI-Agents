@@ -153,6 +153,7 @@ export default function WelcomePage() {
   const [logo, setLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const loaded = useRef(false);
@@ -249,7 +250,15 @@ export default function WelcomePage() {
       }
       setDone(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "We couldn't send your answers. Please try again.");
+      if (err instanceof ApiError && err.status === 401) {
+        // The survey easily takes longer than a session lasts — nothing
+        // typed is lost (autosaved to localStorage above), but they do need
+        // to sign back in before this specific click will succeed.
+        setSessionExpired(true);
+        setError(err.message);
+      } else {
+        setError(err instanceof ApiError ? err.message : "We couldn't send your answers. Please try again.");
+      }
     } finally {
       setSending(false);
     }
@@ -559,7 +568,18 @@ export default function WelcomePage() {
                 </div>
 
                 {error ? (
-                  <p className="mt-5 animate-fade-up rounded-lg bg-danger/10 px-3.5 py-2.5 text-sm text-danger ring-1 ring-inset ring-danger/20">{error}</p>
+                  <p className="mt-5 animate-fade-up rounded-lg bg-danger/10 px-3.5 py-2.5 text-sm text-danger ring-1 ring-inset ring-danger/20">
+                    {error}
+                    {sessionExpired ? (
+                      <>
+                        {" "}
+                        <a href="/login" className="font-semibold underline underline-offset-2">
+                          Sign in again
+                        </a>
+                        {" — your answers on this page are still here."}
+                      </>
+                    ) : null}
+                  </p>
                 ) : null}
 
                 <div className="mt-8 flex items-center justify-between gap-3">

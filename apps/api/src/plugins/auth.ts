@@ -52,11 +52,25 @@ export default fp(async function authPlugin(fastify: FastifyInstance, opts: { pr
       // "time-boxed" impersonation).
       const imp = request.authUser.impersonation;
       if (imp && new Date(imp.expiresAt).getTime() < Date.now()) {
-        reply.code(401).send({ error: "impersonation_session_expired" });
+        reply.code(401).send({
+          error: "impersonation_session_expired",
+          message: "This managed-setup session has timed out (they're limited to one hour). Start a new session from Managed Setup to continue.",
+        });
         return;
       }
     } catch {
-      reply.code(401).send({ error: "unauthorized" });
+      // The common real-world case here isn't a forged token — it's a
+      // perfectly normal session (default 15 min) outliving a slow task
+      // like the /welcome onboarding survey, which easily runs past that
+      // while someone writes FAQs and uploads documents. A bare
+      // "unauthorized" reads as a bug; this tells them what actually
+      // happened and what to do about it. Their in-progress answers are
+      // safe either way — /welcome autosaves to localStorage regardless
+      // of this response.
+      reply.code(401).send({
+        error: "session_expired",
+        message: "Your session timed out. Please sign in again — anything you were filling in in this browser is still saved.",
+      });
       return;
     }
 

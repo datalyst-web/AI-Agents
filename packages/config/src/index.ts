@@ -66,7 +66,14 @@ export const EnvSchema = z.object({
 
   JWT_SECRET: z.string().min(8),
   JWT_ISSUER: z.string().default("ai-chat-agent-platform"),
-  JWT_EXPIRY: z.string().default("15m"),
+  // There is currently no silent refresh — this is the session's entire
+  // lifetime, not an inactivity timeout. 15m was too short in practice: the
+  // /welcome onboarding survey alone (7 steps, writing FAQs, uploading
+  // documents) routinely runs longer than that, and the client-facing
+  // failure was a bare, unexplained "unauthorized" on submit. 4h covers a
+  // normal working session; JWT_REFRESH_EXPIRY below is reserved for real
+  // refresh-token rotation, not implemented yet.
+  JWT_EXPIRY: z.string().default("4h"),
   JWT_REFRESH_EXPIRY: z.string().default("30d"),
 
   // Platform transactional email (password reset, etc.) — see
