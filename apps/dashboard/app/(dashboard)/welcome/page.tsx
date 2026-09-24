@@ -150,7 +150,7 @@ const VIDEO_SEEN_KEY = "chat-agent:welcome-video-seen";
  * (the part after v= in the URL); until then this screen doesn't render at
  * all and onboarding starts straight at Step 1, exactly as it did before.
  */
-const WELCOME_VIDEO_YOUTUBE_ID: string | null = null;
+const WELCOME_VIDEO_YOUTUBE_ID: string | null = "Cg7AeqKPQIY";
 
 export default function WelcomePage() {
   const { user, refreshUser, logout } = useAuth();
