@@ -143,6 +143,14 @@ const CALENDARS: { value: Answers["calendar"]; label: string }[] = [
 ];
 
 const DRAFT_KEY = "chat-agent:welcome-draft";
+const VIDEO_SEEN_KEY = "chat-agent:welcome-video-seen";
+/**
+ * The "how this works" video shown once, before Step 1 — always skippable,
+ * never blocking. Set to the real YouTube video id once it's published
+ * (the part after v= in the URL); until then this screen doesn't render at
+ * all and onboarding starts straight at Step 1, exactly as it did before.
+ */
+const WELCOME_VIDEO_YOUTUBE_ID: string | null = null;
 
 export default function WelcomePage() {
   const { user, refreshUser, logout } = useAuth();
@@ -156,12 +164,25 @@ export default function WelcomePage() {
   const [sessionExpired, setSessionExpired] = useState(false);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
+  // Whether this tenant has already dismissed the intro video (watched or
+  // skipped — both count). Starts true so nothing flashes before we've had
+  // a chance to check localStorage; the check below flips it to false only
+  // when there's actually a video to show and it hasn't been seen yet.
+  const [videoDismissed, setVideoDismissed] = useState(true);
   const loaded = useRef(false);
 
   // Restore a saved draft (or start from their business name), then autosave.
   useEffect(() => {
     if (!user || loaded.current) return;
     loaded.current = true;
+    if (WELCOME_VIDEO_YOUTUBE_ID) {
+      try {
+        setVideoDismissed(localStorage.getItem(`${VIDEO_SEEN_KEY}:${user.tenantId}`) === "1");
+      } catch {
+        // Can't remember it was seen — show it once rather than never.
+        setVideoDismissed(false);
+      }
+    }
     try {
       const saved = localStorage.getItem(`${DRAFT_KEY}:${user.tenantId}`);
       if (saved) {
@@ -175,6 +196,15 @@ export default function WelcomePage() {
     }
     setA((prev) => ({ ...prev, businessName: user.tenantName ?? "", contactEmail: user.email }));
   }, [user]);
+
+  function dismissVideo() {
+    setVideoDismissed(true);
+    try {
+      if (user) localStorage.setItem(`${VIDEO_SEEN_KEY}:${user.tenantId}`, "1");
+    } catch {
+      // Worst case they see the video again next visit — never worth blocking on.
+    }
+  }
   useEffect(() => {
     if (!user || !loaded.current || done) return;
     try {
@@ -289,6 +319,8 @@ export default function WelcomePage() {
       <main className="relative z-10 mx-auto w-full max-w-3xl px-5 pb-20 pt-8">
         {done ? (
           <Celebration onContinue={finish} />
+        ) : WELCOME_VIDEO_YOUTUBE_ID && !videoDismissed ? (
+          <VideoIntro youtubeId={WELCOME_VIDEO_YOUTUBE_ID} firstName={firstName} onContinue={dismissVideo} />
         ) : (
           <>
             {step === 0 ? (
@@ -771,6 +803,61 @@ function Review({ answers: a, documents, logo, onEdit }: { answers: Answers; doc
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * Shown once, before Step 1 — never a gate. A client who doesn't want to
+ * watch clicks Skip and reaches the exact same onboarding form as if this
+ * screen never existed; nothing downstream can tell the difference.
+ */
+function VideoIntro({
+  youtubeId,
+  firstName,
+  onContinue,
+}: {
+  youtubeId: string;
+  firstName: string | undefined;
+  onContinue: () => void;
+}) {
+  return (
+    <div className="animate-fade-up text-center">
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-link">
+          Welcome{firstName ? `, ${firstName}` : ""} 👋
+        </p>
+        <button
+          onClick={onContinue}
+          className="flex-none text-xs font-medium text-foreground/40 transition-colors hover:text-foreground/70"
+        >
+          Skip — start my onboarding →
+        </button>
+      </div>
+
+      <h1 className="mt-4 text-3xl font-semibold tracking-tightest sm:text-4xl">
+        A 90-second look at <span className="text-gradient">what happens next</span>
+      </h1>
+      <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-foreground/55">
+        Here&apos;s exactly what the next few minutes look like, and what happens after you submit — entirely optional, skip it
+        any time.
+      </p>
+
+      <div className="mt-8 overflow-hidden rounded-xl3 bg-brand-gradient-soft p-px shadow-card">
+        <div className="aspect-video overflow-hidden rounded-[calc(1.75rem-1px)] bg-surface-raised/95">
+          <iframe
+            className="h-full w-full"
+            src={`https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0`}
+            title="How your free trial works"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      </div>
+
+      <div className="mt-8 flex justify-center">
+        <PrimaryButton onClick={onContinue}>Continue to onboarding →</PrimaryButton>
+      </div>
     </div>
   );
 }
