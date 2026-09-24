@@ -27,6 +27,8 @@ interface AuthUser {
   subscriptionState: "ACTIVE" | "TRIAL" | "PAST_DUE" | "SUSPENDED" | "CANCELLED" | null;
   /** Whole days left on a free trial, or null when not trialling. Drives the countdown banner in the dashboard layout. */
   trialDaysRemaining: number | null;
+  /** ISO timestamp the 14 days run out, set the moment the agent first goes live. Null before then or off a trial. Drives the Overview countdown card. */
+  trialEndsAt: string | null;
   /** Trial over or subscription ended — the API then only allows Billing, Usage and Support. Never true for staff. */
   subscriptionLapsed: boolean;
   /** A trial client's owner/admin who hasn't filled in the business questionnaire yet — the dashboard sends them to /welcome. */

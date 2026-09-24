@@ -91,6 +91,11 @@ export default function OverviewPage() {
           </Link>
         ) : null}
       </div>
+
+      {!isStaff && user?.subscriptionState === "TRIAL" && user.trialStarted && user.trialDaysRemaining !== null && user.trialEndsAt ? (
+        <TrialCountdown daysRemaining={user.trialDaysRemaining} trialEndsAt={user.trialEndsAt} />
+      ) : null}
+
       {error ? <p className="text-xs text-danger">{error}</p> : null}
 
       {agents === null || usage === null ? (
@@ -194,6 +199,96 @@ export default function OverviewPage() {
           </CardBody>
         )}
       </Card>
+    </div>
+  );
+}
+
+/**
+ * The client's first, and best, look at where their trial stands: how many
+ * of the 14 days are left, and since when. Shown the whole way through the
+ * trial — not just the last-week urgency banner in the dashboard layout,
+ * which is a global reminder across every page, not this page's own
+ * welcome. 14 mirrors TRIAL_DAYS in apps/api/src/lib/planLimits.ts — the
+ * dashboard has no import path to that server-side constant, so it's
+ * restated here the same way the marketing site restates plan pricing.
+ */
+function TrialCountdown({ daysRemaining, trialEndsAt }: { daysRemaining: number; trialEndsAt: string }) {
+  const TRIAL_DAYS = 14;
+  const dayNumber = Math.min(TRIAL_DAYS, Math.max(1, TRIAL_DAYS - daysRemaining + 1));
+  const urgent = daysRemaining <= 3;
+
+  const endDate = new Date(trialEndsAt);
+  const startDate = new Date(endDate.getTime() - TRIAL_DAYS * 24 * 60 * 60 * 1000);
+  const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+  const size = 88;
+  const stroke = 7;
+  const r = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * r;
+  const filled = circumference * (dayNumber / TRIAL_DAYS);
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-xl3 p-px shadow-card ${
+        urgent ? "bg-gradient-to-br from-danger/70 to-danger/15" : "bg-brand-gradient-soft"
+      }`}
+    >
+      <div className="relative flex flex-wrap items-center gap-5 rounded-[calc(1.75rem-1px)] bg-surface-raised/95 px-6 py-5 backdrop-blur sm:gap-6">
+        <div
+          aria-hidden
+          className={`pointer-events-none absolute -right-12 -top-20 h-56 w-56 rounded-full blur-3xl ${
+            urgent ? "bg-danger/15" : "bg-brand-500/15"
+          }`}
+        />
+
+        <div className="relative flex h-[88px] w-[88px] flex-none items-center justify-center">
+          <svg width={size} height={size} className="-rotate-90" role="img" aria-label={`Day ${dayNumber} of ${TRIAL_DAYS}`}>
+            <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} className="stroke-foreground/[0.07]" />
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={r}
+              fill="none"
+              strokeWidth={stroke}
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={circumference - filled}
+              className={`transition-[stroke-dashoffset] duration-700 ease-out ${urgent ? "stroke-danger" : "stroke-brand-500"}`}
+            />
+          </svg>
+          <div className="absolute flex flex-col items-center">
+            <span className="text-xl font-bold leading-none tabular-nums text-foreground">{dayNumber}</span>
+            <span className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-foreground/40">of {TRIAL_DAYS}</span>
+          </div>
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+            </span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-success">Live &amp; trialling</span>
+          </div>
+          <p className="mt-1.5 text-lg font-semibold tracking-tight text-foreground">
+            {daysRemaining === 0
+              ? "Your trial ends today"
+              : daysRemaining === 1
+                ? "1 day left on your free trial"
+                : `${daysRemaining} days left on your free trial`}
+          </p>
+          <p className="mt-0.5 text-xs text-foreground/45">
+            Live since {fmt(startDate)} · trial ends {fmt(endDate)}
+          </p>
+        </div>
+
+        <Link
+          href="/billing"
+          className="flex-none rounded-lg bg-brand-gradient bg-[length:160%_auto] bg-left px-4 py-2.5 text-sm font-medium text-white shadow-glow transition-all duration-300 hover:bg-right hover:shadow-glow-lg"
+        >
+          View plans
+        </Link>
+      </div>
     </div>
   );
 }
