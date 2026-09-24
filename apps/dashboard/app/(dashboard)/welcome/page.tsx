@@ -843,19 +843,37 @@ function VideoIntro({
         any time.
       </p>
 
-      <div className="mt-8 overflow-hidden rounded-xl3 bg-brand-gradient-soft p-px shadow-card">
-        <div className="aspect-video overflow-hidden rounded-[calc(1.75rem-1px)] bg-surface-raised/95">
-          <iframe
-            className="h-full w-full"
-            src={`https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0`}
-            title="How your free trial works"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
+      {/* A real embedded player is fragile here — ad blockers and privacy
+          browsers routinely strip YouTube iframes specifically, which
+          leaves a broken box sitting in the middle of onboarding with no
+          way for the page to detect or recover from it. A thumbnail that
+          opens the video on YouTube itself has nothing to block: it's one
+          static image and a link. */}
+      <a
+        href={`https://youtu.be/${youtubeId}`}
+        target="_blank"
+        rel="noopener"
+        className="group mt-8 block overflow-hidden rounded-xl3 bg-brand-gradient-soft p-px shadow-card transition-shadow hover:shadow-glow-lg"
+      >
+        <div className="relative aspect-video overflow-hidden rounded-[calc(1.75rem-1px)] bg-surface-raised/95">
+          {/* eslint-disable-next-line @next/next/no-img-element -- external YouTube-hosted thumbnail, not a local asset Next can optimize */}
+          <img
+            src={`https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`}
+            alt="How your free trial works"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
           />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/10 transition-colors group-hover:bg-black/20">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-gradient shadow-glow-lg transition-transform duration-300 group-hover:scale-110">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="white" className="ml-1">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </span>
+          </div>
         </div>
-      </div>
+      </a>
+      <p className="mt-2.5 text-xs text-foreground/35">Opens on YouTube ↗</p>
 
-      <div className="mt-8 flex justify-center">
+      <div className="mt-6 flex justify-center">
         <PrimaryButton onClick={onContinue}>Continue to onboarding →</PrimaryButton>
       </div>
     </div>
