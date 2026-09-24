@@ -10,8 +10,10 @@ import { PublicThemeToggle } from "@/components/PublicThemeToggle";
 import { BackToHome } from "@/components/BrandHome";
 import { TURNSTILE_SITE_KEY, TurnstileWidget, type TurnstileHandle } from "@/components/TurnstileWidget";
 
+const RESEND_COOLDOWN_SECONDS = 45;
+
 export default function SignupPage() {
-  const { user, loading: authLoading, completeTwoFactor, establishSessionFromToken } = useAuth();
+  const { user, loading: authLoading, completeTwoFactor, resendTwoFactorCode, establishSessionFromToken } = useAuth();
   const router = useRouter();
   // Someone already signed in has no business on this page — straight to
   // their dashboard (and never into a second signup).
@@ -29,6 +31,40 @@ export default function SignupPage() {
   // emailed; its presence swaps the form for the code prompt.
   const [challenge, setChallenge] = useState<{ challenge: string; email: string } | null>(null);
   const [code, setCode] = useState("");
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN_SECONDS);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+
+  // Starts counting down the moment a code is first sent, not only after a
+  // manual resend — the button's whole job is to still be there once the
+  // original email hasn't shown up, so it shouldn't be clickable before
+  // that's even had a chance to happen.
+  useEffect(() => {
+    if (!challenge || resendCooldown <= 0) return;
+    const t = setInterval(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [challenge, resendCooldown]);
+
+  async function onResendCode() {
+    if (!challenge || resending || resendCooldown > 0) return;
+    setResending(true);
+    setError(null);
+    setResendMessage(null);
+    try {
+      const fresh = await resendTwoFactorCode(challenge.challenge);
+      // The old challenge and the code it was tied to are both dead the
+      // moment a new one is issued — swap in the new challenge and clear
+      // whatever digits were typed against the old code.
+      setChallenge({ challenge: fresh.challenge, email: fresh.email });
+      setCode("");
+      setResendMessage("New code sent — check your email.");
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't resend the code. Please try again.");
+    } finally {
+      setResending(false);
+    }
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -106,13 +142,24 @@ export default function SignupPage() {
               <Button type="submit" disabled={busy || code.length !== 6} className="w-full">
                 {busy ? "Verifying..." : "Confirm and continue"}
               </Button>
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={onResendCode}
+                  disabled={resending || resendCooldown > 0}
+                  className="text-xs font-medium text-brand-link transition-colors hover:underline disabled:cursor-not-allowed disabled:text-foreground/30 disabled:no-underline"
+                >
+                  {resending ? "Sending…" : resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend code"}
+                </button>
+              </div>
+              {resendMessage ? <p className="text-center text-xs text-success">{resendMessage}</p> : null}
               <p className="text-center text-[11px] leading-relaxed text-foreground/35">
-                Your account is created. The code expires in 10 minutes — check your spam folder if it hasn&apos;t arrived. If it
-                expires,{" "}
+                Your account is created. The code expires in 10 minutes — check your spam folder if it hasn&apos;t arrived. Still
+                nothing?{" "}
                 <Link href="/login" className="text-foreground/55 underline underline-offset-2 hover:text-foreground/80">
-                  sign in
+                  Sign in
                 </Link>{" "}
-                to get a new one.
+                to start over.
               </p>
             </form>
           ) : (

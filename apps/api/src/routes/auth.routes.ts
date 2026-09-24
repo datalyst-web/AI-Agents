@@ -26,6 +26,7 @@ const SignupSchema = z.object({
 // The bot check expired or wasn't passed — worded for a person, not a code.
 const CAPTCHA_FAILED = { error: "captcha_failed", message: "The security check didn't go through. Please tick it again and retry." };
 const VerifyTwoFactorSchema = z.object({ challenge: z.string().min(10), code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code.") });
+const ResendTwoFactorSchema = z.object({ challenge: z.string().min(10) });
 const ForgotPasswordSchema = z.object({ email: z.string().email() });
 const ResetPasswordSchema = z.object({ token: z.string().min(1), newPassword: z.string().min(8) });
 const AcceptInviteSchema = z.object({ token: z.string().min(1), displayName: z.string().min(1).max(120), password: z.string().min(8) });
@@ -323,6 +324,47 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
 
     const token = await reply.jwtSign({ sub: user.id, tenantId: user.tenantId ?? undefined, role: user.role });
     reply.send({ token, user: { id: user.id, email: user.email, role: user.role, tenantId: user.tenantId } });
+  });
+
+  /**
+   * The 10-minute code (see TWO_FACTOR_CODE_TTL_MINUTES) is short enough
+   * that a slow mail server, a distracted user, or a filled-in spam folder
+   * routinely burns it before they get the chance to use it. Re-sending
+   * needs a *fresh* challenge, not the original one: the challenge JWT
+   * shares the code's 10-minute expiry, so reusing it would hand someone a
+   * new code with only whatever time happened to be left on the old clock
+   * — sometimes seconds. issueTwoFactorCode already invalidates any prior
+   * outstanding code, so only the latest one is ever live.
+   *
+   * Rate-limited tighter than login/signup themselves: this is a "send
+   * email to this address" action with no password check in front of it
+   * beyond already holding a live challenge, so it's the more attractive
+   * target for mailbox-flooding abuse.
+   */
+  app.post("/v1/auth/resend-2fa-code", { config: { rateLimit: { max: 3, timeWindow: "1 minute" } } }, async (request, reply) => {
+    const body = ResendTwoFactorSchema.parse(request.body);
+
+    let userId: string;
+    try {
+      userId = verifyTwoFactorChallenge(body.challenge);
+    } catch {
+      reply.code(401).send({ error: "challenge_expired", message: "That sign-in attempt expired. Please sign in again." });
+      return;
+    }
+
+    const user = await withPlatformContext(ctx.prisma, (tx) => tx.user.findUnique({ where: { id: userId } }));
+    if (!user || !user.isActive) {
+      reply.code(401).send({ error: "invalid_credentials" });
+      return;
+    }
+
+    const result = await issueTwoFactorCode(ctx.prisma, ctx.email, user);
+    if (!result.sent) {
+      reply.code(502).send({ error: "could_not_send_code", message: "We couldn't send a new code just now. Please try again in a moment." });
+      return;
+    }
+
+    reply.send({ requiresTwoFactor: true, challenge: signTwoFactorChallenge(user.id), email: maskEmail(user.email) });
   });
 
   app.post("/v1/auth/forgot-password", { config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (request, reply) => {

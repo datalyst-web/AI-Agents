@@ -38,8 +38,10 @@ declare global {
   }
 }
 
+const RESEND_COOLDOWN_SECONDS = 45;
+
 export default function LoginPage() {
-  const { user, loading: authLoading, login, loginWithGoogle, completeTwoFactor } = useAuth();
+  const { user, loading: authLoading, login, loginWithGoogle, completeTwoFactor, resendTwoFactorCode } = useAuth();
   const router = useRouter();
   // Someone already signed in has no business on this page — straight to
   // their dashboard (and never into a second signup).
@@ -59,6 +61,33 @@ export default function LoginPage() {
   // its presence is what swaps the form for the code prompt.
   const [challenge, setChallenge] = useState<{ challenge: string; email: string } | null>(null);
   const [code, setCode] = useState("");
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN_SECONDS);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!challenge || resendCooldown <= 0) return;
+    const t = setInterval(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [challenge, resendCooldown]);
+
+  async function onResendCode() {
+    if (!challenge || resending || resendCooldown > 0) return;
+    setResending(true);
+    setError(null);
+    setResendMessage(null);
+    try {
+      const fresh = await resendTwoFactorCode(challenge.challenge);
+      setChallenge({ challenge: fresh.challenge, email: fresh.email });
+      setCode("");
+      setResendMessage("New code sent — check your email.");
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't resend the code. Please try again.");
+    } finally {
+      setResending(false);
+    }
+  }
   // The Google button's own effect below must NOT re-run (re-initializing/
   // re-rendering the button) every time the CAPTCHA token changes, so its
   // callback reads the latest token from this ref rather than closing over
@@ -205,6 +234,17 @@ export default function LoginPage() {
                 <Button type="submit" disabled={busy || code.length !== 6} className="w-full">
                   {busy ? "Verifying..." : "Verify and sign in"}
                 </Button>
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={onResendCode}
+                    disabled={resending || resendCooldown > 0}
+                    className="text-xs font-medium text-brand-link transition-colors hover:underline disabled:cursor-not-allowed disabled:text-foreground/30 disabled:no-underline"
+                  >
+                    {resending ? "Sending…" : resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend code"}
+                  </button>
+                </div>
+                {resendMessage ? <p className="text-center text-xs text-success">{resendMessage}</p> : null}
                 <button
                   type="button"
                   onClick={() => {

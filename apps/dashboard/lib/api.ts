@@ -198,6 +198,9 @@ export const api = {
     }),
   verifyTwoFactor: (challenge: string, code: string) =>
     apiFetch<SessionResponse>("/v1/auth/verify-2fa", { method: "POST", body: JSON.stringify({ challenge, code }) }),
+  /** Re-sends the code and returns a fresh challenge — the old one shares the code's 10-minute expiry, so it has to be replaced, not reused. */
+  resendTwoFactorCode: (challenge: string) =>
+    apiFetch<TwoFactorChallengeResponse>("/v1/auth/resend-2fa-code", { method: "POST", body: JSON.stringify({ challenge }) }),
   forgotPassword: (email: string) =>
     apiFetch<{ message: string }>("/v1/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
   resetPassword: (token: string, newPassword: string) =>

@@ -51,6 +51,8 @@ interface AuthContextValue {
   login: (email: string, password: string, turnstileToken?: string) => Promise<TwoFactorChallengeResponse | null>;
   loginWithGoogle: (credential: string, turnstileToken?: string) => Promise<TwoFactorChallengeResponse | null>;
   completeTwoFactor: (challenge: string, code: string) => Promise<void>;
+  /** Sends a new code and returns the fresh challenge that replaces the caller's old one. */
+  resendTwoFactorCode: (challenge: string) => Promise<TwoFactorChallengeResponse>;
   /** Starts a session from a token issued directly (signup when two-step codes are switched off). */
   establishSessionFromToken: (token: string) => Promise<void>;
   acceptInvite: (token: string, displayName: string, password: string) => Promise<void>;
@@ -176,6 +178,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await establishSession(token);
   }
 
+  async function resendTwoFactorCode(challenge: string) {
+    return api.resendTwoFactorCode(challenge);
+  }
+
   async function acceptInvite(inviteToken: string, displayName: string, password: string) {
     const { token } = await api.acceptInvite(inviteToken, displayName, password);
     setToken(token);
@@ -243,6 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         loginWithGoogle,
         completeTwoFactor,
+        resendTwoFactorCode,
         establishSessionFromToken: establishSession,
         acceptInvite,
         logout,
