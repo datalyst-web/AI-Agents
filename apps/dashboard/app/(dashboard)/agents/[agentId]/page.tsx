@@ -22,6 +22,15 @@ interface AgentDetail {
   };
 }
 
+/** Whole-word, case-sensitive matches of a name inside free text. */
+function nameMatcher(name: string) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp("(?<![\\w])" + escaped + "(?![\\w])", "g");
+}
+function countName(text: string, name: string) {
+  return name.trim() ? (text.match(nameMatcher(name)) ?? []).length : 0;
+}
+
 const PROVIDER_LABELS: Record<AgentDetail["modelRouting"]["preferredProvider"], string> = {
   anthropic: "Anthropic",
   openai: "OpenAI",
@@ -290,6 +299,9 @@ export default function AgentDetailPage() {
   useEffect(() => setDashboardOrigin(window.location.origin), []);
   const [tab, setTab] = useState<(typeof ALL_TABS)[number]>("Test Agent");
   const [agent, setAgent] = useState<AgentDetail | null>(null);
+  const [newName, setNewName] = useState("");
+  const [renameText, setRenameText] = useState(true);
+  const [renaming, setRenaming] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmName, setDeleteConfirmName] = useState("");
@@ -564,6 +576,39 @@ export default function AgentDetailPage() {
     // recreated every render, so listing them would re-fetch in a loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, user, agentId]);
+
+  /**
+   * One name for one assistant. `personality.name` is what customers see in
+   * the widget; `name` is the dashboard label — set together so they can't
+   * drift. The system prompt never injects the name, so the assistant only
+   * knows it from the instructions and greeting text: those are offered a
+   * matching update, or it would keep introducing itself by the old name.
+   */
+  async function saveName(e: FormEvent) {
+    e.preventDefault();
+    const next = newName.trim();
+    if (!user || !agent || !next || next === agent.personality.name) return;
+    const old = agent.personality.name;
+    setRenaming(true);
+    setError(null);
+    try {
+      const swap = (text: string) => (renameText && old ? text.replace(nameMatcher(old), () => next) : text);
+      await api.updateAgent(user.tenantId, agentId, {
+        name: next,
+        personality: {
+          name: next,
+          systemInstructions: swap(agent.personality.systemInstructions),
+          greeting: swap(agent.personality.greeting),
+        },
+      });
+      setNewName("");
+      refreshAgent();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not change the name.");
+    } finally {
+      setRenaming(false);
+    }
+  }
 
   async function saveInstructions(e: FormEvent) {
     e.preventDefault();
@@ -1007,6 +1052,46 @@ export default function AgentDetailPage() {
               </CardBody>
             </Card>
           ) : null}
+
+          <Card>
+            <CardHeader
+              title="Assistant name"
+              subtitle="The name customers see in the chat, and how the assistant introduces itself."
+            />
+            <CardBody>
+              <form onSubmit={saveName} className="space-y-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder={agent.personality.name}
+                    maxLength={60}
+                    className="w-full max-w-xs rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2 text-sm text-foreground outline-none focus:border-brand-500"
+                  />
+                  <Button type="submit" disabled={renaming || !newName.trim() || newName.trim() === agent.personality.name}>
+                    {renaming ? "Saving…" : "Change name"}
+                  </Button>
+                </div>
+                {(() => {
+                  const found = countName(agent.personality.systemInstructions, agent.personality.name) + countName(agent.personality.greeting, agent.personality.name);
+                  return found > 0 && newName.trim() && newName.trim() !== agent.personality.name ? (
+                    <label className="flex items-start gap-2 text-xs text-foreground/60">
+                      <input type="checkbox" checked={renameText} onChange={(e) => setRenameText(e.target.checked)} className="mt-0.5" />
+                      <span>
+                        Also replace &ldquo;{agent.personality.name}&rdquo; with &ldquo;{newName.trim()}&rdquo; in the instructions and greeting ({found}{" "}
+                        {found === 1 ? "place" : "places"}), so the assistant doesn&apos;t keep using the old name.
+                      </span>
+                    </label>
+                  ) : null;
+                })()}
+                {agent.status === "LIVE" ? (
+                  <p className="text-xs text-foreground/40">
+                    This assistant is live, so the new name waits for the client&apos;s approval like any other change — customers keep seeing the current name until it&apos;s published.
+                  </p>
+                ) : null}
+              </form>
+            </CardBody>
+          </Card>
 
           <Card>
             <CardHeader title="Instructions" subtitle="What this agent knows to do and how it should behave." />
