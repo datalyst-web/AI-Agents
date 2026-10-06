@@ -27,6 +27,39 @@ export async function graphApiGet(accessToken: string, path: string, fields: str
   return data;
 }
 
+/**
+ * Messenger and Instagram replies must be sent with the Page's own token.
+ * Staff can paste that, or — better — one never-expiring system-user token
+ * that manages the client's Page, and this finds the Page token behind it,
+ * so nobody re-pastes a token when a short-lived one runs out.
+ */
+export async function resolvePageAccessToken(
+  token: string,
+  channel: "FACEBOOK_MESSENGER" | "INSTAGRAM",
+  externalId: string,
+): Promise<string> {
+  // Already the Page's token: "me" is the Page itself.
+  const me = await graphApiGet(token, "me", "id,instagram_business_account").catch(() => undefined);
+  if (me) {
+    const igId = (me.instagram_business_account as { id?: string } | undefined)?.id;
+    if (channel === "FACEBOOK_MESSENGER" ? me.id === externalId : igId === externalId) return token;
+  }
+  if (channel === "FACEBOOK_MESSENGER") {
+    const page = await graphApiGet(token, externalId, "access_token").catch(() => undefined);
+    if (typeof page?.access_token === "string") return page.access_token;
+  } else {
+    const accounts = await graphApiGet(token, "me/accounts", "id,access_token,instagram_business_account").catch(() => undefined);
+    const pages = (accounts?.data ?? []) as { access_token?: string; instagram_business_account?: { id?: string } }[];
+    const match = pages.find((p) => p.instagram_business_account?.id === externalId);
+    if (match?.access_token) return match.access_token;
+  }
+  throw new Error(
+    channel === "FACEBOOK_MESSENGER"
+      ? "This token can't manage that Page. In Business Settings, give the system user full control of the Page, then try again."
+      : "This token can't manage the Page linked to that Instagram account. In Business Settings, give the system user full control of that Page, then try again.",
+  );
+}
+
 export async function graphApiSend(accessToken: string, path: string, body: Record<string, unknown>) {
   const resp = await fetch(`${GRAPH_API}/${path}`, {
     method: "POST",

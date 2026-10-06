@@ -8,7 +8,7 @@ import { requireTenantMatch, requirePermission } from "../lib/rbac.js";
 import { verifyActiveImpersonation } from "../lib/impersonation.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { encryptChannelCredential, decryptChannelCredential } from "../lib/channelCrypto.js";
-import { telegramCall, graphApiGet, graphApiSend } from "../lib/channelSend.js";
+import { telegramCall, graphApiGet, graphApiSend, resolvePageAccessToken } from "../lib/channelSend.js";
 import { checkUsageAllowance } from "../lib/usageEnforcement.js";
 import { processCustomerMessage } from "../engine/agentLoop.js";
 import { verifyMetaSignedRequest } from "../lib/metaSignedRequest.js";
@@ -146,8 +146,20 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
       { preHandler: [...scoped, requirePermission("channel:connect")] },
       async (request, reply) => {
         const { agentId } = request.params as { agentId: string };
-        const { externalId, accessToken } = ConnectMetaChannelSchema.parse(request.body);
+        const { externalId, accessToken: pastedToken } = ConnectMetaChannelSchema.parse(request.body);
         const validation = META_CHANNEL_VALIDATION[channelEnum];
+
+        // Messenger/Instagram store the Page's own token, found from whatever
+        // token staff pasted (see resolvePageAccessToken).
+        let accessToken = pastedToken;
+        if (channelEnum !== "WHATSAPP") {
+          try {
+            accessToken = await resolvePageAccessToken(pastedToken, channelEnum, externalId);
+          } catch (err) {
+            reply.code(400).send({ error: "invalid_meta_credential", message: err instanceof Error ? err.message : "Meta rejected this token." });
+            return;
+          }
+        }
 
         let label: string;
         try {
@@ -168,7 +180,7 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
         // Meta only delivers a Page's messages (Messenger, and Instagram DMs,
         // which arrive through the linked Page) to an app the Page has
         // subscribed. Without this a connected Page never sends us a single
-        // message. The token is the Page's own, so "me" is the Page.
+        // message. accessToken is the Page's own here, so "me" is the Page.
         // WhatsApp subscribes per WhatsApp Business Account instead, done in
         // WhatsApp Manager when the number is shared with us.
         if (channelEnum !== "WHATSAPP") {
@@ -179,7 +191,7 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
               error: "meta_subscription_failed",
               message: `Not connected — Meta wouldn't let us receive this Page's messages: ${
                 err instanceof Error ? err.message : "unknown error"
-              }. Use a Page access token with the pages_manage_metadata and pages_messaging permissions.`,
+              }. The token needs the pages_manage_metadata and pages_messaging permissions.`,
             });
             return;
           }

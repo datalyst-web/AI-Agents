@@ -64,23 +64,23 @@ const CHANNEL_META: Record<
     idLabel: "Phone number ID",
     idPlaceholder: "e.g. 109876543210987",
     tokenLabel: "Access token",
-    help: "From Meta Business Suite → WhatsApp → API Setup: copy the Phone number ID and a permanent access token.",
+    help: "From WhatsApp Manager → API Setup copy the Phone number ID. Token: the never-expiring system user token (Business Settings → Users → System users), with the WhatsApp number assigned to it.",
   },
   FACEBOOK_MESSENGER: {
     label: "Facebook Messenger",
     blurb: "Reply to customers who message your Facebook Page.",
     idLabel: "Page ID",
     idPlaceholder: "e.g. 102938475610283",
-    tokenLabel: "Page access token",
-    help: "From your Meta App → Messenger → Settings, generate a Page access token for the Page you want connected.",
+    tokenLabel: "System user token",
+    help: "The never-expiring system user token (Business Settings → Users → System users), with full control of this Page. A Page access token also works, but expires.",
   },
   INSTAGRAM: {
     label: "Instagram",
     blurb: "Reply to Instagram DMs sent to your connected business account.",
     idLabel: "Instagram Business Account ID",
     idPlaceholder: "e.g. 178234659012345",
-    tokenLabel: "Page access token",
-    help: "Instagram messaging uses the same Page access token as Messenger — use the Page linked to this Instagram account.",
+    tokenLabel: "System user token",
+    help: "The same system user token as Messenger. It needs full control of the Facebook Page linked to this Instagram account.",
   },
 };
 
