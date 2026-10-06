@@ -84,6 +84,8 @@ model Tenant {
   /// never delete (CLAUDE.md Client Lifecycle), so converting later
   /// restores everything they built during the trial.
   trialEndsAt          DateTime?         @map("trial_ends_at")
+  /// End of the current paid 30-day period (Paynow). Null for clients billed another way, who never auto-expire.
+  paidUntil            DateTime?         @map("paid_until")
   /// The "tell us about your business" questionnaire a trial client fills
   /// in right after signup: { answers, files: [{ name, key, size, contentType }] }.
   /// Staff build the agent from it. Files live in R2 under the tenant's
@@ -861,6 +863,13 @@ enum PaynowPaymentStatus {
 // reaches PAID — this row exists so a customer bouncing off Paynow's
 // hosted page without paying, or a webhook that never arrives, doesn't
 // silently vanish: it's a real row an admin can see and reconcile.
+enum PaymentCurrency {
+  USD
+  ZWG
+
+  @@schema("chat")
+}
+
 model PaynowPayment {
   id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId         String              @map("tenant_id") @db.Uuid
@@ -871,6 +880,9 @@ model PaynowPayment {
   skuType          BillingSkuType      @map("sku_type")
   description      String
   amountUsd        Decimal             @map("amount_usd") @db.Decimal(12, 2)
+  /// What Paynow actually charged, in `currency`. amountUsd stays the USD value for revenue reporting.
+  currency         PaymentCurrency     @default(USD)
+  amountCharged    Decimal?            @map("amount_charged") @db.Decimal(12, 2)
   status           PaynowPaymentStatus @default(PENDING)
   subscriptionTier SubscriptionTier?   @map("subscription_tier")
   periodStart      DateTime?           @map("period_start")

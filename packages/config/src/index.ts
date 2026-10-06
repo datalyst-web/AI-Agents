@@ -210,6 +210,10 @@ export const EnvSchema = z.object({
   // were never wired to a real provider.
   PAYNOW_INTEGRATION_ID: z.string().optional(),
   PAYNOW_INTEGRATION_KEY: z.string().optional(),
+  // A Paynow integration has one fixed currency, so ZiG (ZWG) payments go
+  // through their own integration. PAYNOW_INTEGRATION_* above is USD.
+  PAYNOW_ZWG_INTEGRATION_ID: z.string().optional(),
+  PAYNOW_ZWG_INTEGRATION_KEY: z.string().optional(),
 
   // Explicit, documented escape hatch for a lean launch on a platform
   // without AWS (Railway/Vercel/etc.) — CLAUDE.md's default expectation is

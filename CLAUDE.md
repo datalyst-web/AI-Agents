@@ -695,6 +695,19 @@ included-usage → limit → overage billing logic.
   Starter $29, Growth $89, Scale $249 a month, Enterprise from $499 (not
   self-checkout). Paynow checkout and Platform Analytics read it; keep the
   marketing page's pricing table and the demo agent's knowledge in step.
+- **USD or ZiG** — clients choose at checkout. ZiG = USD price × a fixed
+  `ZWG_PER_USD` (40) in the same file, deliberately not the daily interbank
+  rate. A Paynow integration has one fixed currency, so there are two:
+  `PAYNOW_INTEGRATION_ID/_KEY` (USD) and `PAYNOW_ZWG_INTEGRATION_ID/_KEY`
+  (ZiG), on `api`. Each payment records its `currency` and `amountCharged`;
+  `amountUsd` stays the USD value for revenue. Paynow's result-URL call can
+  be late or missing, so a pending payment is also confirmed by polling its
+  `pollUrl` — only ever on a hash-verified answer from that currency's key.
+- **A payment buys 30 days** (`Tenant.paidUntil`; renewing early stacks).
+  `subscriptionRenewalSweep` reminds 3 days out and on the last day, moves
+  an ended period to `PAST_DUE` (3-day grace, agent still answering), then
+  `SUSPENDED`. Clients with no `paidUntil` (billed another way) are never
+  auto-expired.
 - **Allowances live in one place** — `apps/api/src/lib/planLimits.ts`.
   Changing what a plan includes means editing that table, never a
   migration or a per-tenant edit. A `UsageLimits` row is provisioned

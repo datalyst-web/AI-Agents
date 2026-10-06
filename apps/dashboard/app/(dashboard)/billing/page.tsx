@@ -24,14 +24,26 @@ type Tier = "STARTER" | "GROWTH" | "SCALE";
 interface Plans {
   currentTier: Tier | "ENTERPRISE";
   currentState: "ACTIVE" | "TRIAL" | "PAST_DUE" | "SUSPENDED" | "CANCELLED";
-  plans: { tier: Tier; priceUsd: string }[];
+  paidUntil: string | null;
+  plans: { tier: Tier; priceUsd: string; priceZwg: string }[];
+  currencies: { USD: boolean; ZWG: boolean };
   paynowConfigured: boolean;
+}
+type Currency = "USD" | "ZWG";
+
+/** "$29" / "ZiG 1,160" — whole numbers, since every plan price is one. */
+function formatPrice(amount: string, currency: Currency): string {
+  const n = Number(amount);
+  const whole = Number.isInteger(n) ? n.toLocaleString("en-US") : n.toLocaleString("en-US", { minimumFractionDigits: 2 });
+  return currency === "ZWG" ? `ZiG ${whole}` : `$${whole}`;
 }
 interface PaynowPaymentRow {
   id: string;
   reference: string;
   description: string;
   amountUsd: string;
+  currency: Currency;
+  amountCharged: string | null;
   status: "PENDING" | "PAID" | "CANCELLED" | "FAILED";
   createdAt: string;
 }
@@ -66,6 +78,7 @@ function BillingPageContent() {
 
   const [checkoutTier, setCheckoutTier] = useState<Tier | null>(null);
   const [method, setMethod] = useState<"card" | "mobile">("card");
+  const [currency, setCurrency] = useState<Currency>("USD");
   const [phone, setPhone] = useState("");
   const [mobileMethod, setMobileMethod] = useState<"ecocash" | "onemoney">("ecocash");
   const [saving, setSaving] = useState(false);
@@ -177,6 +190,7 @@ function BillingPageContent() {
 
   function openCheckout(tier: Tier) {
     setCheckoutTier(tier);
+    setCurrency(plans?.currencies.USD === false && plans.currencies.ZWG ? "ZWG" : "USD");
     setMethod("card");
     setPhone("");
     setMobileMethod("ecocash");
@@ -194,7 +208,7 @@ function BillingPageContent() {
     const paynowTab = method === "card" ? window.open("", "_blank") : null;
     try {
       if (method === "card") {
-        const { reference, redirectUrl } = await api.startPaynowCheckout(user.tenantId, checkoutTier);
+        const { reference, redirectUrl } = await api.startPaynowCheckout(user.tenantId, checkoutTier, currency);
         if (paynowTab) {
           paynowTab.opener = null;
           paynowTab.location.href = redirectUrl;
@@ -207,7 +221,7 @@ function BillingPageContent() {
           window.location.href = redirectUrl;
         }
       } else {
-        const { reference, instructions } = await api.startPaynowMobileCheckout(user.tenantId, checkoutTier, phone, mobileMethod);
+        const { reference, instructions } = await api.startPaynowMobileCheckout(user.tenantId, checkoutTier, currency, phone, mobileMethod);
         setMobileInstructions(instructions);
         watchPayment(reference, 60, 5000);
       }
@@ -233,7 +247,13 @@ function BillingPageContent() {
       <Card>
         <CardHeader
           title="Plan"
-          subtitle={plans ? `Currently on ${plans.currentTier}` : undefined}
+          subtitle={
+            plans
+              ? `Currently on ${plans.currentTier}${
+                  plans.paidUntil ? ` · paid until ${new Date(plans.paidUntil).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}` : ""
+                }`
+              : undefined
+          }
           action={plans ? <Badge tone={STATE_TONE[plans.currentState]}>{plans.currentState}</Badge> : undefined}
         />
         <CardBody>
@@ -252,17 +272,20 @@ function BillingPageContent() {
                       {isCurrent ? <Badge tone="brand">Current</Badge> : null}
                     </div>
                     <div className="mt-1 text-2xl font-semibold text-foreground">
-                      ${plan.priceUsd}
+                      {formatPrice(plan.priceUsd, "USD")}
                       <span className="text-xs font-normal text-foreground/40">/mo</span>
                     </div>
+                    {plans.currencies.ZWG ? (
+                      <div className="text-xs text-foreground/50">or {formatPrice(plan.priceZwg, "ZWG")}/mo</div>
+                    ) : null}
                     {isOwner ? (
                       <Button
                         variant={isCurrent ? "secondary" : "primary"}
                         className="mt-3 w-full"
-                        disabled={isCurrent}
+                        disabled={isCurrent && !plans.paidUntil}
                         onClick={() => openCheckout(plan.tier)}
                       >
-                        {isCurrent ? "Current plan" : "Switch to this plan"}
+                        {isCurrent ? (plans.paidUntil ? "Renew for 30 days" : "Current plan") : "Switch to this plan"}
                       </Button>
                     ) : null}
                   </div>
@@ -349,7 +372,7 @@ function BillingPageContent() {
                   <div className="text-xs text-foreground/40">{new Date(p.createdAt).toLocaleString()}</div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="tabular-nums text-foreground/70">${p.amountUsd}</span>
+                  <span className="tabular-nums text-foreground/70">{formatPrice(p.amountCharged ?? p.amountUsd, p.currency)}</span>
                   <Badge tone={PAYMENT_TONE[p.status]}>{p.status}</Badge>
                 </div>
               </div>
@@ -361,6 +384,27 @@ function BillingPageContent() {
       <Modal open={checkoutTier !== null} onClose={() => setCheckoutTier(null)} title={checkoutTier ? `Switch to ${checkoutTier}` : ""}>
         {checkoutTier && (
           <form onSubmit={submitCheckout} className="space-y-3">
+            {plans && plans.currencies.USD && plans.currencies.ZWG ? (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-foreground/60">Pay in</label>
+                <div className="flex gap-2">
+                  {(["USD", "ZWG"] as const).map((c) => {
+                    const plan = plans.plans.find((pl) => pl.tier === checkoutTier);
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setCurrency(c)}
+                        className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-medium ${currency === c ? "border-brand-400 bg-brand-500/10 text-foreground" : "border-foreground/10 text-foreground/60"}`}
+                      >
+                        {c === "USD" ? "US dollars" : "ZiG"}
+                        {plan ? <span className="block text-xs font-normal text-foreground/50">{formatPrice(c === "USD" ? plan.priceUsd : plan.priceZwg, c)}/mo</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
             <div className="flex gap-2">
               <button
                 type="button"

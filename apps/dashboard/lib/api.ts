@@ -229,6 +229,8 @@ export const api = {
       subscriptionTier: "STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE" | null;
       subscriptionState: "ACTIVE" | "TRIAL" | "PAST_DUE" | "SUSPENDED" | "CANCELLED" | null;
       trialEndsAt: string | null;
+      paidUntil: string | null;
+      renewalDaysRemaining: number | null;
       trialDaysRemaining: number | null;
       subscriptionLapsed: boolean;
       onboardingIntakeRequired: boolean;
@@ -502,26 +504,43 @@ export const api = {
     apiFetch<{
       currentTier: "STARTER" | "GROWTH" | "SCALE" | "ENTERPRISE";
       currentState: "ACTIVE" | "TRIAL" | "PAST_DUE" | "SUSPENDED" | "CANCELLED";
-      plans: { tier: "STARTER" | "GROWTH" | "SCALE"; priceUsd: string }[];
+      paidUntil: string | null;
+      plans: { tier: "STARTER" | "GROWTH" | "SCALE"; priceUsd: string; priceZwg: string }[];
+      currencies: { USD: boolean; ZWG: boolean };
       paynowConfigured: boolean;
     }>(`/v1/tenants/${tenantId}/billing/plans`),
   listPaynowPayments: (tenantId: string) =>
     apiFetch<
-      { id: string; reference: string; description: string; amountUsd: string; status: "PENDING" | "PAID" | "CANCELLED" | "FAILED"; createdAt: string }[]
+      {
+        id: string;
+        reference: string;
+        description: string;
+        amountUsd: string;
+        currency: "USD" | "ZWG";
+        amountCharged: string | null;
+        status: "PENDING" | "PAID" | "CANCELLED" | "FAILED";
+        createdAt: string;
+      }[]
     >(`/v1/tenants/${tenantId}/billing/payments`),
   getPaynowPayment: (tenantId: string, reference: string) =>
     apiFetch<{ reference: string; status: "PENDING" | "PAID" | "CANCELLED" | "FAILED"; amountUsd: string; description: string }>(
       `/v1/tenants/${tenantId}/billing/payments/${reference}`,
     ),
-  startPaynowCheckout: (tenantId: string, tier: "STARTER" | "GROWTH" | "SCALE") =>
+  startPaynowCheckout: (tenantId: string, tier: "STARTER" | "GROWTH" | "SCALE", currency: "USD" | "ZWG") =>
     apiFetch<{ reference: string; redirectUrl: string }>(`/v1/tenants/${tenantId}/billing/checkout`, {
       method: "POST",
-      body: JSON.stringify({ tier }),
+      body: JSON.stringify({ tier, currency }),
     }),
-  startPaynowMobileCheckout: (tenantId: string, tier: "STARTER" | "GROWTH" | "SCALE", phone: string, method: "ecocash" | "onemoney") =>
+  startPaynowMobileCheckout: (
+    tenantId: string,
+    tier: "STARTER" | "GROWTH" | "SCALE",
+    currency: "USD" | "ZWG",
+    phone: string,
+    method: "ecocash" | "onemoney",
+  ) =>
     apiFetch<{ reference: string; instructions: string }>(`/v1/tenants/${tenantId}/billing/checkout/mobile`, {
       method: "POST",
-      body: JSON.stringify({ tier, phone, method }),
+      body: JSON.stringify({ tier, currency, phone, method }),
     }),
 
   getUsageSummary: (tenantId: string) =>

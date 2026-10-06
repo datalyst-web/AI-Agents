@@ -67,6 +67,18 @@ export const TRIAL_DAYS = 14;
 export const PLAN_PRICE_USD = { STARTER: 29, GROWTH: 89, SCALE: 249, ENTERPRISE: 499 } as const;
 export const SELF_CHECKOUT_TIERS = ["STARTER", "GROWTH", "SCALE"] as const;
 
+/**
+ * ZiG prices are the USD price times this fixed rate — a business decision,
+ * deliberately not the daily interbank rate, so a ZiG price never moves
+ * under a client between days.
+ */
+export const ZWG_PER_USD = 40;
+
+/** What checkout charges for a plan, in the currency the client pays in. */
+export function planPrice(tier: keyof typeof PLAN_PRICE_USD, currency: "USD" | "ZWG"): number {
+  return currency === "ZWG" ? PLAN_PRICE_USD[tier] * ZWG_PER_USD : PLAN_PRICE_USD[tier];
+}
+
 export function trialEndDate(from = new Date()): Date {
   return new Date(from.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
 }

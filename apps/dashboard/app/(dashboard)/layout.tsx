@@ -306,11 +306,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-8">
           <div className="mx-auto max-w-6xl animate-fade-up">
             {lapsed ? (
-              <LapsedBanner trialEnded={user.subscriptionState === "TRIAL" || user.subscriptionState === "SUSPENDED"} />
+              <LapsedBanner trialEnded={user.subscriptionState === "TRIAL" || (user.subscriptionState === "SUSPENDED" && !user.paidUntil)} />
             ) : !isStaff && user.subscriptionState === "TRIAL" && user.trialStarted === false ? (
               <TrialNotStartedBanner />
-            ) : (
+            ) : user?.subscriptionState === "TRIAL" ? (
               <TrialBanner daysRemaining={user?.trialDaysRemaining ?? null} state={user?.subscriptionState ?? null} />
+            ) : isStaff ? null : (
+              <RenewalBanner daysRemaining={user?.renewalDaysRemaining ?? null} />
             )}
             {children}
           </div>
@@ -545,6 +547,35 @@ function LapsedBanner({ trialEnded }: { trialEnded: boolean }) {
         Your AI agent is paused and the rest of the dashboard is locked. Choose a plan below to reactivate — everything
         you set up is still here, and it comes back the moment payment is confirmed.
       </p>
+    </div>
+  );
+}
+
+/** Paid 30-day subscriptions: from 3 days before the end, through the grace period after it. */
+function RenewalBanner({ daysRemaining }: { daysRemaining: number | null }) {
+  if (daysRemaining === null || daysRemaining > 3) return null;
+  const ended = daysRemaining <= 0;
+  const graceLeft = 3 + daysRemaining;
+  return (
+    <div
+      className={`mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl2 px-5 py-3.5 text-sm ring-1 ring-inset ${
+        ended ? "bg-danger/10 text-danger ring-danger/25" : "bg-warning/10 text-warning ring-warning/25"
+      }`}
+    >
+      <span className="font-medium">
+        {ended
+          ? `Your subscription has ended. Your assistant pauses in ${Math.max(graceLeft, 0)} ${graceLeft === 1 ? "day" : "days"}.`
+          : daysRemaining === 1
+            ? "Your subscription ends tomorrow."
+            : `Your subscription ends in ${daysRemaining} days.`}{" "}
+        <span className="font-normal opacity-80">Renew in US dollars or ZiG to keep it answering without a break.</span>
+      </span>
+      <Link
+        href="/billing"
+        className="rounded-lg bg-current/15 px-3.5 py-1.5 text-xs font-semibold underline-offset-2 hover:underline"
+      >
+        Renew now
+      </Link>
     </div>
   );
 }

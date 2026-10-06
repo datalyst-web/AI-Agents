@@ -10,6 +10,7 @@ import { runConversationTimeoutSweep } from "./jobs/conversationTimeoutSweep.js"
 import { runEscalationNotificationSweep } from "./jobs/escalationNotificationSweep.js";
 import { runOverageBillingSweep } from "./jobs/overageBillingSweep.js";
 import { runTrialExpirySweep } from "./jobs/trialExpirySweep.js";
+import { runSubscriptionRenewalSweep } from "./jobs/subscriptionRenewalSweep.js";
 import { withDistributedLock } from "./lib/lock.js";
 import { env } from "./env.js";
 
@@ -75,6 +76,16 @@ async function main() {
       runTrialExpirySweep(ctx),
     ).catch((err) => {
       console.error("[workers] trial expiry sweep failed", err);
+      Sentry.captureException(err);
+    });
+  }, TRIAL_EXPIRY_SWEEP_INTERVAL_MS);
+
+  // Same hourly cadence as trials: a reminder or pause an hour late is fine.
+  setInterval(() => {
+    void withDistributedLock(ctx.redis, "chat:lock:subscription-renewal-sweep", TRIAL_EXPIRY_SWEEP_INTERVAL_MS - 10_000, () =>
+      runSubscriptionRenewalSweep(ctx),
+    ).catch((err) => {
+      console.error("[workers] subscription renewal sweep failed", err);
       Sentry.captureException(err);
     });
   }, TRIAL_EXPIRY_SWEEP_INTERVAL_MS);

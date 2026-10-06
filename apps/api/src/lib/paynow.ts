@@ -13,11 +13,28 @@ import { env } from "../env.js";
 const INITIATE_URL = "https://www.paynow.co.zw/interface/initiatetransaction";
 const INITIATE_MOBILE_URL = "https://www.paynow.co.zw/interface/remotetransaction";
 
-function getCredentials(): { id: string; key: string } {
-  if (!env.PAYNOW_INTEGRATION_ID || !env.PAYNOW_INTEGRATION_KEY) {
-    throw new Error("Paynow is not configured — PAYNOW_INTEGRATION_ID/PAYNOW_INTEGRATION_KEY must be set.");
-  }
-  return { id: env.PAYNOW_INTEGRATION_ID, key: env.PAYNOW_INTEGRATION_KEY };
+export type PaynowCurrency = "USD" | "ZWG";
+const PAYNOW_CURRENCIES: readonly PaynowCurrency[] = ["USD", "ZWG"];
+
+/**
+ * A Paynow integration has one fixed currency (chosen when it's created in
+ * Paynow), and Paynow charges whatever amount we send in that currency — so
+ * USD and ZiG are separate integrations with separate keys.
+ */
+function credentialsFor(currency: PaynowCurrency): { id: string; key: string } | undefined {
+  const id = currency === "USD" ? env.PAYNOW_INTEGRATION_ID : env.PAYNOW_ZWG_INTEGRATION_ID;
+  const key = currency === "USD" ? env.PAYNOW_INTEGRATION_KEY : env.PAYNOW_ZWG_INTEGRATION_KEY;
+  return id && key ? { id, key } : undefined;
+}
+
+export function isPaynowConfigured(currency: PaynowCurrency): boolean {
+  return credentialsFor(currency) !== undefined;
+}
+
+function getCredentials(currency: PaynowCurrency): { id: string; key: string } {
+  const credentials = credentialsFor(currency);
+  if (!credentials) throw new Error(`Paynow is not configured for ${currency}.`);
+  return credentials;
 }
 
 /**
@@ -57,7 +74,9 @@ function parseFormEncoded(text: string): Record<string, string> {
 
 export interface InitiateWebPaymentParams {
   reference: string;
-  amountUsd: string;
+  /** In `currency` — the integration's own currency. */
+  amount: string;
+  currency: PaynowCurrency;
   description: string;
   authEmail: string;
 }
@@ -71,12 +90,12 @@ export interface InitiateWebPaymentResult {
 
 /** Standard (card/hosted-page) checkout — customer is redirected to Paynow's own payment page. */
 export async function initiateWebPayment(params: InitiateWebPaymentParams): Promise<InitiateWebPaymentResult> {
-  const { id, key } = getCredentials();
+  const { id, key } = getCredentials(params.currency);
   const fields: Record<string, string> = {
     resulturl: `${env.API_PUBLIC_BASE_URL}/v1/billing/paynow/webhook`,
     returnurl: `${env.DASHBOARD_BASE_URL}/billing?paynowReference=${encodeURIComponent(params.reference)}`,
     reference: params.reference,
-    amount: params.amountUsd,
+    amount: params.amount,
     id,
     additionalinfo: params.description,
     authemail: params.authEmail,
@@ -114,12 +133,12 @@ export interface InitiateMobilePaymentResult {
 
 /** Express/mobile checkout (EcoCash, OneMoney) — no redirect; the customer approves a prompt on their phone. */
 export async function initiateMobilePayment(params: InitiateMobilePaymentParams): Promise<InitiateMobilePaymentResult> {
-  const { id, key } = getCredentials();
+  const { id, key } = getCredentials(params.currency);
   const fields: Record<string, string> = {
     resulturl: `${env.API_PUBLIC_BASE_URL}/v1/billing/paynow/webhook`,
     returnurl: `${env.DASHBOARD_BASE_URL}/billing?paynowReference=${encodeURIComponent(params.reference)}`,
     reference: params.reference,
-    amount: params.amountUsd,
+    amount: params.amount,
     id,
     additionalinfo: params.description,
     authemail: params.authEmail,
@@ -151,6 +170,8 @@ export interface PaynowStatusUpdate {
   amount?: string;
   status: string;
   pollUrl?: string;
+  /** Which integration signed it — so a ZiG answer can never settle a USD payment. */
+  currency: PaynowCurrency;
 }
 
 /**
@@ -159,15 +180,19 @@ export interface PaynowStatusUpdate {
  * shape). The hash check is the ONLY thing that makes this trustworthy;
  * never act on a `status` field from a payload that fails verification.
  */
-export function verifyAndParseStatusUpdate(rawFormBody: string): PaynowStatusUpdate | undefined {
+export function verifyAndParseStatusUpdate(rawFormBody: string, currency?: PaynowCurrency): PaynowStatusUpdate | undefined {
   // Not configured is just another way this can't be trusted — an inbound
   // call arriving before PAYNOW_INTEGRATION_KEY is set (or after it's
   // unset) must fail closed the same as a bad hash, never throw a raw
   // 500 out of the webhook route.
-  if (!env.PAYNOW_INTEGRATION_ID || !env.PAYNOW_INTEGRATION_KEY) return undefined;
-  const { key } = getCredentials();
+  // The result URL is shared by both integrations, so an unlabelled call is
+  // checked against each configured key; a poll knows its currency.
   const parsed = parseFormEncoded(rawFormBody);
-  if (!verifyHash(parsed, key)) return undefined;
+  const verifiedAs = (currency ? [currency] : PAYNOW_CURRENCIES).find((c) => {
+    const credentials = credentialsFor(c);
+    return credentials !== undefined && verifyHash(parsed, credentials.key);
+  });
+  if (!verifiedAs) return undefined;
   if (!parsed.reference || !parsed.status) return undefined;
   return {
     reference: parsed.reference,
@@ -175,13 +200,14 @@ export function verifyAndParseStatusUpdate(rawFormBody: string): PaynowStatusUpd
     amount: parsed.amount,
     status: parsed.status,
     pollUrl: parsed.pollurl,
+    currency: verifiedAs,
   };
 }
 
 /** Polls a stored pollUrl directly — used as a reconciliation fallback if the result-URL webhook never arrives (e.g. it was unreachable at the time). */
-export async function pollPaymentStatus(pollUrl: string): Promise<PaynowStatusUpdate | undefined> {
+export async function pollPaymentStatus(pollUrl: string, currency: PaynowCurrency): Promise<PaynowStatusUpdate | undefined> {
   const resp = await fetch(pollUrl, { method: "POST", signal: AbortSignal.timeout(10_000) });
-  return verifyAndParseStatusUpdate(await resp.text());
+  return verifyAndParseStatusUpdate(await resp.text(), currency);
 }
 
 export function isPaidStatus(status: string): boolean {

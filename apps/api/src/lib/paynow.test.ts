@@ -9,6 +9,7 @@ let verifyAndParseStatusUpdate: typeof import("./paynow.js").verifyAndParseStatu
 let isPaidStatus: typeof import("./paynow.js").isPaidStatus;
 
 const INTEGRATION_KEY = "test-integration-key-not-real";
+const ZWG_INTEGRATION_KEY = "test-zwg-integration-key-not-real";
 
 beforeAll(async () => {
   process.env.DATABASE_URL = process.env.DATABASE_URL ?? "postgresql://placeholder:placeholder@localhost:5432/placeholder";
@@ -16,6 +17,8 @@ beforeAll(async () => {
   process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
   process.env.PAYNOW_INTEGRATION_ID = "12345";
   process.env.PAYNOW_INTEGRATION_KEY = INTEGRATION_KEY;
+  process.env.PAYNOW_ZWG_INTEGRATION_ID = "67890";
+  process.env.PAYNOW_ZWG_INTEGRATION_KEY = ZWG_INTEGRATION_KEY;
   ({ verifyAndParseStatusUpdate, isPaidStatus } = await import("./paynow.js"));
 });
 
@@ -88,6 +91,20 @@ describe("verifyAndParseStatusUpdate — Paynow result-URL webhook trust boundar
   });
 });
 
+describe("verifyAndParseStatusUpdate — USD and ZiG integrations", () => {
+  const fields = { reference: "sub-gov-1", amount: "1160.00", status: "Paid" };
+
+  it("tells which integration signed an unlabelled result-URL call", () => {
+    expect(verifyAndParseStatusUpdate(buildSignedFormBody(fields))?.currency).toBe("USD");
+    expect(verifyAndParseStatusUpdate(buildSignedFormBody(fields, ZWG_INTEGRATION_KEY))?.currency).toBe("ZWG");
+  });
+
+  it("rejects a poll answer signed by the other currency's integration", () => {
+    expect(verifyAndParseStatusUpdate(buildSignedFormBody(fields, ZWG_INTEGRATION_KEY), "USD")).toBeUndefined();
+    expect(verifyAndParseStatusUpdate(buildSignedFormBody(fields), "ZWG")).toBeUndefined();
+  });
+});
+
 describe("verifyAndParseStatusUpdate — fails closed when Paynow isn't configured", () => {
   it("returns undefined (never throws) for a webhook call arriving before PAYNOW_INTEGRATION_KEY is set", async () => {
     // Regression test: found live — a webhook call arriving while
@@ -96,8 +113,12 @@ describe("verifyAndParseStatusUpdate — fails closed when Paynow isn't configur
     // the documented "always fail closed, never crash" behavior.
     const previousId = process.env.PAYNOW_INTEGRATION_ID;
     const previousKey = process.env.PAYNOW_INTEGRATION_KEY;
+    const previousZwgId = process.env.PAYNOW_ZWG_INTEGRATION_ID;
+    const previousZwgKey = process.env.PAYNOW_ZWG_INTEGRATION_KEY;
     delete process.env.PAYNOW_INTEGRATION_ID;
     delete process.env.PAYNOW_INTEGRATION_KEY;
+    delete process.env.PAYNOW_ZWG_INTEGRATION_ID;
+    delete process.env.PAYNOW_ZWG_INTEGRATION_KEY;
     vi.resetModules();
 
     try {
@@ -108,6 +129,8 @@ describe("verifyAndParseStatusUpdate — fails closed when Paynow isn't configur
     } finally {
       if (previousId !== undefined) process.env.PAYNOW_INTEGRATION_ID = previousId;
       if (previousKey !== undefined) process.env.PAYNOW_INTEGRATION_KEY = previousKey;
+      if (previousZwgId !== undefined) process.env.PAYNOW_ZWG_INTEGRATION_ID = previousZwgId;
+      if (previousZwgKey !== undefined) process.env.PAYNOW_ZWG_INTEGRATION_KEY = previousZwgKey;
       vi.resetModules();
     }
   });

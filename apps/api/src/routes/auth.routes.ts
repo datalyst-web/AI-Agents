@@ -533,7 +533,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
     // withTenant(effectiveTenantId) and throw.
     const user = await withPlatformContext(ctx.prisma, (tx) => tx.user.findUniqueOrThrow({ where: { id: authUser.sub } }));
 
-    const { theme, subscriptionTier, subscriptionState, brandName, logoUrl, trialEndsAt, tenantName, onboardingIntakeAt } = effectiveTenantId
+    const { theme, subscriptionTier, subscriptionState, brandName, logoUrl, trialEndsAt, paidUntil, tenantName, onboardingIntakeAt } = effectiveTenantId
       ? await withTenant(ctx.prisma, { tenantId: effectiveTenantId }, async (tx) => {
           const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: effectiveTenantId! } });
           return {
@@ -543,6 +543,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
             brandName: tenant.brandName,
             logoUrl: tenant.logoObjectKey ? `/v1/tenants/${tenant.id}/branding/logo` : null,
             trialEndsAt: tenant.trialEndsAt,
+            paidUntil: tenant.paidUntil,
             tenantName: tenant.name,
             onboardingIntakeAt: tenant.onboardingIntakeAt,
           };
@@ -557,6 +558,7 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
           brandName: null,
           logoUrl: null,
           trialEndsAt: null,
+          paidUntil: null,
           tenantName: null,
           onboardingIntakeAt: null,
         };
@@ -586,6 +588,13 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
         authUser.role !== "setup_specialist" &&
         subscriptionState !== null &&
         isSubscriptionLapsed({ subscriptionState, trialEndsAt }),
+      // Paid (Paynow) subscriptions: whole days left on the current 30 days —
+      // negative once it has ended and the grace period is running.
+      paidUntil,
+      renewalDaysRemaining:
+        paidUntil && (subscriptionState === "ACTIVE" || subscriptionState === "PAST_DUE")
+          ? Math.ceil((new Date(paidUntil).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+          : null,
       trialDaysRemaining:
         trialEndsAt && subscriptionState === "TRIAL"
           ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))

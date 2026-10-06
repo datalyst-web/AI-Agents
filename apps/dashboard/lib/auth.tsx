@@ -29,6 +29,10 @@ interface AuthUser {
   trialDaysRemaining: number | null;
   /** ISO timestamp the 14 days run out, set the moment the agent first goes live. Null before then or off a trial. Drives the Overview countdown card. */
   trialEndsAt: string | null;
+  /** End of the current paid 30-day period; null for clients billed another way. */
+  paidUntil: string | null;
+  /** Whole days left on the paid period (negative during the grace period after it ends); null when not on one. */
+  renewalDaysRemaining: number | null;
   /** Trial over or subscription ended — the API then only allows Billing, Usage and Support. Never true for staff. */
   subscriptionLapsed: boolean;
   /** A trial client's owner/admin who hasn't filled in the business questionnaire yet — the dashboard sends them to /welcome. */

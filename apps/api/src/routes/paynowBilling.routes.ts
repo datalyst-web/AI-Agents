@@ -7,13 +7,15 @@ import { requireTenantMatch, requirePermission } from "../lib/rbac.js";
 import { verifyActiveImpersonation } from "../lib/impersonation.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { recordSubscriptionStateChange } from "../lib/subscriptionHistory.js";
-import { PLAN_PRICE_USD, SELF_CHECKOUT_TIERS, provisionUsageLimits } from "../lib/planLimits.js";
+import { PLAN_PRICE_USD, SELF_CHECKOUT_TIERS, planPrice, provisionUsageLimits } from "../lib/planLimits.js";
 import {
   initiateWebPayment,
   initiateMobilePayment,
   verifyAndParseStatusUpdate,
   isPaidStatus,
   pollPaymentStatus,
+  isPaynowConfigured,
+  type PaynowCurrency,
   type PaynowStatusUpdate,
 } from "../lib/paynow.js";
 import { env } from "../env.js";
@@ -34,7 +36,14 @@ const SUBSCRIPTION_PRICING_USD: Partial<Record<"STARTER" | "GROWTH" | "SCALE", s
   SELF_CHECKOUT_TIERS.map((tier) => [tier, PLAN_PRICE_USD[tier].toFixed(2)]),
 );
 
-const CheckoutSchema = z.object({ tier: z.enum(["STARTER", "GROWTH", "SCALE"]) });
+const CheckoutSchema = z.object({ tier: z.enum(["STARTER", "GROWTH", "SCALE"]), currency: z.enum(["USD", "ZWG"]).default("USD") });
+
+function currencyUnavailable(currency: PaynowCurrency) {
+  return {
+    error: "paynow_not_configured",
+    message: currency === "ZWG" ? "ZiG payments aren't available right now — please pay in USD." : "USD payments aren't available right now — please pay in ZiG.",
+  };
+}
 const MobileCheckoutSchema = CheckoutSchema.extend({
   phone: z.string().min(9).max(15),
   method: z.enum(["ecocash", "onemoney"]),
@@ -62,6 +71,8 @@ async function applyPaynowStatusUpdate(ctx: AppContext, update: PaynowStatusUpda
   await withPlatformContext(ctx.prisma, async (tx) => {
     const payment = await tx.paynowPayment.findFirst({ where: { reference: update.reference } });
     if (!payment) return;
+    // Signed by the other currency's integration — not an answer about this payment.
+    if (payment.currency !== update.currency) return;
     // Idempotent — Paynow can call the result URL more than once for
     // the same transaction; never double-create a BillingLineItem or
     // re-fire the subscription-activation side effects for a payment
@@ -79,27 +90,32 @@ async function applyPaynowStatusUpdate(ctx: AppContext, update: PaynowStatusUpda
       });
 
       if (count === 1 && newStatus === "PAID") {
+        const before = await tenantTx.tenant.findUniqueOrThrow({
+          where: { id: payment.tenantId },
+          select: { subscriptionState: true, paidUntil: true },
+        });
+        // 30 days from now, or from the end of the current period when
+        // renewing early — a client never loses days they already paid for.
+        const now = new Date();
+        const periodStart = before.paidUntil && before.paidUntil > now ? before.paidUntil : now;
+        const paidUntil = new Date(periodStart.getTime() + PERIOD_DAYS * 24 * 60 * 60 * 1000);
         await tenantTx.billingLineItem.create({
           data: {
             tenantId: payment.tenantId,
             skuType: payment.skuType,
             description: payment.description,
             amountUsd: payment.amountUsd,
-            periodStart: payment.periodStart ?? payment.createdAt,
-            periodEnd: payment.periodEnd ?? payment.createdAt,
+            periodStart: payment.subscriptionTier ? periodStart : (payment.periodStart ?? payment.createdAt),
+            periodEnd: payment.subscriptionTier ? paidUntil : (payment.periodEnd ?? payment.createdAt),
           },
         });
         if (payment.subscriptionTier) {
-          const before = await tenantTx.tenant.findUniqueOrThrow({
-            where: { id: payment.tenantId },
-            select: { subscriptionState: true },
-          });
           await tenantTx.tenant.update({
             where: { id: payment.tenantId },
             // trialEndsAt is cleared, not left to lapse — otherwise
             // trialExpirySweep would still see a past date on a tenant
             // that has since paid.
-            data: { subscriptionState: "ACTIVE", subscriptionTier: payment.subscriptionTier, trialEndsAt: null },
+            data: { subscriptionState: "ACTIVE", subscriptionTier: payment.subscriptionTier, trialEndsAt: null, paidUntil },
           });
           await recordSubscriptionStateChange(tenantTx, payment.tenantId, before.subscriptionState, "ACTIVE");
           // The paid plan's allowance replaces whatever trial/lower-tier
@@ -110,7 +126,13 @@ async function applyPaynowStatusUpdate(ctx: AppContext, update: PaynowStatusUpda
         await writeAuditLog(tenantTx, { tenantId: payment.tenantId }, {
           actorUserId: SYSTEM_PAYNOW_ACTOR_ID,
           action: "billing_payment_confirmed",
-          metadata: { reference: payment.reference, paynowReference: update.paynowReference, amountUsd: payment.amountUsd.toString() },
+          metadata: {
+            reference: payment.reference,
+            paynowReference: update.paynowReference,
+            amountUsd: payment.amountUsd.toString(),
+            currency: payment.currency,
+            amountCharged: (payment.amountCharged ?? payment.amountUsd).toString(),
+          },
         });
       }
     });
@@ -126,12 +148,12 @@ async function applyPaynowStatusUpdate(ctx: AppContext, update: PaynowStatusUpda
  */
 async function reconcilePendingPayment(
   ctx: AppContext,
-  payment: { reference: string; status: string; pollUrl: string | null },
+  payment: { reference: string; status: string; pollUrl: string | null; currency: PaynowCurrency },
   log: { warn: (obj: object, msg: string) => void },
 ): Promise<boolean> {
   if (payment.status !== "PENDING" || !payment.pollUrl) return false;
   try {
-    const update = await pollPaymentStatus(payment.pollUrl);
+    const update = await pollPaymentStatus(payment.pollUrl, payment.currency);
     // Only ever apply a verified answer about this exact payment.
     if (!update || update.reference !== payment.reference) return false;
     await applyPaynowStatusUpdate(ctx, update);
@@ -158,13 +180,22 @@ export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: App
     { preHandler: [...scoped, requirePermission("billing:read")] },
     async (request) => {
       const tenant = await withTenant(ctx.prisma, request.tenantCtx!, (tx) =>
-        tx.tenant.findUniqueOrThrow({ where: { id: request.tenantCtx!.tenantId }, select: { subscriptionTier: true, subscriptionState: true } }),
+        tx.tenant.findUniqueOrThrow({
+          where: { id: request.tenantCtx!.tenantId },
+          select: { subscriptionTier: true, subscriptionState: true, paidUntil: true },
+        }),
       );
       return {
         currentTier: tenant.subscriptionTier,
         currentState: tenant.subscriptionState,
-        plans: Object.entries(SUBSCRIPTION_PRICING_USD).map(([tier, priceUsd]) => ({ tier, priceUsd })),
-        paynowConfigured: Boolean(env.PAYNOW_INTEGRATION_ID && env.PAYNOW_INTEGRATION_KEY),
+        paidUntil: tenant.paidUntil,
+        plans: SELF_CHECKOUT_TIERS.map((tier) => ({
+          tier,
+          priceUsd: planPrice(tier, "USD").toFixed(2),
+          priceZwg: planPrice(tier, "ZWG").toFixed(2),
+        })),
+        currencies: { USD: isPaynowConfigured("USD"), ZWG: isPaynowConfigured("ZWG") },
+        paynowConfigured: isPaynowConfigured("USD") || isPaynowConfigured("ZWG"),
       };
     },
   );
@@ -217,16 +248,17 @@ export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: App
     "/v1/tenants/:tenantId/billing/checkout",
     { preHandler: [...scoped, requirePermission("billing:write")] },
     async (request, reply) => {
-      const { tier } = CheckoutSchema.parse(request.body);
+      const { tier, currency } = CheckoutSchema.parse(request.body);
       const priceUsd = SUBSCRIPTION_PRICING_USD[tier];
       if (!priceUsd) {
         reply.code(400).send({ error: "no_self_serve_price", message: `${tier} has no self-serve price — contact us to set this tier up.` });
         return;
       }
-      if (!env.PAYNOW_INTEGRATION_ID || !env.PAYNOW_INTEGRATION_KEY) {
-        reply.code(503).send({ error: "paynow_not_configured" });
+      if (!isPaynowConfigured(currency)) {
+        reply.code(503).send(currencyUnavailable(currency));
         return;
       }
+      const amount = planPrice(tier, currency).toFixed(2);
 
       const { reference, description, authEmail } = await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
         const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: request.tenantCtx!.tenantId } });
@@ -242,6 +274,8 @@ export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: App
             skuType: "SUBSCRIPTION",
             description,
             amountUsd: priceUsd,
+            currency,
+            amountCharged: amount,
             subscriptionTier: tier,
             periodStart,
             periodEnd,
@@ -251,12 +285,12 @@ export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: App
         await writeAuditLog(tx, request.tenantCtx!, {
           actorUserId: request.tenantCtx!.impersonation?.staffUserId ?? request.authUser!.sub,
           action: "billing_checkout_initiated",
-          metadata: { reference, tier, amountUsd: priceUsd },
+          metadata: { reference, tier, amountUsd: priceUsd, currency, amountCharged: amount },
         });
         return { reference, description, authEmail: owner?.email ?? request.authUser!.sub };
       });
 
-      const result = await initiateWebPayment({ reference, amountUsd: priceUsd, description, authEmail });
+      const result = await initiateWebPayment({ reference, amount, currency, description, authEmail });
       if (!result.ok) {
         reply.code(502).send({ error: "paynow_checkout_failed", message: result.error });
         return;
@@ -270,16 +304,17 @@ export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: App
     "/v1/tenants/:tenantId/billing/checkout/mobile",
     { preHandler: [...scoped, requirePermission("billing:write")] },
     async (request, reply) => {
-      const { tier, phone, method } = MobileCheckoutSchema.parse(request.body);
+      const { tier, currency, phone, method } = MobileCheckoutSchema.parse(request.body);
       const priceUsd = SUBSCRIPTION_PRICING_USD[tier];
       if (!priceUsd) {
         reply.code(400).send({ error: "no_self_serve_price", message: `${tier} has no self-serve price — contact us to set this tier up.` });
         return;
       }
-      if (!env.PAYNOW_INTEGRATION_ID || !env.PAYNOW_INTEGRATION_KEY) {
-        reply.code(503).send({ error: "paynow_not_configured" });
+      if (!isPaynowConfigured(currency)) {
+        reply.code(503).send(currencyUnavailable(currency));
         return;
       }
+      const amount = planPrice(tier, currency).toFixed(2);
 
       const { reference, description, authEmail } = await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
         const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: request.tenantCtx!.tenantId } });
@@ -295,6 +330,8 @@ export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: App
             skuType: "SUBSCRIPTION",
             description,
             amountUsd: priceUsd,
+            currency,
+            amountCharged: amount,
             subscriptionTier: tier,
             periodStart,
             periodEnd,
@@ -304,12 +341,12 @@ export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: App
         await writeAuditLog(tx, request.tenantCtx!, {
           actorUserId: request.tenantCtx!.impersonation?.staffUserId ?? request.authUser!.sub,
           action: "billing_checkout_initiated",
-          metadata: { reference, tier, amountUsd: priceUsd, method },
+          metadata: { reference, tier, amountUsd: priceUsd, currency, amountCharged: amount, method },
         });
         return { reference, description, authEmail: owner?.email ?? request.authUser!.sub };
       });
 
-      const result = await initiateMobilePayment({ reference, amountUsd: priceUsd, description, authEmail, phone, method });
+      const result = await initiateMobilePayment({ reference, amount, currency, description, authEmail, phone, method });
       if (!result.ok) {
         reply.code(502).send({ error: "paynow_checkout_failed", message: result.error });
         return;
