@@ -137,15 +137,18 @@ interface ChatResponse {
     <div class="panel" hidden>
       <div class="header">
         <div class="header-glow"></div>
+        <div class="avatar-halo">
+        <div class="avatar-ring"></div>
         <div class="avatar-wrap">
           <img class="avatar" hidden />
           <svg class="avatar-fallback" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
           </svg>
         </div>
+        </div>
         <div class="header-text">
           <div class="name"></div>
-          <div class="status"><span class="status-dot"></span>Online now</div>
+          <div class="status"><span class="status-dot"></span>Online · replies in seconds</div>
         </div>
         <button class="close" aria-label="Close chat">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 5l14 14M19 5L5 19" stroke-linecap="round"/></svg>
@@ -397,12 +400,37 @@ interface ChatResponse {
     if ((e as AnimationEvent).animationName === "sonarPing") launcher.classList.remove("invite");
   });
 
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+  /**
+   * Agent replies type themselves out, word by word, over at most ~0.9s —
+   * the reply is already complete, this only paces how it appears. Skipped
+   * for visitors who ask their device for reduced motion.
+   */
+  function revealText(bubble: HTMLElement, text: string) {
+    if (reducedMotion) {
+      bubble.textContent = text;
+      return;
+    }
+    const tokens = text.split(/(\s+)/);
+    const perFrame = Math.max(1, Math.ceil(tokens.length / 55));
+    let shown = 0;
+    const step = () => {
+      shown = Math.min(tokens.length, shown + perFrame);
+      bubble.textContent = tokens.slice(0, shown).join("");
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      if (shown < tokens.length) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
   function appendMessage(role: "customer" | "agent", text: string) {
     const row = document.createElement("div");
     row.className = `row ${role}`;
     const bubble = document.createElement("div");
     bubble.className = `bubble ${role}`;
-    bubble.textContent = text;
+    if (role === "agent") revealText(bubble, text);
+    else bubble.textContent = text;
     const time = document.createElement("div");
     time.className = "timestamp";
     time.textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -443,7 +471,7 @@ interface ChatResponse {
 
     const typing = document.createElement("div");
     typing.className = "row agent";
-    typing.innerHTML = `<div class="bubble agent typing"><span></span><span></span><span></span></div>`;
+    typing.innerHTML = `<div class="bubble agent typing"><span></span><span></span><span></span><em>Thinking</em></div>`;
     messagesEl.appendChild(typing);
     messagesEl.scrollTop = messagesEl.scrollHeight;
 
@@ -580,6 +608,8 @@ interface ChatResponse {
       @keyframes launcherPop { 0% { opacity: 0; transform: scale(0.4) translateY(12px); } 60% { opacity: 1; transform: scale(1.08) translateY(0); } 100% { opacity: 1; transform: scale(1) translateY(0); } }
       @keyframes sonarPing { 0% { box-shadow: 0 0 0 0 rgba(18,165,224,0.45); } 100% { box-shadow: 0 0 0 22px rgba(18,165,224,0); } }
       @keyframes bobIdle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
       .launcher {
         position: fixed; bottom: 24px; ${side}: 24px; ${otherSide}: auto; width: 60px; height: 60px; border-radius: 50%;
@@ -630,6 +660,11 @@ interface ChatResponse {
         background: linear-gradient(180deg, rgba(128,128,128,0.06), rgba(128,128,128,0) 100%); border-bottom: 1px solid var(--header-border); }
       .header-glow { position: absolute; top: -40px; left: -20px; width: 140px; height: 140px; border-radius: 50%;
         background: radial-gradient(circle, var(--header-glow), transparent 70%); pointer-events: none; }
+      .avatar-halo { position: relative; width: 42px; height: 42px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+      .avatar-ring { position: absolute; inset: 0; border-radius: 50%;
+        background: conic-gradient(from 0deg, var(--brand-1), var(--brand-3), #8b5cf6, var(--brand-1));
+        animation: spin 6s linear infinite; opacity: 0.9; }
+      .avatar-halo .avatar-wrap { box-shadow: 0 0 0 2px var(--panel-bg); }
       .avatar-wrap { position: relative; width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
         background: linear-gradient(135deg, var(--brand-1), var(--brand-3)); display: flex; align-items: center; justify-content: center;
         box-shadow: 0 0 0 2px rgba(128,128,128,0.15); overflow: hidden; }
@@ -666,6 +701,10 @@ interface ChatResponse {
       .bubble.typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-secondary); animation: typingBounce 1.2s ease-in-out infinite; }
       .bubble.typing span:nth-child(2) { animation-delay: 0.15s; }
       .bubble.typing span:nth-child(3) { animation-delay: 0.3s; }
+      .bubble.typing em { font-style: normal; font-size: 11.5px; margin-left: 6px; letter-spacing: 0.01em;
+        background: linear-gradient(90deg, var(--text-secondary) 0%, var(--brand-1) 50%, var(--text-secondary) 100%);
+        background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+        animation: shimmer 1.8s linear infinite; }
 
       .confirmation { padding: 12px 16px; background: rgba(232,165,61,0.08); border-top: 1px solid rgba(232,165,61,0.25); animation: fadeInUp 0.2s ease both; }
       .confirmation-text { color: var(--bubble-agent-text); font-size: 12.5px; margin-bottom: 9px; line-height: 1.4; }
@@ -697,6 +736,10 @@ interface ChatResponse {
       .composer button:active:not(:disabled) { transform: scale(0.94); }
       .composer button:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
 
+
+      @media (prefers-reduced-motion: reduce) {
+        .avatar-ring, .bubble.typing em, .status-dot, .launcher { animation: none !important; }
+      }
 
       @media (max-width: 480px) {
         .panel { bottom: 0; right: 0; left: 0; width: 100%; max-width: 100%; height: 100%; max-height: 100%; border-radius: 0; }
