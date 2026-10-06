@@ -7,6 +7,11 @@ export interface QueueMessage<T = unknown> {
 }
 
 export interface QueueClient {
+  /**
+   * `delaySeconds` holds the message back durably (it survives a worker
+   * restart). SQS caps it at 15 minutes, so a consumer that needs a longer
+   * wait must carry its own due time and re-enqueue if woken early.
+   */
   enqueue<T>(queueName: string, payload: T, opts?: { delaySeconds?: number }): Promise<void>;
   /**
    * Long-polls for messages. `handler` must resolve (ack) or throw

@@ -21,6 +21,14 @@ export interface RunWorkflowParams {
   triggerFilter?: WorkflowConditionGroup;
   actions: WorkflowAction[];
   triggerPayload: Record<string, unknown>;
+  /** Continues a run that paused at a WAIT, from the action after it. */
+  resume?: { runId: string; actionId: string };
+}
+
+/** A run paused at a WAIT; the caller schedules `resume` after `seconds`. */
+export interface WorkflowWait {
+  seconds: number;
+  resume: { runId: string; actionId: string };
 }
 
 interface ActionLogEntry {
@@ -39,6 +47,10 @@ interface ActionLogEntry {
  * retries per its own retry config, then calls `notify` on the
  * `onFailureNotify` target and records FAILED_NOTIFIED, never just FAILED
  * with nobody told.
+ *
+ * A WAIT with seconds > 0 ends this run() call: the run stays RUNNING with
+ * its log so far, and the caller schedules a delayed job to resume it —
+ * never sleeping in a worker (or inside the caller's transaction).
  */
 export class WorkflowExecutor {
   constructor(
@@ -47,7 +59,9 @@ export class WorkflowExecutor {
     private notify: NotifyFn,
   ) {}
 
-  async run(params: RunWorkflowParams): Promise<{ runId: string; status: string }> {
+  async run(params: RunWorkflowParams): Promise<{ runId: string; status: string; wait?: WorkflowWait }> {
+    if (params.resume) return this.continueRun(params, params.resume.runId, params.resume.actionId);
+
     const runId = randomUUID();
     await this.tx.workflowRun.create({
       data: {
@@ -68,14 +82,42 @@ export class WorkflowExecutor {
       return { runId, status: "SUCCEEDED" };
     }
 
+    return this.continueRun(params, runId, params.actions[0]?.id);
+  }
+
+  private async continueRun(
+    params: RunWorkflowParams,
+    runId: string,
+    startActionId: string | undefined,
+  ): Promise<{ runId: string; status: string; wait?: WorkflowWait }> {
     const actionsById = new Map(params.actions.map((a) => [a.id, a]));
     const log: ActionLogEntry[] = [];
-    let currentId = params.actions[0]?.id;
     let overallStatus: "SUCCEEDED" | "FAILED" | "FAILED_NOTIFIED" = "SUCCEEDED";
+    if (params.resume) {
+      const existing = await this.tx.workflowRun.findFirst({ where: { id: runId, tenantId: params.tenantId } });
+      // Completed already (e.g. a duplicate resume delivery) — never re-run its actions.
+      if (!existing || existing.status !== "RUNNING") return { runId, status: existing?.status ?? "SUCCEEDED" };
+      log.push(...(existing.actionLog as unknown as ActionLogEntry[]));
+      // An action that failed before the wait (its final attempt failed) still marks the run.
+      const finalStatusByAction = new Map(log.map((entry) => [entry.actionId, entry.status]));
+      if ([...finalStatusByAction.values()].includes("failed")) overallStatus = "FAILED_NOTIFIED";
+    }
+    let currentId = startActionId;
 
     while (currentId) {
       const action: WorkflowAction | undefined = actionsById.get(currentId);
       if (!action) break;
+
+      const waitSeconds = action.type === "WAIT" && typeof action.config.seconds === "number" ? action.config.seconds : 0;
+      if (waitSeconds > 0) {
+        log.push({ actionId: action.id, status: "succeeded", attempt: 1, output: { waitSeconds }, at: new Date().toISOString() });
+        if (!action.nextOnSuccess) break;
+        await this.tx.workflowRun.update({
+          where: { id: runId },
+          data: { status: "RUNNING", actionLog: log as unknown as object },
+        });
+        return { runId, status: "RUNNING", wait: { seconds: waitSeconds, resume: { runId, actionId: action.nextOnSuccess } } };
+      }
 
       const result = await this.runActionWithRetry(action, {
         tenantId: params.tenantId,

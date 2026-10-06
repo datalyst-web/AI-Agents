@@ -20,6 +20,13 @@ export interface WorkflowRunJob {
   tenantId: string;
   workflowId: string;
   triggerPayload: Record<string, unknown>;
+  /** Set when continuing a run that paused at a WAIT action. */
+  resume?: {
+    runId: string;
+    actionId: string;
+    /** ISO time the wait ends; a job woken earlier (SQS caps delays at 15 min) re-enqueues itself. */
+    notBefore: string;
+  };
 }
 
 export interface FollowupJob {

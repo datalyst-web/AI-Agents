@@ -6,6 +6,8 @@ import {
 } from "@aws-sdk/client-sqs";
 import type { QueueClient, QueueMessage } from "./types.js";
 
+const SQS_MAX_DELAY_SECONDS = 900;
+
 /**
  * Production queue backend — the shared platform SQS setup described in
  * ARCHITECTURE.md ("One SQS account setup ... per-product queues"). Queue
@@ -26,7 +28,9 @@ export class SqsQueueClient implements QueueClient {
       new SendMessageCommand({
         QueueUrl: queueUrl,
         MessageBody: JSON.stringify(payload),
-        DelaySeconds: opts?.delaySeconds,
+        // SQS refuses anything over 15 minutes; longer waits re-check their
+        // own due time and re-enqueue (see WorkflowRunJob.notBefore).
+        DelaySeconds: opts?.delaySeconds ? Math.min(Math.ceil(opts.delaySeconds), SQS_MAX_DELAY_SECONDS) : undefined,
       }),
     );
   }

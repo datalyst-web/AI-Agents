@@ -91,6 +91,23 @@ async function main() {
     });
   }, OVERAGE_BILLING_SWEEP_INTERVAL_MS);
 
+  // Railway sends SIGTERM when a deploy replaces this worker. Stop taking
+  // jobs and let in-flight ones finish; anything still running when the
+  // drain window closes is requeued by the next worker (packages/queue).
+  let shuttingDown = false;
+  const shutdown = (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[workers] ${signal} received, draining in-flight jobs`);
+    void ctx.queue
+      .stop()
+      .catch((err) => console.error("[workers] queue shutdown failed", err))
+      .then(() => Promise.allSettled([ctx.prisma.$disconnect(), ctx.redis.quit(), Sentry.flush(2000)]))
+      .finally(() => process.exit(0));
+  };
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+  process.once("SIGINT", () => shutdown("SIGINT"));
+
   await Promise.all([
     ctx.queue.consume<KnowledgeIngestJob>(knowledgeQueueTarget, async (msg) => {
       console.log(`[workers] knowledge-ingest job ${msg.id} for source ${msg.body.knowledgeSourceId}`);
@@ -107,7 +124,7 @@ async function main() {
     ctx.queue.consume<WorkflowRunJob>(workflowQueueTarget, async (msg) => {
       console.log(`[workers] workflow-run job ${msg.id} for workflow ${msg.body.workflowId}`);
       try {
-        await runWorkflowJob(ctx, msg.body);
+        await runWorkflowJob(ctx, msg.body, workflowQueueTarget);
       } catch (err) {
         Sentry.captureException(err);
         throw err;
