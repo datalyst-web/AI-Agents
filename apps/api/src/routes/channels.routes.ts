@@ -35,12 +35,10 @@ const META_CHANNEL_VALIDATION: Record<MetaChannel, { path: (id: string) => strin
 
 /**
  * Deployment channels beyond the website widget/standalone URL (CLAUDE.md
- * Deployment Surfaces). Deliberately client-actioned, never staff — see
- * shared-types/rbac.ts channel:connect. Telegram is fully wired end to
- * end; WhatsApp is schema/UI-ready but has no live webhook handler yet —
- * it needs a real Meta Business/WhatsApp Cloud API account behind it
- * first (see the dashboard card's own explanation), and shipping an
- * untested webhook path would be worse than not having one.
+ * Deployment Surfaces). Staff connect them inside a Managed Setup session
+ * (channel:connect is staff-only). Telegram, and WhatsApp, Messenger and
+ * Instagram through the one platform Meta app, all receive messages via
+ * the webhooks below.
  */
 export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContext) {
   const scoped = [app.authenticate, requireTenantMatch(), verifyActiveImpersonation(ctx.prisma)];
@@ -165,6 +163,26 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
                 : `Meta rejected this ${channelEnum === "WHATSAPP" ? "phone number id" : "id"}/access token pair.`,
           });
           return;
+        }
+
+        // Meta only delivers a Page's messages (Messenger, and Instagram DMs,
+        // which arrive through the linked Page) to an app the Page has
+        // subscribed. Without this a connected Page never sends us a single
+        // message. The token is the Page's own, so "me" is the Page.
+        // WhatsApp subscribes per WhatsApp Business Account instead, done in
+        // WhatsApp Manager when the number is shared with us.
+        if (channelEnum !== "WHATSAPP") {
+          try {
+            await graphApiSend(accessToken, "me/subscribed_apps", { subscribed_fields: "messages,messaging_postbacks" });
+          } catch (err) {
+            reply.code(400).send({
+              error: "meta_subscription_failed",
+              message: `Not connected — Meta wouldn't let us receive this Page's messages: ${
+                err instanceof Error ? err.message : "unknown error"
+              }. Use a Page access token with the pages_manage_metadata and pages_messaging permissions.`,
+            });
+            return;
+          }
         }
 
         // externalId must be globally unique per channel (it's how the one
