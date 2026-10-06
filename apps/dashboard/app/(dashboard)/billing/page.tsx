@@ -71,7 +71,6 @@ function BillingPageContent() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [mobileInstructions, setMobileInstructions] = useState<string | null>(null);
-  const pollAttempts = useRef(0);
 
   function refreshBilling() {
     if (!user) return;
@@ -119,24 +118,22 @@ function BillingPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Paynow redirects the customer's browser back here after the hosted
-  // checkout page — that redirect is NOT proof of payment (never verified,
-  // just a UX courtesy), so instead of trusting it, poll our own backend
-  // (which only ever changes status once Paynow's hash-verified webhook
-  // confirms it) until it resolves or we give up.
-  useEffect(() => {
-    const reference = searchParams.get("paynowReference");
-    if (!reference || !user) return;
-    router.replace("/billing");
-    pollAttempts.current = 0;
+  // Watches one payment until it resolves. Our backend only ever marks it
+  // paid on a hash-verified answer from Paynow (its result-URL call, or the
+  // backend asking Paynow itself), never on the browser coming back here.
+  // Every check — including a failed one — counts as an attempt.
+  const watchedReference = useRef<string | null>(null);
+  function watchPayment(reference: string, maxAttempts: number, intervalMs: number) {
+    if (!user) return;
+    watchedReference.current = reference;
+    let attempts = 0;
+    const tenantId = user.tenantId;
 
-    // A failed check counts as an attempt and is retried, same as a
-    // still-pending one. Dropping it (the old .catch) ended polling in
-    // silence, so a client who had just paid saw nothing at all.
     const retryOrGiveUp = () => {
-      pollAttempts.current += 1;
-      if (pollAttempts.current < 10) {
-        setTimeout(poll, 2000);
+      if (watchedReference.current !== reference) return; // superseded by a newer checkout
+      attempts += 1;
+      if (attempts < maxAttempts) {
+        setTimeout(check, intervalMs);
       } else {
         setReturnNotice({
           tone: "warning",
@@ -145,11 +142,12 @@ function BillingPageContent() {
       }
     };
 
-    const poll = () => {
+    const check = () => {
       api
-        .getPaynowPayment(user.tenantId, reference)
+        .getPaynowPayment(tenantId, reference)
         .then((payment) => {
           if (payment.status === "PAID") {
+            setCheckoutTier(null);
             setReturnNotice({ tone: "success", text: `Payment confirmed — ${payment.description} is now active.` });
             refreshBilling();
             // Lifts the lapsed-account lock (if any) straight away.
@@ -158,13 +156,22 @@ function BillingPageContent() {
           }
           if (payment.status === "CANCELLED" || payment.status === "FAILED") {
             setReturnNotice({ tone: "danger", text: `Payment ${payment.status.toLowerCase()} — nothing was charged.` });
+            refreshBilling();
             return;
           }
           retryOrGiveUp();
         })
         .catch(retryOrGiveUp);
     };
-    poll();
+    check();
+  }
+
+  // Paynow sends the payment tab back here with the reference.
+  useEffect(() => {
+    const reference = searchParams.get("paynowReference");
+    if (!reference || !user) return;
+    router.replace("/billing");
+    watchPayment(reference, 10, 2000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, user]);
 
@@ -182,15 +189,30 @@ function BillingPageContent() {
     if (!user || !checkoutTier) return;
     setSaving(true);
     setFormError(null);
+    // Opened now, while the click still counts as the user's — a tab opened
+    // after the await below would be stopped by popup blockers.
+    const paynowTab = method === "card" ? window.open("", "_blank") : null;
     try {
       if (method === "card") {
-        const { redirectUrl } = await api.startPaynowCheckout(user.tenantId, checkoutTier);
-        window.location.href = redirectUrl;
+        const { reference, redirectUrl } = await api.startPaynowCheckout(user.tenantId, checkoutTier);
+        if (paynowTab) {
+          paynowTab.opener = null;
+          paynowTab.location.href = redirectUrl;
+          setCheckoutTier(null);
+          setReturnNotice({ tone: "warning", text: "Complete your payment in the Paynow tab. This page updates as soon as it's confirmed." });
+          // Paying can take a few minutes: check every 5s for 15 minutes.
+          watchPayment(reference, 180, 5000);
+        } else {
+          // Popups blocked — pay in this tab instead; Paynow returns here.
+          window.location.href = redirectUrl;
+        }
       } else {
-        const { instructions } = await api.startPaynowMobileCheckout(user.tenantId, checkoutTier, phone, mobileMethod);
+        const { reference, instructions } = await api.startPaynowMobileCheckout(user.tenantId, checkoutTier, phone, mobileMethod);
         setMobileInstructions(instructions);
+        watchPayment(reference, 60, 5000);
       }
     } catch (err) {
+      paynowTab?.close();
       setFormError(err instanceof ApiError ? err.message : "Could not start checkout.");
     } finally {
       setSaving(false);
@@ -381,7 +403,7 @@ function BillingPageContent() {
                 </div>
               </>
             ) : (
-              <p className="text-xs text-foreground/40">You&apos;ll be taken to Paynow&apos;s secure page to complete payment, then brought back here.</p>
+              <p className="text-xs text-foreground/40">Paynow&apos;s secure payment page opens in a new tab. This page updates once your payment is confirmed.</p>
             )}
 
             {mobileInstructions ? (

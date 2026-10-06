@@ -180,7 +180,7 @@ export function verifyAndParseStatusUpdate(rawFormBody: string): PaynowStatusUpd
 
 /** Polls a stored pollUrl directly — used as a reconciliation fallback if the result-URL webhook never arrives (e.g. it was unreachable at the time). */
 export async function pollPaymentStatus(pollUrl: string): Promise<PaynowStatusUpdate | undefined> {
-  const resp = await fetch(pollUrl, { method: "POST" });
+  const resp = await fetch(pollUrl, { method: "POST", signal: AbortSignal.timeout(10_000) });
   return verifyAndParseStatusUpdate(await resp.text());
 }
 

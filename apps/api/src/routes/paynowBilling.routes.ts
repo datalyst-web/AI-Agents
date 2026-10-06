@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { withTenant, withPlatformContext } from "@chat-agent/db";
 import type { AppContext } from "../lib/context.js";
 import { requireTenantMatch, requirePermission } from "../lib/rbac.js";
@@ -8,7 +8,14 @@ import { verifyActiveImpersonation } from "../lib/impersonation.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { recordSubscriptionStateChange } from "../lib/subscriptionHistory.js";
 import { PLAN_PRICE_USD, SELF_CHECKOUT_TIERS, provisionUsageLimits } from "../lib/planLimits.js";
-import { initiateWebPayment, initiateMobilePayment, verifyAndParseStatusUpdate, isPaidStatus } from "../lib/paynow.js";
+import {
+  initiateWebPayment,
+  initiateMobilePayment,
+  verifyAndParseStatusUpdate,
+  isPaidStatus,
+  pollPaymentStatus,
+  type PaynowStatusUpdate,
+} from "../lib/paynow.js";
 import { env } from "../env.js";
 
 /**
@@ -43,8 +50,108 @@ const SYSTEM_PAYNOW_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
 
 const PERIOD_DAYS = 30;
 
+/** How far back a pending payment is still worth asking Paynow about. */
+const RECONCILE_WINDOW_MS = 48 * 60 * 60 * 1000;
+const MAX_RECONCILE_PER_LIST = 5;
+
+/**
+ * Records a hash-verified status update from Paynow — its result-URL call,
+ * or our own poll of the payment's pollUrl.
+ */
+async function applyPaynowStatusUpdate(ctx: AppContext, update: PaynowStatusUpdate): Promise<void> {
+  await withPlatformContext(ctx.prisma, async (tx) => {
+    const payment = await tx.paynowPayment.findFirst({ where: { reference: update.reference } });
+    if (!payment) return;
+    // Idempotent — Paynow can call the result URL more than once for
+    // the same transaction; never double-create a BillingLineItem or
+    // re-fire the subscription-activation side effects for a payment
+    // already recorded as PAID.
+    if (payment.status === "PAID") return;
+
+    const newStatus = isPaidStatus(update.status) ? "PAID" : update.status.toLowerCase() === "cancelled" ? "CANCELLED" : payment.status;
+
+    await withTenant(ctx.prisma, { tenantId: payment.tenantId }, async (tenantTx) => {
+      // Conditional on the status we read, so when Paynow's result-URL call
+      // and our own poll land together only one of them activates the plan.
+      const { count } = await tenantTx.paynowPayment.updateMany({
+        where: { id: payment.id, status: payment.status },
+        data: { status: newStatus, paynowReference: update.paynowReference, pollUrl: update.pollUrl ?? payment.pollUrl },
+      });
+
+      if (count === 1 && newStatus === "PAID") {
+        await tenantTx.billingLineItem.create({
+          data: {
+            tenantId: payment.tenantId,
+            skuType: payment.skuType,
+            description: payment.description,
+            amountUsd: payment.amountUsd,
+            periodStart: payment.periodStart ?? payment.createdAt,
+            periodEnd: payment.periodEnd ?? payment.createdAt,
+          },
+        });
+        if (payment.subscriptionTier) {
+          const before = await tenantTx.tenant.findUniqueOrThrow({
+            where: { id: payment.tenantId },
+            select: { subscriptionState: true },
+          });
+          await tenantTx.tenant.update({
+            where: { id: payment.tenantId },
+            // trialEndsAt is cleared, not left to lapse — otherwise
+            // trialExpirySweep would still see a past date on a tenant
+            // that has since paid.
+            data: { subscriptionState: "ACTIVE", subscriptionTier: payment.subscriptionTier, trialEndsAt: null },
+          });
+          await recordSubscriptionStateChange(tenantTx, payment.tenantId, before.subscriptionState, "ACTIVE");
+          // The paid plan's allowance replaces whatever trial/lower-tier
+          // limits were in place — this is the moment the client starts
+          // getting what they actually paid for.
+          await provisionUsageLimits(tenantTx, payment.tenantId, payment.subscriptionTier, "ACTIVE");
+        }
+        await writeAuditLog(tenantTx, { tenantId: payment.tenantId }, {
+          actorUserId: SYSTEM_PAYNOW_ACTOR_ID,
+          action: "billing_payment_confirmed",
+          metadata: { reference: payment.reference, paynowReference: update.paynowReference, amountUsd: payment.amountUsd.toString() },
+        });
+      }
+    });
+  });
+}
+
+/**
+ * Asks Paynow directly about a payment still PENDING here. Paynow's
+ * result-URL call can be late or never arrive (seen live on the first test
+ * payment), and without this a client who has paid stays locked out. The
+ * poll response is hash-verified exactly like the result-URL call.
+ * Returns true if the stored status may have changed.
+ */
+async function reconcilePendingPayment(
+  ctx: AppContext,
+  payment: { reference: string; status: string; pollUrl: string | null },
+  log: { warn: (obj: object, msg: string) => void },
+): Promise<boolean> {
+  if (payment.status !== "PENDING" || !payment.pollUrl) return false;
+  try {
+    const update = await pollPaymentStatus(payment.pollUrl);
+    // Only ever apply a verified answer about this exact payment.
+    if (!update || update.reference !== payment.reference) return false;
+    await applyPaynowStatusUpdate(ctx, update);
+    return true;
+  } catch (err) {
+    log.warn({ err }, "paynow status poll failed");
+    return false;
+  }
+}
+
 export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: AppContext) {
   const scoped = [app.authenticate, requireTenantMatch(), verifyActiveImpersonation(ctx.prisma)];
+
+  // Kept so the payment can be reconciled if Paynow's result-URL call never arrives.
+  const savePollUrl = async (tenantCtx: NonNullable<FastifyRequest["tenantCtx"]>, reference: string, pollUrl: string | undefined) => {
+    if (!pollUrl) return;
+    await withTenant(ctx.prisma, tenantCtx, (tx) =>
+      tx.paynowPayment.updateMany({ where: { tenantId: tenantCtx.tenantId, reference }, data: { pollUrl } }),
+    );
+  };
 
   app.get(
     "/v1/tenants/:tenantId/billing/plans",
@@ -66,13 +173,21 @@ export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: App
     "/v1/tenants/:tenantId/billing/payments",
     { preHandler: [...scoped, requirePermission("billing:read")] },
     async (request) => {
-      return withTenant(ctx.prisma, request.tenantCtx!, (tx) =>
-        tx.paynowPayment.findMany({
-          where: { tenantId: request.tenantCtx!.tenantId },
-          orderBy: { createdAt: "desc" },
-          take: 20,
-        }),
-      );
+      const list = () =>
+        withTenant(ctx.prisma, request.tenantCtx!, (tx) =>
+          tx.paynowPayment.findMany({
+            where: { tenantId: request.tenantCtx!.tenantId },
+            orderBy: { createdAt: "desc" },
+            take: 20,
+          }),
+        );
+      const payments = await list();
+      const pending = payments
+        .filter((p) => p.status === "PENDING" && p.pollUrl && Date.now() - p.createdAt.getTime() < RECONCILE_WINDOW_MS)
+        .slice(0, MAX_RECONCILE_PER_LIST);
+      if (pending.length === 0) return payments;
+      const changed = await Promise.all(pending.map((p) => reconcilePendingPayment(ctx, p, request.log)));
+      return changed.some(Boolean) ? list() : payments;
     },
   );
 
@@ -86,6 +201,12 @@ export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: App
       );
       if (!payment) {
         reply.code(404).send({ error: "payment_not_found" });
+        return;
+      }
+      if (await reconcilePendingPayment(ctx, payment, request.log)) {
+        reply.send(
+          await withTenant(ctx.prisma, request.tenantCtx!, (tx) => tx.paynowPayment.findUniqueOrThrow({ where: { id: payment.id } })),
+        );
         return;
       }
       reply.send(payment);
@@ -140,6 +261,7 @@ export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: App
         reply.code(502).send({ error: "paynow_checkout_failed", message: result.error });
         return;
       }
+      await savePollUrl(request.tenantCtx!, reference, result.pollUrl);
       reply.send({ reference, redirectUrl: result.redirectUrl });
     },
   );
@@ -192,6 +314,7 @@ export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: App
         reply.code(502).send({ error: "paynow_checkout_failed", message: result.error });
         return;
       }
+      await savePollUrl(request.tenantCtx!, reference, result.pollUrl);
       reply.send({ reference, instructions: result.instructions });
     },
   );
@@ -230,60 +353,7 @@ export async function registerPaynowBillingRoutes(app: FastifyInstance, ctx: App
         return;
       }
 
-      await withPlatformContext(ctx.prisma, async (tx) => {
-        const payment = await tx.paynowPayment.findFirst({ where: { reference: update.reference } });
-        if (!payment) return;
-        // Idempotent — Paynow can call the result URL more than once for
-        // the same transaction; never double-create a BillingLineItem or
-        // re-fire the subscription-activation side effects for a payment
-        // already recorded as PAID.
-        if (payment.status === "PAID") return;
-
-        const newStatus = isPaidStatus(update.status) ? "PAID" : update.status.toLowerCase() === "cancelled" ? "CANCELLED" : payment.status;
-
-        await withTenant(ctx.prisma, { tenantId: payment.tenantId }, async (tenantTx) => {
-          await tenantTx.paynowPayment.update({
-            where: { id: payment.id },
-            data: { status: newStatus, paynowReference: update.paynowReference, pollUrl: update.pollUrl ?? payment.pollUrl },
-          });
-
-          if (newStatus === "PAID") {
-            await tenantTx.billingLineItem.create({
-              data: {
-                tenantId: payment.tenantId,
-                skuType: payment.skuType,
-                description: payment.description,
-                amountUsd: payment.amountUsd,
-                periodStart: payment.periodStart ?? payment.createdAt,
-                periodEnd: payment.periodEnd ?? payment.createdAt,
-              },
-            });
-            if (payment.subscriptionTier) {
-              const before = await tenantTx.tenant.findUniqueOrThrow({
-                where: { id: payment.tenantId },
-                select: { subscriptionState: true },
-              });
-              await tenantTx.tenant.update({
-                where: { id: payment.tenantId },
-                // trialEndsAt is cleared, not left to lapse — otherwise
-                // trialExpirySweep would still see a past date on a tenant
-                // that has since paid.
-                data: { subscriptionState: "ACTIVE", subscriptionTier: payment.subscriptionTier, trialEndsAt: null },
-              });
-              await recordSubscriptionStateChange(tenantTx, payment.tenantId, before.subscriptionState, "ACTIVE");
-              // The paid plan's allowance replaces whatever trial/lower-tier
-              // limits were in place — this is the moment the client starts
-              // getting what they actually paid for.
-              await provisionUsageLimits(tenantTx, payment.tenantId, payment.subscriptionTier, "ACTIVE");
-            }
-            await writeAuditLog(tenantTx, { tenantId: payment.tenantId }, {
-              actorUserId: SYSTEM_PAYNOW_ACTOR_ID,
-              action: "billing_payment_confirmed",
-              metadata: { reference: payment.reference, paynowReference: update.paynowReference, amountUsd: payment.amountUsd.toString() },
-            });
-          }
-        });
-      });
+      await applyPaynowStatusUpdate(ctx, update);
 
       reply.code(200).send({ received: true });
     });
