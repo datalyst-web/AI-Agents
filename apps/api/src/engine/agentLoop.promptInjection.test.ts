@@ -112,10 +112,10 @@ describe("capabilitiesText — the agent is told exactly what it can do", () => 
 describe("buildSystemPrompt — reply style", () => {
   it("asks every agent for short, plain-text replies, without loosening the guardrails", () => {
     const prompt = buildSystemPrompt("You are the Acme assistant.", [], []);
-    expect(prompt).toContain("Be brief");
+    expect(prompt).toContain("Hard limit: 50 words");
     expect(prompt).toMatch(/Plain text only/);
     // Brevity must never override the anti-hallucination rules.
     expect(prompt).toMatch(/accuracy beats brevity/);
-    expect(prompt.indexOf("Be brief")).toBeGreaterThan(prompt.indexOf("You must never invent facts"));
+    expect(prompt.indexOf("Hard limit: 50 words")).toBeGreaterThan(prompt.indexOf("You must never invent facts"));
   });
 });

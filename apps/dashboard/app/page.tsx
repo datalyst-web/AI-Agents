@@ -79,6 +79,8 @@ const PLANS: {
   tier: string;
   pricePrefix?: string;
   price: string;
+  /** ZiG equivalent: USD x 40 (ZWG_PER_USD in apps/api/src/lib/planLimits.ts). */
+  priceZwg?: string;
   cadence: string;
   blurb: string;
   included: string[];
@@ -89,6 +91,7 @@ const PLANS: {
   {
     tier: "Starter",
     price: "$29",
+    priceZwg: "ZiG 1,160",
     cadence: "/month",
     blurb: "One agent on your website, for a business testing the water.",
     included: ["500 conversations/month", "500,000 AI tokens/month", "Website widget + shareable link", "Knowledge base from your docs & site", "Email escalation alerts"],
@@ -98,6 +101,7 @@ const PLANS: {
   {
     tier: "Growth",
     price: "$89",
+    priceZwg: "ZiG 3,560",
     cadence: "/month",
     blurb: "For businesses running real volume across more than one channel.",
     included: [
@@ -115,6 +119,7 @@ const PLANS: {
   {
     tier: "Scale",
     price: "$249",
+    priceZwg: "ZiG 9,960",
     cadence: "/month",
     blurb: "Multiple agents, multiple departments, higher volume.",
     included: [
@@ -344,6 +349,7 @@ export default function LandingPage() {
                   <span className="text-3xl font-semibold tracking-tightest text-foreground">{plan.price}</span>
                   <span className="text-sm text-foreground/45">{plan.cadence}</span>
                 </div>
+                {plan.priceZwg ? <p className="mt-1 text-xs text-foreground/45">or {plan.priceZwg}{plan.cadence}</p> : null}
                 <p className="mt-3 text-sm leading-relaxed text-foreground/55">{plan.blurb}</p>
                 <ul className="mt-6 space-y-2.5 border-t border-surface-border pt-6">
                   {plan.included.map((feature) => (
