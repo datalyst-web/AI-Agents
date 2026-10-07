@@ -10,7 +10,7 @@ import { writeAuditLog } from "../lib/audit.js";
 import { encryptChannelCredential, decryptChannelCredential } from "../lib/channelCrypto.js";
 import { telegramCall, graphApiGet, graphApiSend, resolvePageAccessToken } from "../lib/channelSend.js";
 import { checkUsageAllowance } from "../lib/usageEnforcement.js";
-import { processCustomerMessage } from "../engine/agentLoop.js";
+import { processCustomerMessage, recordBusinessAppReply } from "../engine/agentLoop.js";
 import { verifyMetaSignedRequest } from "../lib/metaSignedRequest.js";
 import { env } from "../env.js";
 
@@ -381,6 +381,12 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
         customerIdentifier: { type: "telegram_chat_id", value: String(chatId) },
       });
 
+      // A person is handling this chat — no placeholder after every message.
+      if (result.humanTakeoverActive) {
+        reply.send({ ok: true });
+        return;
+      }
+
       if (result.pendingConfirmation) {
         await telegramCall(botToken, "sendMessage", {
           chat_id: chatId,
@@ -476,6 +482,8 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
             value?: {
               metadata?: { phone_number_id?: string };
               messages?: Array<{ from?: string; type?: string; text?: { body?: string } }>;
+              /** smb_message_echoes: what the business sent from the WhatsApp Business app (coexistence). */
+              message_echoes?: Array<{ to?: string; type?: string; text?: { body?: string } }>;
             };
           }>;
         }>;
@@ -487,6 +495,14 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
             for (const change of entry.changes ?? []) {
               const phoneNumberId = change.value?.metadata?.phone_number_id;
               if (!phoneNumberId) continue;
+              for (const echo of change.value?.message_echoes ?? []) {
+                if (!echo.to) continue;
+                await handleBusinessAppEcho(ctx, {
+                  phoneNumberId,
+                  customer: echo.to,
+                  text: echo.type === "text" && echo.text?.body ? echo.text.body : `(${echo.type ?? "message"} sent from the WhatsApp Business app)`,
+                });
+              }
               for (const msg of change.value?.messages ?? []) {
                 const from = msg.from;
                 const body = msg.text?.body;
@@ -671,6 +687,11 @@ async function handleMetaInboundMessage(
     customerIdentifier: { type: params.identifierType, value: params.senderId },
   });
 
+  // A person is handling this chat (dashboard takeover, or a reply from the
+  // WhatsApp Business app): stay silent rather than send a placeholder after
+  // every customer message.
+  if (result.humanTakeoverActive) return;
+
   const replyText = result.pendingConfirmation
     ? `${result.pendingConfirmation.confirmationPrompt}\n\nReply YES to confirm or NO to cancel.`
     : result.reply;
@@ -679,4 +700,25 @@ async function handleMetaInboundMessage(
   // the connection's health is visible via its own status/errorMessage
   // fields on the next explicit action, same as the Telegram path above.
   if (replyText) await params.sendReply(accessToken, replyText).catch(() => undefined);
+}
+
+/**
+ * A reply the business sent from the WhatsApp Business app on a number shared
+ * with the AI. Recorded in the conversation as a staff message, and the AI
+ * steps back in that chat (see recordBusinessAppReply).
+ */
+async function handleBusinessAppEcho(ctx: AppContext, params: { phoneNumberId: string; customer: string; text: string }) {
+  const connection = await withPlatformContext(ctx.prisma, (tx) =>
+    tx.channelConnection.findFirst({
+      where: { channel: "WHATSAPP", externalId: params.phoneNumberId, status: "CONNECTED" },
+    }),
+  );
+  if (!connection) return;
+  await recordBusinessAppReply(ctx, {
+    tenantId: connection.tenantId,
+    agentId: connection.agentId,
+    channel: "WHATSAPP",
+    customerIdentifier: { type: "whatsapp_phone_number", value: params.customer },
+    text: params.text,
+  });
 }

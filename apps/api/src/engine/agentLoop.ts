@@ -67,6 +67,54 @@ const INJECTION_PHRASES = [
  */
 const SYSTEM_AGENT_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
 
+/** Channels that carry no conversation id of their own — a chat is identified by the customer. */
+const MESSAGING_CHANNELS = new Set(["TELEGRAM", "WHATSAPP", "FACEBOOK_MESSENGER", "INSTAGRAM"]);
+
+/**
+ * When the business replies from the WhatsApp Business app on a number shared
+ * with the AI (coexistence), the AI steps back in that chat until this long
+ * has passed since the last staff reply, then answers again.
+ */
+export const BUSINESS_APP_REPLY_PAUSE_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * The customer's open conversation on a messaging channel, so each message
+ * continues the same thread instead of starting a new conversation (which
+ * left the agent with no memory of the previous message). A conversation the
+ * timeout sweep has closed (30 minutes of silence) starts a fresh one.
+ */
+async function findOpenMessagingConversation(
+  tx: Prisma.TransactionClient,
+  where: { tenantId: string; agentId: string; channel: IncomingMessage["channel"]; customerIdentityId: string },
+) {
+  return tx.conversation.findFirst({
+    where: { ...where, outcome: "IN_PROGRESS" },
+    orderBy: { startedAt: "desc" },
+  });
+}
+
+/**
+ * A new conversation inherits an app-reply pause that's still running, so a
+ * customer who goes quiet for half an hour mid-chat with staff doesn't get
+ * the AI butting in when they write again.
+ */
+async function inheritedBusinessAppPause(
+  tx: Prisma.TransactionClient,
+  where: { tenantId: string; agentId: string; customerIdentityId: string },
+): Promise<Date | undefined> {
+  const recent = await tx.conversation.findFirst({
+    where: {
+      ...where,
+      humanTakeoverActive: true,
+      takenOverByUserId: null,
+      takenOverAt: { gt: new Date(Date.now() - BUSINESS_APP_REPLY_PAUSE_MS) },
+    },
+    orderBy: { takenOverAt: "desc" },
+    select: { takenOverAt: true },
+  });
+  return recent?.takenOverAt ?? undefined;
+}
+
 export interface IncomingMessage {
   tenantId: string;
   agentId: string;
@@ -290,20 +338,44 @@ export async function processCustomerMessage(
       });
     }
 
-    const conversation = input.conversationId
+    const messagingThread =
+      !input.conversationId && customerIdentityId && MESSAGING_CHANNELS.has(input.channel)
+        ? { tenantId: input.tenantId, agentId: input.agentId, channel: input.channel, customerIdentityId }
+        : undefined;
+    const existing = input.conversationId
       ? await tx.conversation.findFirstOrThrow({ where: { id: input.conversationId, tenantId: input.tenantId } })
-      : await tx.conversation.create({
-          data: {
-            id: randomUUID(),
-            tenantId: input.tenantId,
-            agentId: input.agentId,
-            channel: input.channel,
-            customerIdentityId,
-            outcome: "IN_PROGRESS",
-            dropOffPoint: "NONE",
-            sentimentTrend: [],
-          },
-        });
+      : messagingThread
+        ? await findOpenMessagingConversation(tx, messagingThread)
+        : null;
+    const inheritedPause = !existing && messagingThread ? await inheritedBusinessAppPause(tx, messagingThread) : undefined;
+    const conversation =
+      existing ??
+      (await tx.conversation.create({
+        data: {
+          id: randomUUID(),
+          tenantId: input.tenantId,
+          agentId: input.agentId,
+          channel: input.channel,
+          customerIdentityId,
+          outcome: "IN_PROGRESS",
+          dropOffPoint: "NONE",
+          sentimentTrend: [],
+          ...(inheritedPause ? { humanTakeoverActive: true, takenOverAt: inheritedPause } : {}),
+        },
+      }));
+
+    // A pause started by a reply from the WhatsApp Business app (no staff user
+    // id — see recordBusinessAppReply) ends on its own; a takeover started in
+    // the dashboard stays until staff release it.
+    if (
+      conversation.humanTakeoverActive &&
+      !conversation.takenOverByUserId &&
+      conversation.takenOverAt &&
+      Date.now() - conversation.takenOverAt.getTime() > BUSINESS_APP_REPLY_PAUSE_MS
+    ) {
+      await tx.conversation.update({ where: { id: conversation.id }, data: { humanTakeoverActive: false, takenOverAt: null } });
+      conversation.humanTakeoverActive = false;
+    }
 
     // ---- Live human takeover ------------------------------------------------
     // A staff member has taken this specific conversation over (see
@@ -893,3 +965,60 @@ async function recordUsage(
     },
   });
 }
+
+/**
+ * Records a reply the business sent from the WhatsApp Business app on a number
+ * the AI shares with it (coexistence — Meta's smb_message_echoes webhook), and
+ * makes the AI step back in that chat for BUSINESS_APP_REPLY_PAUSE_MS. The
+ * pause carries no staff user id, which is what lets it lapse on its own.
+ */
+export async function recordBusinessAppReply(
+  deps: { prisma: PrismaClient },
+  input: {
+    tenantId: string;
+    agentId: string;
+    channel: "WHATSAPP";
+    customerIdentifier: { type: "whatsapp_phone_number"; value: string };
+    text: string;
+  },
+): Promise<void> {
+  await withTenant(deps.prisma, { tenantId: input.tenantId, agentId: input.agentId }, async (tx) => {
+    const identity = await resolveCustomerIdentity(tx, {
+      tenantId: input.tenantId,
+      agentId: input.agentId,
+      identifierType: input.customerIdentifier.type,
+      identifierValue: input.customerIdentifier.value,
+    });
+    const thread = { tenantId: input.tenantId, agentId: input.agentId, channel: input.channel, customerIdentityId: identity.id };
+    const conversation =
+      (await findOpenMessagingConversation(tx, thread)) ??
+      (await tx.conversation.create({
+        data: {
+          id: randomUUID(),
+          tenantId: input.tenantId,
+          agentId: input.agentId,
+          channel: input.channel,
+          customerIdentityId: identity.id,
+          outcome: "IN_PROGRESS",
+          dropOffPoint: "NONE",
+          sentimentTrend: [],
+        },
+      }));
+    await tx.message.create({
+      data: {
+        id: randomUUID(),
+        tenantId: input.tenantId,
+        agentId: input.agentId,
+        conversationId: conversation.id,
+        role: "staff",
+        content: input.text,
+      },
+    });
+    // Only a pause from the app — never overwrite a dashboard takeover's staff user.
+    await tx.conversation.updateMany({
+      where: { id: conversation.id, takenOverByUserId: null },
+      data: { humanTakeoverActive: true, takenOverAt: new Date() },
+    });
+  });
+}
+
