@@ -278,3 +278,4 @@ export function createEmailProviderFromEnv(env: {
     fromAddress: env.SMTP_FROM_ADDRESS,
   });
 }
+export { escapeHtml, renderPremiumEmail, type EmailBlock, type EmailSection, type PremiumEmail } from "./layout.js";

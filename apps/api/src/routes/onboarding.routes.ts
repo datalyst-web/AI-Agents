@@ -2,11 +2,12 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { withPlatformContext, withTenant } from "@chat-agent/db";
-import type { EmailAttachment } from "@chat-agent/email";
+import { renderPremiumEmail, type EmailAttachment } from "@chat-agent/email";
 import type { AppContext } from "../lib/context.js";
 import { requireStaff, requireTenantMatch } from "../lib/rbac.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { env } from "../env.js";
+import { buildAgentFromIntake, staffBuildEmail, type IntakeAutoBuildState, type IntakeBuildReport } from "../lib/intakeAutoBuild.js";
 
 /**
  * The free-trial onboarding questionnaire. Right after signup (and the
@@ -233,10 +234,15 @@ export async function registerOnboardingRoutes(app: FastifyInstance, ctx: AppCon
     }
     const answers = IntakeAnswersSchema.parse(rawAnswers);
 
+    const submittedAt = new Date();
     const tenant = await withTenant(ctx.prisma, request.tenantCtx!, async (tx) => {
+      // A repeat submission keeps the auto-build record, or the release
+      // sweep would lose track of an assistant it already drafted.
+      const previous = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { onboardingIntake: true } });
+      const autoBuild = (previous.onboardingIntake as { autoBuild?: IntakeAutoBuildState } | null)?.autoBuild;
       const updated = await tx.tenant.update({
         where: { id: tenantId },
-        data: { onboardingIntake: { answers, files } as object, onboardingIntakeAt: new Date() },
+        data: { onboardingIntake: { answers, files, ...(autoBuild ? { autoBuild } : {}) } as object, onboardingIntakeAt: submittedAt },
         select: { id: true, name: true },
       });
       await writeAuditLog(tx, request.tenantCtx!, {
@@ -248,11 +254,32 @@ export async function registerOnboardingRoutes(app: FastifyInstance, ctx: AppCon
       return updated;
     });
 
-    // Every staff member gets the whole questionnaire. Failing to email must
-    // not lose the submission (it's saved above and shown in Managed Setup),
-    // so it's logged, not returned as an error.
-    const staff = await withPlatformContext(ctx.prisma, (tx) =>
-      tx.user.findMany({ where: { isActive: true, role: { in: ["platform_admin", "setup_specialist"] } }, select: { email: true } }),
+    // Draft their assistant straight away (lib/intakeAutoBuild.ts). A
+    // failure here must not lose the submission — staff are told and build
+    // it by hand.
+    let report: IntakeBuildReport | null = null;
+    let buildError: string | null = null;
+    try {
+      report = await buildAgentFromIntake(ctx, { tenantId, submittedByUserId: request.authUser!.sub, answers, files, buffers, submittedAt });
+      if (report) {
+        const state: IntakeAutoBuildState = { agentId: report.agentId, builtAt: submittedAt.toISOString(), releaseAt: report.releaseAt.toISOString() };
+        await withTenant(ctx.prisma, request.tenantCtx!, (tx) =>
+          tx.tenant.update({ where: { id: tenantId }, data: { onboardingIntake: { answers, files, autoBuild: state } as object } }),
+        );
+      }
+    } catch (err) {
+      buildError = err instanceof Error ? err.message : String(err);
+      request.log.error({ tenantId, err }, "could not auto-draft the assistant from the onboarding questionnaire");
+    }
+
+    // Every staff member gets the build report and the whole questionnaire.
+    // Failing to email must not lose the submission (it's saved above and
+    // shown in Managed Setup), so it's logged, not returned as an error.
+    const [staff, platform] = await withPlatformContext(ctx.prisma, (tx) =>
+      Promise.all([
+        tx.user.findMany({ where: { isActive: true, role: { in: ["platform_admin", "setup_specialist"] } }, select: { email: true } }),
+        tx.platformSettings.findUnique({ where: { id: "global" }, select: { brandName: true } }),
+      ]),
     );
     const totalBytes = buffers.reduce((sum, b) => sum + b.length, 0);
     const attachments: EmailAttachment[] | undefined =
@@ -265,13 +292,19 @@ export async function registerOnboardingRoutes(app: FastifyInstance, ctx: AppCon
         ? `Files attached: ${fileNames}.`
         : `Files: ${fileNames} — too large to attach; download them from Managed Setup.`
       : "No files were sent.";
-    const staffText =
-      `${tenant.name} just started a free trial and told us about their business.\n\n` +
-      `${describeIntake(answers)}\n\n${fileLine}\n\n` +
-      `Build their assistant from Managed Setup: ${env.DASHBOARD_BASE_URL}/managed-setup\n` +
-      `Their 14-day trial starts when their assistant goes live.`;
+    const staffEmail = staffBuildEmail({
+      brand: platform?.brandName ?? "Datalyst Africa",
+      tenantName: tenant.name,
+      answers,
+      report,
+      buildError,
+      intakeSummary: describeIntake(answers),
+      fileLine,
+      dashboardUrl: env.DASHBOARD_BASE_URL,
+    });
+    const staffHtml = renderPremiumEmail(staffEmail.html);
     const results = await Promise.all(
-      staff.map((s) => ctx.email.send({ to: s.email, subject: `New free trial: ${answers.businessName}`, text: staffText, attachments })),
+      staff.map((s) => ctx.email.send({ to: s.email, subject: staffEmail.subject, text: staffEmail.text, html: staffHtml, attachments })),
     );
     const failed = results.filter((r) => !r.sent);
     if (failed.length) request.log.error({ tenantId, failed: failed.length, error: failed[0]?.error }, "could not email staff about a new trial intake");

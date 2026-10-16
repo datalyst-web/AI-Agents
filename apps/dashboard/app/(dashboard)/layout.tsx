@@ -258,15 +258,17 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         {impersonation ? (
           <div className="sticky top-0 z-20 flex flex-col items-start gap-2 bg-warning/15 px-4 py-2 text-xs ring-1 ring-inset ring-warning/30 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-8">
-            <span className="flex items-center gap-2 font-medium text-warning">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0">
+            <span className="flex items-start gap-2 font-medium text-warning sm:items-center">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="mt-px shrink-0 sm:mt-0">
                 <path d="M8 3l6.5 11H1.5L8 3Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
                 <path d="M8 6.5v3M8 11.5v.01" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
               </svg>
-              Managing <span className="text-foreground">{impersonation.tenantName}</span> on their behalf — every action here is logged to their audit trail.
+              <span>
+                Managing <span className="text-foreground">{impersonation.tenantName}</span> on their behalf — every action here is logged to their audit trail.
+              </span>
             </span>
             <button
               onClick={() => void endImpersonation()}

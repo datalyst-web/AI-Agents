@@ -164,3 +164,14 @@ body {
   background-color: white;
   padding: 0.3rem 0.55rem;
 }
+
+/* Voice input's listening waveform (components/VoiceInputButton.tsx). */
+@keyframes voicewave {
+  0%,
+  100% {
+    height: 5px;
+  }
+  50% {
+    height: 16px;
+  }
+}

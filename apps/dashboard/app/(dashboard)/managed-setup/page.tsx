@@ -604,7 +604,7 @@ export default function ManagedSetupPage() {
                 value={clientBrandName}
                 onChange={(e) => setClientBrandName(e.target.value)}
                 placeholder={`e.g. ${brandingTarget?.name ?? "Acme Inc"}`}
-                className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-500"
+                className="min-w-0 flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-500"
               />
               <Button type="button" disabled={savingClientBrand} onClick={saveClientBrandName}>
                 {savingClientBrand ? "Saving…" : "Save"}
@@ -618,7 +618,7 @@ export default function ManagedSetupPage() {
                 <select
                   value={selectedPresetId}
                   onChange={(e) => setSelectedPresetId(e.target.value)}
-                  className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-500"
+                  className="min-w-0 flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-500"
                 >
                   <option value="" className="bg-surface-overlay text-foreground">Select a preset…</option>
                   {presets.map((p) => (
@@ -643,7 +643,7 @@ export default function ManagedSetupPage() {
                 value={dataResidency}
                 onChange={(e) => setDataResidency(e.target.value)}
                 placeholder="e.g. EU, US — as agreed with this client"
-                className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-500"
+                className="min-w-0 flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-500"
               />
               <Button type="button" variant="secondary" disabled={savingResidency} onClick={saveDataResidency}>
                 {savingResidency ? "Saving…" : "Save"}

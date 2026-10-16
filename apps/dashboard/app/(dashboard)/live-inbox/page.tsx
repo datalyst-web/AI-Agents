@@ -274,7 +274,7 @@ function ThreadPanel({
               value={reply}
               onChange={(e) => setReply(e.target.value)}
               placeholder="Type your reply…"
-              className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+              className="min-w-0 flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
             />
             <Button type="submit" disabled={sending || !reply.trim()}>
               {sending ? "Sending…" : "Send"}

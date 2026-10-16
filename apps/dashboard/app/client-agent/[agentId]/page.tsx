@@ -10,6 +10,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useParams } from "next/navigation";
+import { VoiceInputButton } from "@/components/VoiceInputButton";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
@@ -38,6 +39,8 @@ export default function ClientAgentPage() {
   const { agentId } = useParams<{ agentId: string }>();
   const [config, setConfig] = useState<WidgetConfig | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [listening, setListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [input, setInput] = useState("");
@@ -186,15 +189,21 @@ export default function ClientAgentPage() {
         </div>
       ) : null}
       {sendError ? <p className="relative mx-auto w-full max-w-2xl px-5 pt-2 text-xs text-danger sm:px-8">{sendError}</p> : null}
+      {voiceError || listening ? (
+        <p className={`relative mx-auto w-full max-w-2xl px-5 pt-2 text-xs sm:px-8 ${voiceError ? "text-danger" : "text-foreground/50"}`} role="status">
+          {voiceError ?? "Listening — speak naturally. Tap the mic again when you're done."}
+        </p>
+      ) : null}
 
       <form onSubmit={onSubmit} className="relative mx-auto flex w-full max-w-2xl gap-2 border-t border-surface-border p-4 sm:px-8">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Type a message…"
+          placeholder={listening ? "Listening…" : "Type a message…"}
           disabled={!config || sending}
-          className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+          className={`w-0 min-w-0 flex-1 rounded-lg border bg-foreground/5 px-4 py-3 text-sm text-foreground outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 ${listening ? "border-danger/40" : "border-foreground/10"}`}
         />
+        <VoiceInputButton value={input} onChange={setInput} disabled={!config || sending} onListeningChange={setListening} onError={setVoiceError} />
         <button
           type="submit"
           disabled={!config || sending || !input.trim()}

@@ -11,6 +11,7 @@ import { encryptChannelCredential, decryptChannelCredential } from "../lib/chann
 import { telegramCall, graphApiGet, graphApiSend, resolvePageAccessToken } from "../lib/channelSend.js";
 import { checkUsageAllowance } from "../lib/usageEnforcement.js";
 import { processCustomerMessage, recordBusinessAppReply } from "../engine/agentLoop.js";
+import { handleChannelInbound } from "../engine/replyPacing.js";
 import { verifyMetaSignedRequest } from "../lib/metaSignedRequest.js";
 import { env } from "../env.js";
 
@@ -373,36 +374,21 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
         return;
       }
 
-      const result = await processCustomerMessage(ctx, {
-        tenantId: connection.tenantId,
-        agentId: connection.agentId,
-        channel: "TELEGRAM",
-        customerMessage: text,
-        customerIdentifier: { type: "telegram_chat_id", value: String(chatId) },
-      });
-
-      // A person is handling this chat — no placeholder after every message.
-      if (result.humanTakeoverActive) {
-        reply.send({ ok: true });
-        return;
-      }
-
-      if (result.pendingConfirmation) {
-        await telegramCall(botToken, "sendMessage", {
-          chat_id: chatId,
-          text: result.pendingConfirmation.confirmationPrompt,
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: "✅ Confirm", callback_data: `confirm:${result.pendingConfirmation.toolCallId}` },
-                { text: "❌ Cancel", callback_data: `cancel:${result.pendingConfirmation.toolCallId}` },
-              ],
-            ],
-          },
-        });
-      } else if (result.reply) {
-        await telegramCall(botToken, "sendMessage", { chat_id: chatId, text: result.reply });
-      }
+      // Answered now or after the agent's reply delay (engine/replyPacing.ts).
+      await handleChannelInbound(
+        ctx,
+        {
+          connectionId: connection.id,
+          tenantId: connection.tenantId,
+          agentId: connection.agentId,
+          channel: "TELEGRAM",
+          externalId: null,
+          identifierType: "telegram_chat_id",
+          sender: String(chatId),
+          text,
+        },
+        botToken,
+      );
       reply.send({ ok: true });
     } catch (err) {
       request.log.error(err, "telegram webhook processing failed");
@@ -481,7 +467,7 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
             field?: string;
             value?: {
               metadata?: { phone_number_id?: string };
-              messages?: Array<{ from?: string; type?: string; text?: { body?: string } }>;
+              messages?: Array<{ id?: string; from?: string; type?: string; text?: { body?: string } }>;
               /** smb_message_echoes: what the business sent from the WhatsApp Business app (coexistence). */
               message_echoes?: Array<{ to?: string; type?: string; text?: { body?: string } }>;
             };
@@ -513,13 +499,7 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
                   senderId: from,
                   text: body,
                   identifierType: "whatsapp_phone_number",
-                  sendReply: (accessToken, reply_) =>
-                    graphApiSend(accessToken, `${phoneNumberId}/messages`, {
-                      messaging_product: "whatsapp",
-                      to: from,
-                      type: "text",
-                      text: { body: reply_ },
-                    }),
+                  inboundMessageId: msg.id,
                 });
               }
             }
@@ -539,11 +519,6 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
                 senderId,
                 text,
                 identifierType: payload.object === "page" ? "facebook_psid" : "instagram_igsid",
-                sendReply: (accessToken, reply_) =>
-                  graphApiSend(accessToken, "me/messages", {
-                    recipient: { id: senderId },
-                    message: { text: reply_ },
-                  }),
               });
             }
           }
@@ -663,7 +638,7 @@ async function handleMetaInboundMessage(
     senderId: string;
     text: string;
     identifierType: "whatsapp_phone_number" | "facebook_psid" | "instagram_igsid";
-    sendReply: (accessToken: string, reply: string) => Promise<unknown>;
+    inboundMessageId?: string;
   },
 ) {
   const connection = await withPlatformContext(ctx.prisma, (tx) =>
@@ -678,28 +653,24 @@ async function handleMetaInboundMessage(
   const allowance = await checkUsageAllowance(ctx.prisma, connection.tenantId);
   if (allowance.overHardCap) return;
 
-  const accessToken = decryptChannelCredential(connection.encryptedCredential);
-  const result = await processCustomerMessage(ctx, {
-    tenantId: connection.tenantId,
-    agentId: connection.agentId,
-    channel: params.channel,
-    customerMessage: params.text,
-    customerIdentifier: { type: params.identifierType, value: params.senderId },
-  });
-
-  // A person is handling this chat (dashboard takeover, or a reply from the
-  // WhatsApp Business app): stay silent rather than send a placeholder after
-  // every customer message.
-  if (result.humanTakeoverActive) return;
-
-  const replyText = result.pendingConfirmation
-    ? `${result.pendingConfirmation.confirmationPrompt}\n\nReply YES to confirm or NO to cancel.`
-    : result.reply;
-  // Best-effort — a send failure here (e.g. the customer blocked the Page,
-  // or the token expired) has nowhere useful to surface synchronously;
-  // the connection's health is visible via its own status/errorMessage
-  // fields on the next explicit action, same as the Telegram path above.
-  if (replyText) await params.sendReply(accessToken, replyText).catch(() => undefined);
+  // Answered now or after the agent's reply delay (engine/replyPacing.ts).
+  // A person handling the chat (dashboard takeover, or a reply from the
+  // WhatsApp Business app) keeps the AI silent there.
+  await handleChannelInbound(
+    ctx,
+    {
+      connectionId: connection.id,
+      tenantId: connection.tenantId,
+      agentId: connection.agentId,
+      channel: params.channel,
+      externalId: params.channel === "WHATSAPP" ? params.externalId : null,
+      identifierType: params.identifierType,
+      sender: params.senderId,
+      text: params.text,
+      inboundMessageId: params.inboundMessageId,
+    },
+    decryptChannelCredential(connection.encryptedCredential),
+  );
 }
 
 /**

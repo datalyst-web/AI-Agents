@@ -11,6 +11,7 @@ import { runEscalationNotificationSweep } from "./jobs/escalationNotificationSwe
 import { runOverageBillingSweep } from "./jobs/overageBillingSweep.js";
 import { runTrialExpirySweep } from "./jobs/trialExpirySweep.js";
 import { runSubscriptionRenewalSweep } from "./jobs/subscriptionRenewalSweep.js";
+import { runIntakeAgentReleaseSweep } from "./jobs/intakeAgentReleaseSweep.js";
 import { withDistributedLock } from "./lib/lock.js";
 import { env } from "./env.js";
 
@@ -18,6 +19,7 @@ const RETENTION_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6h — production sho
 const CONVERSATION_TIMEOUT_SWEEP_INTERVAL_MS = 5 * 60 * 1000; // 5m — CONVERSATION_ABANDONED needs to fire close to its 30m threshold, not hours late.
 const ESCALATION_NOTIFICATION_SWEEP_INTERVAL_MS = 2 * 60 * 1000; // 2m — a human should hear about a live handoff quickly, not on the same cadence as the 5m/6h sweeps above.
 const TRIAL_EXPIRY_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // 1h — a trial ending a few minutes late is fine; a day late is a free month.
+const INTAKE_RELEASE_SWEEP_INTERVAL_MS = 60 * 1000; // 1m — the client is told their assistant is ready 30 minutes after the questionnaire, so this must land within a minute of that.
 const OVERAGE_BILLING_SWEEP_INTERVAL_MS = 12 * 60 * 60 * 1000; // 12h — only ever bills a closed month, so running twice a day is plenty and self-heals if the worker was down at the month boundary.
 
 /**
@@ -89,6 +91,15 @@ async function main() {
       Sentry.captureException(err);
     });
   }, TRIAL_EXPIRY_SWEEP_INTERVAL_MS);
+
+  setInterval(() => {
+    void withDistributedLock(ctx.redis, "chat:lock:intake-release-sweep", INTAKE_RELEASE_SWEEP_INTERVAL_MS - 5_000, () =>
+      runIntakeAgentReleaseSweep(ctx),
+    ).catch((err) => {
+      console.error("[workers] intake release sweep failed", err);
+      Sentry.captureException(err);
+    });
+  }, INTAKE_RELEASE_SWEEP_INTERVAL_MS);
 
   setInterval(() => {
     void withDistributedLock(

@@ -163,9 +163,16 @@ interface ChatResponse {
         </div>
         <button type="button" class="csat-skip">Skip</button>
       </div>
+      <div class="voice-hint" role="status" aria-live="polite" hidden></div>
       <form class="composer">
         <input type="text" placeholder="Type a message…" autocomplete="off" />
-        <button type="submit" aria-label="Send" disabled>
+        <button type="button" class="mic" aria-label="Speak your message" aria-pressed="false" title="Speak instead of typing" hidden>
+          <svg class="mic-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/>
+          </svg>
+          <span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+        </button>
+        <button type="submit" class="send" aria-label="Send" disabled>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
         </button>
       </form>
@@ -182,7 +189,9 @@ interface ChatResponse {
   const csatSkipBtn = shadow.querySelector<HTMLButtonElement>(".csat-skip")!;
   const form = shadow.querySelector<HTMLFormElement>(".composer")!;
   const input = shadow.querySelector<HTMLInputElement>("input")!;
-  const sendBtn = shadow.querySelector<HTMLButtonElement>(".composer button")!;
+  const sendBtn = shadow.querySelector<HTMLButtonElement>(".composer .send")!;
+  const micBtn = shadow.querySelector<HTMLButtonElement>(".composer .mic")!;
+  const voiceHint = shadow.querySelector<HTMLElement>(".voice-hint")!;
   const nameEl = shadow.querySelector<HTMLElement>(".name")!;
   const avatarEl = shadow.querySelector<HTMLImageElement>(".avatar")!;
   const avatarFallback = shadow.querySelector<HTMLElement>(".avatar-fallback")!;
@@ -232,6 +241,7 @@ interface ChatResponse {
       requestAnimationFrame(() => panel.classList.add("open"));
       input.focus();
     } else {
+      recognition?.abort();
       panel.classList.remove("open");
       closeTimer = setTimeout(() => {
         if (!opened) panel.hidden = true;
@@ -545,8 +555,120 @@ interface ChatResponse {
     }
   }
 
+  // ---- Voice input ---------------------------------------------------------
+  // The browser's own speech recognition (Chrome, Edge, Safari, Samsung
+  // Internet) — nothing is recorded or sent to us; the words simply appear
+  // in the box, where the visitor can check them before sending. The button
+  // only shows where the browser supports it (and on https).
+  type Recognition = {
+    lang: string;
+    interimResults: boolean;
+    continuous: boolean;
+    maxAlternatives: number;
+    start(): void;
+    stop(): void;
+    abort(): void;
+    onresult: ((e: { results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null;
+    onerror: ((e: { error: string }) => void) | null;
+    onend: (() => void) | null;
+  };
+  const speechWindow = window as unknown as Record<string, unknown>;
+  const SpeechRecognitionCtor = (speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition) as (new () => Recognition) | undefined;
+  let recognition: Recognition | null = null;
+  let silenceTimer: ReturnType<typeof setTimeout> | undefined;
+  let maxTimer: ReturnType<typeof setTimeout> | undefined;
+  let hintTimer: ReturnType<typeof setTimeout> | undefined;
+  const SILENCE_MS = 2500;
+  const MAX_LISTEN_MS = 60_000;
+  if (SpeechRecognitionCtor && window.isSecureContext) micBtn.hidden = false;
+
+  function showVoiceHint(text: string, tone: "info" | "error", autoHideMs?: number) {
+    clearTimeout(hintTimer);
+    voiceHint.textContent = text;
+    voiceHint.classList.toggle("error", tone === "error");
+    voiceHint.hidden = false;
+    if (autoHideMs) hintTimer = setTimeout(() => (voiceHint.hidden = true), autoHideMs);
+  }
+
+  function setListening(on: boolean) {
+    micBtn.classList.toggle("listening", on);
+    micBtn.setAttribute("aria-pressed", String(on));
+    micBtn.setAttribute("aria-label", on ? "Stop listening" : "Speak your message");
+    form.classList.toggle("listening", on);
+    input.placeholder = on ? "Listening…" : "Type a message…";
+    if (on) showVoiceHint("Listening — speak naturally. Tap the mic again when you're done.", "info");
+    else if (!voiceHint.classList.contains("error")) voiceHint.hidden = true;
+  }
+
+  function stopListening() {
+    clearTimeout(silenceTimer);
+    clearTimeout(maxTimer);
+    recognition?.stop();
+  }
+
+  const VOICE_ERRORS: Record<string, string> = {
+    "not-allowed": "Microphone access is blocked. Allow it for this site in your browser settings to speak your message.",
+    "service-not-allowed": "Microphone access is blocked. Allow it for this site in your browser settings to speak your message.",
+    "no-speech": "I didn't hear anything — tap the mic and try again.",
+    "audio-capture": "No microphone was found on this device.",
+    network: "Voice typing needs an internet connection — please type instead.",
+    "language-not-supported": "Voice typing isn't available in this language here — please type instead.",
+  };
+
+  function startListening() {
+    if (!SpeechRecognitionCtor) return;
+    const rec = new SpeechRecognitionCtor();
+    recognition = rec;
+    rec.lang = document.documentElement.lang || navigator.language || "en-US";
+    rec.interimResults = true;
+    rec.continuous = true;
+    rec.maxAlternatives = 1;
+    // Anything already typed stays; speech is added after it.
+    const prefix = input.value.trim() ? `${input.value.trim()} ` : "";
+    rec.onresult = (e) => {
+      let spoken = "";
+      for (let i = 0; i < e.results.length; i++) spoken += e.results[i]![0].transcript;
+      const text = spoken.replace(/\s+/g, " ").trimStart();
+      input.value = prefix + (text ? text.charAt(0).toUpperCase() + text.slice(1) : "");
+      sendBtn.disabled = input.value.trim().length === 0;
+      input.scrollLeft = input.scrollWidth;
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(stopListening, SILENCE_MS);
+    };
+    rec.onerror = (e) => {
+      const message = VOICE_ERRORS[e.error];
+      if (message) showVoiceHint(message, "error", 6000);
+    };
+    rec.onend = () => {
+      clearTimeout(silenceTimer);
+      clearTimeout(maxTimer);
+      recognition = null;
+      setListening(false);
+      if (opened) input.focus();
+    };
+    try {
+      voiceHint.classList.remove("error");
+      rec.start();
+      setListening(true);
+      maxTimer = setTimeout(stopListening, MAX_LISTEN_MS);
+    } catch {
+      recognition = null;
+      showVoiceHint("Voice typing couldn't start — please try again.", "error", 5000);
+    }
+  }
+
+  micBtn.addEventListener("click", () => {
+    if (recognition) stopListening();
+    else startListening();
+  });
+
   form.addEventListener("submit", (e) => {
     e.preventDefault();
+    if (recognition) {
+      // Send what's in the box now; late results must not refill it.
+      recognition.onresult = null;
+      stopListening();
+    }
     const text = input.value.trim();
     if (!text) return;
     input.value = "";
@@ -723,7 +845,7 @@ interface ChatResponse {
       .csat-skip { background: none; border: none; cursor: pointer; font-size: 11px; color: var(--text-secondary); text-decoration: underline; }
 
       .composer { display: flex; gap: 8px; padding: 13px; border-top: 1px solid var(--composer-border); background: var(--composer-bg); }
-      .composer input { flex: 1; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 11px;
+      .composer input { flex: 1; min-width: 0; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 11px;
         padding: 10px 13px; color: var(--input-text); font-size: 13.5px; outline: none; transition: border-color 0.15s, background 0.15s; }
       .composer input:focus { border-color: rgba(53,189,240,0.55); background: var(--input-focus-bg); }
       .composer input::placeholder { color: var(--input-placeholder); }
@@ -736,9 +858,35 @@ interface ChatResponse {
       .composer button:active:not(:disabled) { transform: scale(0.94); }
       .composer button:disabled { opacity: 0.35; cursor: default; box-shadow: none; }
 
+      .composer button.mic {
+        position: relative; background: var(--input-bg); border: 1px solid var(--input-border); color: var(--text-secondary);
+        box-shadow: none; flex-shrink: 0;
+      }
+      .composer button.mic:hover { color: var(--brand-2); filter: none; border-color: rgba(53,189,240,0.45); }
+      .composer button.mic .wave { display: none; align-items: center; gap: 2.5px; height: 18px; }
+      .composer button.mic .wave i { display: block; width: 3px; height: 6px; border-radius: 2px; background: currentColor; animation: wave 0.9s ease-in-out infinite; }
+      .composer button.mic .wave i:nth-child(2) { animation-delay: 0.12s; }
+      .composer button.mic .wave i:nth-child(3) { animation-delay: 0.24s; }
+      .composer button.mic .wave i:nth-child(4) { animation-delay: 0.36s; }
+      .composer button.mic .wave i:nth-child(5) { animation-delay: 0.48s; }
+      .composer button.mic.listening {
+        background: linear-gradient(135deg, #ff5a5f, #e5383b); border-color: transparent; color: #ffffff;
+        animation: mic-pulse 1.6s ease-out infinite;
+      }
+      .composer button.mic.listening .mic-icon { display: none; }
+      .composer button.mic.listening .wave { display: flex; }
+      .composer.listening input { border-color: rgba(229,56,59,0.45); }
+      .voice-hint { margin: 0 13px -4px; padding: 8px 11px; border-radius: 10px; font-size: 11.5px; line-height: 1.45;
+        color: var(--text-secondary); background: var(--input-bg); border: 1px solid var(--input-border); animation: hint-in 0.18s ease-out; }
+      .voice-hint[hidden] { display: none; }
+      .voice-hint.error { color: #e5383b; border-color: rgba(229,56,59,0.3); background: rgba(229,56,59,0.07); }
+      @keyframes wave { 0%, 100% { height: 5px; } 50% { height: 16px; } }
+      @keyframes mic-pulse { 0% { box-shadow: 0 0 0 0 rgba(229,56,59,0.45); } 70% { box-shadow: 0 0 0 9px rgba(229,56,59,0); } 100% { box-shadow: 0 0 0 0 rgba(229,56,59,0); } }
+      @keyframes hint-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
 
       @media (prefers-reduced-motion: reduce) {
-        .avatar-ring, .bubble.typing em, .status-dot, .launcher { animation: none !important; }
+        .avatar-ring, .bubble.typing em, .status-dot, .launcher, .composer button.mic, .composer button.mic .wave i, .voice-hint { animation: none !important; }
       }
 
       @media (max-width: 480px) {

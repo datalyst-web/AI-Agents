@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { Card, CardHeader, CardBody, Button, Badge, AgentStatusBadge, StatTile, ContentSourceTag, LineChart, BarBreakdown, CardRowSkeleton, Modal } from "@chat-agent/ui";
 import { useAuth } from "@/lib/auth";
 import { api, ApiError } from "@/lib/api";
+import { ReplyPacingCard, type ReplyPacing } from "@/components/ReplyPacingCard";
+import { VoiceInputButton } from "@/components/VoiceInputButton";
 
 interface AgentDetail {
   id: string;
@@ -14,7 +16,7 @@ interface AgentDetail {
   /** LIVE only: saved edits customers don't get until approved and published. */
   hasUnpublishedChanges?: boolean;
   approvedAt?: string | null;
-  personality: { name: string; greeting: string; systemInstructions: string; tone: string };
+  personality: { name: string; greeting: string; systemInstructions: string; tone: string; replyPacing?: ReplyPacing };
   modelRouting: {
     preferredProvider: "anthropic" | "openai" | "gemini";
     anthropicModelTier: "haiku" | "sonnet" | "opus";
@@ -159,7 +161,7 @@ function CopyField({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="flex items-center gap-2">
-      <code className="flex-1 overflow-x-auto whitespace-nowrap rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-xs text-foreground/70">
+      <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-xs text-foreground/70">
         {value}
       </code>
       <button
@@ -210,6 +212,8 @@ function TestConversationBody({
   onCancelConfirmation: () => void;
   scrollRef: RefObject<HTMLDivElement>;
 }) {
+  const [listening, setListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   return (
     <>
       <div ref={scrollRef} className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
@@ -273,14 +277,20 @@ function TestConversationBody({
       ) : null}
       {error ? <p className="border-t border-surface-border px-4 py-2 text-xs text-danger">{error}</p> : null}
 
+      {voiceError || listening ? (
+        <p className={`border-t border-surface-border px-4 py-2 text-xs ${voiceError ? "text-danger" : "text-foreground/50"}`} role="status">
+          {voiceError ?? "Listening — speak naturally. Tap the mic again when you're done."}
+        </p>
+      ) : null}
       <form onSubmit={onSubmit} className="flex gap-2 border-t border-surface-border p-3">
         <input
           value={input}
           onChange={(e) => onInputChange(e.target.value)}
-          placeholder="Type a message to test the agent..."
+          placeholder={listening ? "Listening…" : "Type a message to test the agent..."}
           disabled={sending}
-          className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
+          className={`w-0 min-w-0 flex-1 rounded-lg border bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none transition-colors focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20 ${listening ? "border-danger/40" : "border-foreground/10"}`}
         />
+        <VoiceInputButton value={input} onChange={onInputChange} disabled={sending} onListeningChange={setListening} onError={setVoiceError} />
         <Button type="submit" disabled={sending || !input.trim()}>
           Send
         </Button>
@@ -842,8 +852,15 @@ export default function AgentDetailPage() {
           )}
         </div>
       ) : null}
-      {agent.status === "DRAFT" && !isStaff ? (
-        <p className="text-xs text-foreground/40">Your AI Setup Team is configuring this agent — check back soon.</p>
+      {["DRAFT", "CONFIGURING", "KNOWLEDGE_PROCESSING"].includes(agent.status) && !isStaff ? (
+        <p className="text-xs text-foreground/40">Your AI Setup Team is configuring this agent — we&apos;ll email you the moment it&apos;s ready to try.</p>
+      ) : null}
+      {agent.status === "CONFIGURING" && isStaff ? (
+        <p className="text-xs text-foreground/40">
+          Drafted from the client&apos;s onboarding questionnaire. It moves to Testing and the client is emailed that it&apos;s ready 30
+          minutes after they submitted — review and adjust it before then, or click{" "}
+          <span className="text-foreground/70">Start Testing</span> to release it now.
+        </p>
       ) : null}
       {agent.status === "DRAFT" && isStaff ? (
         <p className="text-xs text-foreground/40">
@@ -1197,6 +1214,20 @@ export default function AgentDetailPage() {
             </CardBody>
           </Card>
 
+          <ReplyPacingCard
+            value={agent.personality.replyPacing}
+            isLive={agent.status === "LIVE"}
+            onSave={async (replyPacing) => {
+              if (!user) return;
+              try {
+                await api.updateAgent(user.tenantId, agentId, { personality: { replyPacing } });
+              } catch (err) {
+                throw new Error(err instanceof ApiError ? err.message : "Save failed.");
+              }
+              refreshAgent();
+            }}
+          />
+
           {versions.length > 0 ? (
             <Card>
               <CardHeader title="Version history" subtitle="A snapshot is taken every time you publish to Live. Roll back if a change causes problems." />
@@ -1289,7 +1320,7 @@ export default function AgentDetailPage() {
                   placeholder="https://example.com/faq"
                   value={crawlUrl}
                   onChange={(e) => setCrawlUrl(e.target.value)}
-                  className="flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2 text-sm text-foreground outline-none focus:border-brand-500"
+                  className="w-0 min-w-0 flex-1 rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2 text-sm text-foreground outline-none focus:border-brand-500"
                 />
                 <Button type="submit" variant="secondary">Crawl</Button>
               </form>
@@ -1303,8 +1334,8 @@ export default function AgentDetailPage() {
               ) : (
                 knowledge.map((k) => (
                   <div key={k.id} className="flex flex-wrap items-center justify-between gap-y-2 px-5 py-3 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="text-foreground">{k.originalFilename ?? k.sourceUrl ?? k.type}</span>
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="min-w-0 break-all text-foreground">{k.originalFilename ?? k.sourceUrl ?? k.type}</span>
                       <ContentSourceTag source={k.addedBySource} />
                     </div>
                     <div className="flex items-center gap-3">

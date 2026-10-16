@@ -15,8 +15,9 @@ let withTenant: typeof import("@chat-agent/db").withTenant;
 let app: FastifyInstance;
 const createdTenantIds: string[] = [];
 const createdStaffIds: string[] = [];
-const sentEmails: { to: string; subject: string; text: string; attachments?: { filename: string }[] }[] = [];
+const sentEmails: { to: string; subject: string; text: string; html?: string; attachments?: { filename: string }[] }[] = [];
 const storedKeys: string[] = [];
+const enqueued: { tenantId: string; kind: string }[] = [];
 
 beforeAll(async () => {
   if (!process.env.CHAT_APP_DATABASE_URL) return;
@@ -39,7 +40,7 @@ beforeAll(async () => {
   await app.register(multipart, { limits: { fileSize: 25 * 1024 * 1024 } });
   await app.register(authPlugin, { prisma });
   const email = {
-    send: async (m: { to: string; subject: string; text: string; attachments?: { filename: string }[] }) => {
+    send: async (m: { to: string; subject: string; text: string; html?: string; attachments?: { filename: string }[] }) => {
       sentEmails.push(m);
       return { sent: true };
     },
@@ -51,7 +52,12 @@ beforeAll(async () => {
     },
     presignedDownloadUrl: async (key: string) => `https://files.example/${encodeURIComponent(key)}`,
   };
-  const ctx = { prisma, email, objectStore } as never;
+  const queue = {
+    enqueue: async (_target: string, job: { tenantId: string; kind: string }) => {
+      enqueued.push(job);
+    },
+  };
+  const ctx = { prisma, email, objectStore, queue } as never;
   await registerOnboardingRoutes(app, ctx);
   await registerAgentRoutes(app, ctx);
   await registerAuthRoutes(app, ctx);
@@ -138,11 +144,32 @@ describe.skipIf(!process.env.CHAT_APP_DATABASE_URL)("free-trial onboarding (real
     expect(await me()).toMatchObject({ onboardingIntakeRequired: false, trialStarted: false });
 
     const staffMail = sentEmails.find((m) => m.to === t.staffEmail);
-    expect(staffMail?.subject).toBe("New free trial: Sunrise Dental");
+    expect(staffMail?.subject).toMatch(/^New free trial: Sunrise Dental — assistant drafted, client notified at /);
+    expect(staffMail?.html).toContain("Left for our team");
     expect(staffMail?.text).toContain("Do you accept medical aid?");
     expect(staffMail?.text).toContain("WordPress — Install it for me");
     expect(staffMail?.attachments?.map((a) => a.filename)).toEqual(["logo.png", "price list.txt"]);
     expect(sentEmails.find((m) => m.to === t.ownerEmail)?.subject).toMatch(/building your AI assistant/);
+    // The client is only told it's ready later, by the release sweep.
+    expect(sentEmails.some((m) => m.to === t.ownerEmail && /is ready/.test(m.subject))).toBe(false);
+
+    // Their assistant was drafted through the normal pipeline, not published.
+    const built = await withTenant(prisma, { tenantId: t.tenantId }, async (tx) => ({
+      agents: await tx.agent.findMany({ where: { tenantId: t.tenantId } }),
+      sources: await tx.knowledgeSource.findMany({ where: { tenantId: t.tenantId } }),
+      tenant: await tx.tenant.findUniqueOrThrow({ where: { id: t.tenantId } }),
+    }));
+    expect(built.agents).toHaveLength(1);
+    expect(built.agents[0]).toMatchObject({ status: "CONFIGURING", name: "Sunrise Dental Assistant", createdBySource: "STAFF_MANAGED_SETUP" });
+    expect((built.agents[0]!.personality as { systemInstructions: string }).systemInstructions).not.toContain("$30");
+    expect(built.sources.map((s) => s.type).sort()).toEqual(["MANUAL_FAQ", "MANUAL_FAQ", "TXT"]);
+    expect(enqueued.filter((j) => j.tenantId === t.tenantId)).toHaveLength(3);
+    expect(built.tenant.logoObjectKey).toMatch(new RegExp(`^chat/${t.tenantId}/branding/`));
+    const autoBuild = (built.tenant.onboardingIntake as { autoBuild: { agentId: string; releaseAt: string } }).autoBuild;
+    expect(autoBuild.agentId).toBe(built.agents[0]!.id);
+    const delay = new Date(autoBuild.releaseAt).getTime() - built.tenant.onboardingIntakeAt!.getTime();
+    expect(delay).toBe(30 * 60 * 1000);
+
 
     const view = await app.inject({ method: "GET", url: `/v1/platform/tenants/${t.tenantId}/intake`, headers: t.admin });
     expect(view.statusCode).toBe(200);
@@ -157,6 +184,16 @@ describe.skipIf(!process.env.CHAT_APP_DATABASE_URL)("free-trial onboarding (real
 
     // Clients can't read the staff view.
     expect((await app.inject({ method: "GET", url: `/v1/platform/tenants/${t.tenantId}/intake`, headers: t.owner })).statusCode).toBe(403);
+
+    // Submitting again never makes a second agent, and keeps the release record.
+    const again = multipartBody(ANSWERS);
+    expect((await app.inject({ method: "POST", url: `/v1/tenants/${t.tenantId}/intake`, headers: { ...t.owner, ...again.headers }, payload: again.payload })).statusCode).toBe(200);
+    const after = await withTenant(prisma, { tenantId: t.tenantId }, async (tx) => ({
+      agents: await tx.agent.count({ where: { tenantId: t.tenantId } }),
+      tenant: await tx.tenant.findUniqueOrThrow({ where: { id: t.tenantId } }),
+    }));
+    expect(after.agents).toBe(1);
+    expect((after.tenant.onboardingIntake as { autoBuild?: unknown }).autoBuild).toEqual(autoBuild);
   });
 
   it("requires the essentials and the right person", async () => {

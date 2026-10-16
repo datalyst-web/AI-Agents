@@ -394,6 +394,15 @@ onboarded by our team another way, not by this flow):
    (`apps/api/src/routes/onboarding.routes.ts`).
 3. Every staff member is emailed all answers (files attached up to 4 MB);
    Managed Setup shows a "Questionnaire" button per client.
+   On submit, `lib/intakeAutoBuild.ts` drafts the agent through the normal
+   pipeline (agent row in `CONFIGURING`, FAQ/file/crawl knowledge sources,
+   ingestion queue, branding) — business facts go to the knowledge base,
+   never the instructions. The staff email is a build report: what was set
+   up and what is left for a person (channels, calendar, unsupported files).
+   Thirty minutes after submission, `intakeAgentReleaseSweep` (workers, every
+   minute) moves it to `TESTING` and emails the client that it's ready —
+   held up to 2 h while knowledge is still ingesting; skipped if staff
+   already pressed Start Testing. Staff edit it before then like any agent.
 4. Staff build, the client approves, it's published. **The 14 days start at
    first go-live** (`trialEndsAt` is null until then; the publish route sets
    it and emails the client). Reminders at 3 days and on the last day; at
@@ -523,6 +532,18 @@ invoiced and reported on separately.
   Meta app is in Development mode it only works for its own admins' pages;
   serving clients needs Meta business verification and app review —
   `docs/meta-app-review.md` is the submission checklist.
+- **Reply timing** — `personality.replyPacing` (staff set it on the agent's
+  Configuration tab; on a LIVE agent it waits for client approval like any
+  change): instant, a fixed delay up to 15 min, or human-like pacing, with
+  optional merging of quick back-to-back messages into one reply, "typing…",
+  and an urgent-message bypass. Messaging channels only — the widget always
+  answers at once. Delayed replies are durable queue jobs consumed by the
+  API (`engine/replyPacing.ts`, started in `server.ts`, not `buildApp`); a
+  conversation a person has taken over is never delayed.
+- **Voice input** — the widget, standalone page and Test Agent chat have a
+  mic using the browser's own speech recognition: words land in the box to
+  be checked before sending, no audio reaches us, and the button is hidden
+  where the browser can't do it (Firefox).
 - **Data deletion `[LOCKED]`** — `POST /v1/channels/meta/data-deletion`
   (Meta's callback, required for app review) verifies the `signed_request`
   against `META_APP_SECRET` and erases that person across **every** tenant

@@ -15,4 +15,6 @@ export const QUEUE_NAMES = {
   knowledgeIngest: "chat-knowledge-ingest",
   workflowRun: "chat-workflow-run",
   followup: "chat-followup",
+  /** Messaging-channel replies held back by an agent's reply pacing — consumed by the API (apps/api/src/engine/replyPacing.ts). */
+  channelReply: "chat-channel-reply",
 } as const;
