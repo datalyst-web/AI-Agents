@@ -38,6 +38,7 @@ function fakeProvider(overrides: Partial<AIProvider> = {}): AIProvider {
       yield { delta: "ok", done: true, finishReason: "stop", usage: { inputTokens: 1, outputTokens: 1 } };
     }),
     toolCall: vi.fn(),
+    transcribe: vi.fn(async () => ({ text: "hello", model: "unset", provider: "gemini" as const, usage: { inputTokens: 1, outputTokens: 1 } })),
     embed: vi.fn(async (): Promise<EmbedResult> => ({
       vectors: [[0.1, 0.2]],
       model: "unset",
@@ -154,5 +155,23 @@ describe("ModelRouter.embed() — embeddingModelIds precedence over caller overr
     await expect(router.embed({ model: "", input: ["hello"] })).rejects.toThrow(
       /No pinned embedding model id/,
     );
+  });
+});
+
+describe("ModelRouter.transcribe", () => {
+  it("falls back to Gemini, with Gemini's own model id, when OpenAI's speech-to-text fails", async () => {
+    const openai = fakeProvider({ name: "openai", transcribe: vi.fn(async () => { throw new Error("openai down"); }) });
+    const gemini = fakeProvider({ name: "gemini" });
+    const router = new ModelRouter({ providers: { openai, gemini }, modelIds: { gemini: "gemini-chat-model" } });
+    const result = await router.transcribe({ audio: new Uint8Array([1, 2]), mimeType: "audio/ogg", filename: "voice.ogg" });
+    expect(result.text).toBe("hello");
+    expect(gemini.transcribe).toHaveBeenCalledWith(expect.objectContaining({ model: "gemini-chat-model", filename: "voice.ogg" }));
+  });
+
+  it("never sends audio to a provider without speech input", async () => {
+    const anthropic = fakeProvider({ name: "anthropic" });
+    const router = new ModelRouter({ providers: { anthropic }, modelIds: {} });
+    await expect(router.transcribe({ audio: new Uint8Array([1]), mimeType: "audio/ogg", filename: "v.ogg" })).rejects.toThrow();
+    expect(anthropic.transcribe).not.toHaveBeenCalled();
   });
 });

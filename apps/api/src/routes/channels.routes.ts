@@ -12,6 +12,7 @@ import { telegramCall, graphApiGet, graphApiSend, resolvePageAccessToken } from 
 import { checkUsageAllowance } from "../lib/usageEnforcement.js";
 import { processCustomerMessage, recordBusinessAppReply } from "../engine/agentLoop.js";
 import { handleChannelInbound } from "../engine/replyPacing.js";
+import { metaAttachmentLabel, prepareAttachment, telegramVoice, urlVoice, whatsappVoice, type InboundAttachment, type MediaLabel } from "../lib/channelMedia.js";
 import { verifyMetaSignedRequest } from "../lib/metaSignedRequest.js";
 import { env } from "../env.js";
 
@@ -340,7 +341,20 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
 
     const botToken = decryptChannelCredential(connection.encryptedCredential);
     const update = request.body as {
-      message?: { chat: { id: number }; text?: string };
+      message?: {
+        chat: { id: number };
+        text?: string;
+        caption?: string;
+        voice?: { file_id: string; mime_type?: string };
+        audio?: { file_id: string; mime_type?: string };
+        video_note?: { file_id: string };
+        photo?: unknown[];
+        video?: unknown;
+        document?: unknown;
+        sticker?: unknown;
+        location?: unknown;
+        contact?: unknown;
+      };
       callback_query?: { id: string; message?: { chat: { id: number } }; data?: string };
     };
 
@@ -367,9 +381,40 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
         return;
       }
 
-      const chatId = update.message?.chat.id;
-      const text = update.message?.text;
-      if (!chatId || !text) {
+      const message = update.message;
+      const chatId = message?.chat.id;
+      if (!chatId || !message) {
+        reply.send({ ok: true });
+        return;
+      }
+      // Voice notes are transcribed; photos, files and the rest get a
+      // polite "please tell me in words" instead of silence (lib/channelMedia.ts).
+      const voice = message.voice ?? message.audio;
+      const mediaLabel: MediaLabel | null = message.photo
+        ? "photo"
+        : message.video || message.video_note
+          ? "video"
+          : message.document
+            ? "file"
+            : message.sticker
+              ? "sticker"
+              : message.location
+                ? "location"
+                : message.contact
+                  ? "contact"
+                  : null;
+      let text = message.text ?? message.caption ?? "";
+      let prepared: Awaited<ReturnType<typeof prepareAttachment>> | undefined;
+      if (!message.text && voice) {
+        prepared = await prepareAttachment(ctx.router, telegramVoice(botToken, voice.file_id, voice.mime_type));
+      } else if (!message.text && mediaLabel) {
+        prepared = await prepareAttachment(ctx.router, { kind: "media", label: mediaLabel });
+        if (message.caption) {
+          prepared = { ...prepared, text: `${message.caption}\n[They also attached a ${mediaLabel}, which you can't open here.]`, storedContent: `${prepared.storedContent}: ${message.caption}` };
+        }
+      }
+      if (prepared) text = prepared.text;
+      if (!text) {
         reply.send({ ok: true });
         return;
       }
@@ -386,6 +431,7 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
           identifierType: "telegram_chat_id",
           sender: String(chatId),
           text,
+          prepared: prepared ? { inputKind: prepared.inputKind, storedContent: prepared.storedContent, transcriptionUsage: prepared.transcriptionUsage } : undefined,
         },
         botToken,
       );
@@ -460,14 +506,25 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
           id?: string;
           messaging?: Array<{
             sender?: { id?: string };
-            message?: { text?: string; is_echo?: boolean };
+            message?: { text?: string; is_echo?: boolean; attachments?: Array<{ type?: string; payload?: { url?: string } }> };
             postback?: { title?: string };
           }>;
           changes?: Array<{
             field?: string;
             value?: {
               metadata?: { phone_number_id?: string };
-              messages?: Array<{ id?: string; from?: string; type?: string; text?: { body?: string } }>;
+              messages?: Array<{
+                id?: string;
+                from?: string;
+                type?: string;
+                text?: { body?: string };
+                audio?: { id?: string; mime_type?: string };
+                image?: { caption?: string };
+                video?: { caption?: string };
+                document?: { caption?: string };
+                button?: { text?: string };
+                interactive?: { button_reply?: { title?: string }; list_reply?: { title?: string } };
+              }>;
               /** smb_message_echoes: what the business sent from the WhatsApp Business app (coexistence). */
               message_echoes?: Array<{ to?: string; type?: string; text?: { body?: string } }>;
             };
@@ -491,13 +548,28 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
               }
               for (const msg of change.value?.messages ?? []) {
                 const from = msg.from;
-                const body = msg.text?.body;
-                if (!from || msg.type !== "text" || !body) continue;
+                if (!from) continue;
+                // Text, and the text of a tapped button or list choice.
+                const body =
+                  msg.text?.body ?? msg.button?.text ?? msg.interactive?.button_reply?.title ?? msg.interactive?.list_reply?.title;
+                // Reactions, read receipts, "unsupported" and system notices aren't messages to answer.
+                const label: MediaLabel | null =
+                  msg.type === "image" ? "photo" : msg.type === "video" ? "video" : msg.type === "document" ? "file"
+                  : msg.type === "sticker" ? "sticker" : msg.type === "location" ? "location" : msg.type === "contacts" ? "contact" : null;
+                const caption = msg.image?.caption ?? msg.video?.caption ?? msg.document?.caption;
+                const attachment: MetaAttachment | undefined =
+                  msg.type === "audio" && msg.audio?.id
+                    ? { kind: "whatsapp_voice", mediaId: msg.audio.id, mimeType: msg.audio.mime_type }
+                    : label
+                      ? { kind: "media", label, caption }
+                      : undefined;
+                if (!body && !attachment) continue;
                 await handleMetaInboundMessage(ctx, {
                   channel: "WHATSAPP",
                   externalId: phoneNumberId,
                   senderId: from,
-                  text: body,
+                  text: body ?? "",
+                  attachment: body ? undefined : attachment,
                   identifierType: "whatsapp_phone_number",
                   inboundMessageId: msg.id,
                 });
@@ -509,15 +581,22 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
             for (const messagingEvent of entry.messaging ?? []) {
               const senderId = messagingEvent.sender?.id;
               const text = messagingEvent.message?.text;
+              const first = messagingEvent.message?.attachments?.[0];
+              const attachment: MetaAttachment | undefined = first
+                ? first.type === "audio" && first.payload?.url
+                  ? { kind: "url_voice", url: first.payload.url }
+                  : { kind: "media", label: metaAttachmentLabel(first.type) }
+                : undefined;
               // is_echo: a message the connected Page/IG account itself
               // sent (including our own replies below) — skip, or we'd
               // process our own outbound messages as new customer input.
-              if (!senderId || !text || messagingEvent.message?.is_echo) continue;
+              if (!senderId || (!text && !attachment) || messagingEvent.message?.is_echo) continue;
               await handleMetaInboundMessage(ctx, {
                 channel: payload.object === "page" ? "FACEBOOK_MESSENGER" : "INSTAGRAM",
                 externalId: pageOrIgId,
                 senderId,
-                text,
+                text: text ?? "",
+                attachment: text ? undefined : attachment,
                 identifierType: payload.object === "page" ? "facebook_psid" : "instagram_igsid",
               });
             }
@@ -630,6 +709,12 @@ export async function registerChannelRoutes(app: FastifyInstance, ctx: AppContex
   });
 }
 
+/** What a Meta webhook carried besides text; downloaded once the connection's token is known. */
+type MetaAttachment =
+  | { kind: "whatsapp_voice"; mediaId: string; mimeType?: string }
+  | { kind: "url_voice"; url: string }
+  | { kind: "media"; label: MediaLabel; caption?: string };
+
 async function handleMetaInboundMessage(
   ctx: AppContext,
   params: {
@@ -639,6 +724,7 @@ async function handleMetaInboundMessage(
     text: string;
     identifierType: "whatsapp_phone_number" | "facebook_psid" | "instagram_igsid";
     inboundMessageId?: string;
+    attachment?: MetaAttachment;
   },
 ) {
   const connection = await withPlatformContext(ctx.prisma, (tx) =>
@@ -653,6 +739,20 @@ async function handleMetaInboundMessage(
   const allowance = await checkUsageAllowance(ctx.prisma, connection.tenantId);
   if (allowance.overHardCap) return;
 
+  const accessToken = decryptChannelCredential(connection.encryptedCredential);
+  let text = params.text;
+  let prepared: Awaited<ReturnType<typeof prepareAttachment>> | undefined;
+  if (params.attachment) {
+    const a = params.attachment;
+    const source: InboundAttachment =
+      a.kind === "whatsapp_voice" ? whatsappVoice(accessToken, a.mediaId, a.mimeType) : a.kind === "url_voice" ? urlVoice(a.url) : { kind: "media", label: a.label };
+    prepared = await prepareAttachment(ctx.router, source);
+    if (a.kind === "media" && a.caption) {
+      prepared = { ...prepared, text: `${a.caption}\n[They also attached a ${a.label}, which you can't open here.]`, storedContent: `${prepared.storedContent}: ${a.caption}` };
+    }
+    text = prepared.text;
+  }
+
   // Answered now or after the agent's reply delay (engine/replyPacing.ts).
   // A person handling the chat (dashboard takeover, or a reply from the
   // WhatsApp Business app) keeps the AI silent there.
@@ -666,10 +766,11 @@ async function handleMetaInboundMessage(
       externalId: params.channel === "WHATSAPP" ? params.externalId : null,
       identifierType: params.identifierType,
       sender: params.senderId,
-      text: params.text,
+      text,
       inboundMessageId: params.inboundMessageId,
+      prepared: prepared ? { inputKind: prepared.inputKind, storedContent: prepared.storedContent, transcriptionUsage: prepared.transcriptionUsage } : undefined,
     },
-    decryptChannelCredential(connection.encryptedCredential),
+    accessToken,
   );
 }
 

@@ -242,6 +242,8 @@ export const api = {
       platformLogoUrl: string | null;
       notifyEscalationEmail: boolean;
       notifyEscalationSms: boolean;
+      /** False until an SMS provider is connected on the server. */
+      smsAlertsAvailable?: boolean;
       notifyEscalationPush: boolean;
       phoneNumber: string | null;
     }>("/v1/auth/me"),

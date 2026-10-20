@@ -1,5 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type {
+  TranscribeOptions,
+  TranscribeResult,
   AIProvider,
   ChatMessage,
   EmbedOptions,
@@ -164,6 +166,15 @@ export class AnthropicProvider implements AIProvider {
 
   async toolCall(options: GenerateOptions & { tools: NonNullable<GenerateOptions["tools"]> }) {
     return this.generate(options);
+  }
+
+  async transcribe(_options: TranscribeOptions): Promise<TranscribeResult> {
+    throw new AIProviderError({
+      provider: this.name,
+      code: "invalid_request",
+      message: "Anthropic has no audio transcription API — route transcribe() through OpenAI or Gemini.",
+      retryable: false,
+    });
   }
 
   async embed(_options: EmbedOptions): Promise<EmbedResult> {

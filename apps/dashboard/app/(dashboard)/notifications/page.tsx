@@ -26,6 +26,7 @@ export default function NotificationsPage() {
   const { user } = useAuth();
   const [email, setEmail] = useState(true);
   const [sms, setSms] = useState(false);
+  const [smsAvailable, setSmsAvailable] = useState(false);
   const [push, setPush] = useState(false);
   const [phone, setPhone] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -45,6 +46,7 @@ export default function NotificationsPage() {
       .then((d) => {
         setEmail(d.notifyEscalationEmail);
         setSms(d.notifyEscalationSms);
+        setSmsAvailable(Boolean(d.smsAlertsAvailable));
         setPush(d.notifyEscalationPush);
         setPhone(d.phoneNumber ?? "");
         setLoaded(true);
@@ -139,6 +141,8 @@ export default function NotificationsPage() {
             </div>
             <input type="checkbox" checked={email} disabled={!loaded} onChange={(e) => setEmail(e.target.checked)} className="h-4 w-4" />
           </label>
+          {smsAvailable ? (
+          <>
           <label className="flex items-center justify-between gap-4">
             <div>
               <div className="text-sm text-foreground">SMS</div>
@@ -156,6 +160,8 @@ export default function NotificationsPage() {
               className="w-full rounded-lg border border-foreground/10 bg-foreground/5 px-3 py-2.5 text-sm text-foreground outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-500/20"
             />
           </div>
+          </>
+          ) : null}
 
           <div className="flex items-center justify-between gap-4">
             <div>

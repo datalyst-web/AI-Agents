@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "@chat-agent/db";
 import { withTenant, Prisma } from "@chat-agent/db";
-import type { ModelRouter, ChatMessage } from "@chat-agent/ai-provider";
+import type { ModelRouter, ChatMessage, ProviderName } from "@chat-agent/ai-provider";
 import type { SecretsProvider } from "@chat-agent/secrets";
 import type { QueueClient } from "@chat-agent/queue";
 import { retrieveKnowledge } from "@chat-agent/rag";
@@ -21,7 +21,7 @@ import { writeAuditLog } from "../lib/audit.js";
 import { encryptChannelCredential } from "../lib/channelCrypto.js";
 import { env } from "../env.js";
 import { servedAgentConfig } from "../lib/publishedAgentConfig.js";
-import { LANGUAGE_TEXT, cleanSearchQuery, detectedLanguage, languageTurn, looksLikeEnglish, searchQueryMessages } from "./language.js";
+import { LANGUAGE_TEXT, cleanSearchQuery, detectedLanguage, languageTurn, looksLikeEnglish, notice, searchQueryMessages } from "./language.js";
 
 // Identifier types whose raw value is the destination for an outbound
 // message (a Telegram chat_id, a WhatsApp/Messenger/Instagram sender id) —
@@ -141,6 +141,16 @@ export interface IncomingMessage {
    * this — see lib/publishedAgentConfig.ts.
    */
   useWorkingCopy?: boolean;
+  /**
+   * How the customer sent it. "voice": `customerMessage` is the transcript
+   * of a voice note. "media": a photo/file the agent can't see —
+   * `customerMessage` tells the model what arrived. Both skip nothing else.
+   */
+  inputKind?: "text" | "voice" | "media";
+  /** What staff see in the conversation, when it differs from customerMessage (e.g. "🎤 Voice note: …"). */
+  storedContent?: string;
+  /** The voice note's speech-to-text call, recorded against this conversation like any model call. */
+  transcriptionUsage?: { provider: ProviderName; modelId: string; inputTokens: number; outputTokens: number };
 }
 
 export interface PendingConfirmationResponse {
@@ -162,6 +172,8 @@ export interface AgentTurnResult {
    *  ultimately the widget) to start polling for new staff messages
    *  instead of treating `reply` as the actual answer. */
   humanTakeoverActive?: boolean;
+  /** The language this reply is in (null = English) — lets callers word their own fixed text to match. */
+  replyLanguage?: string | null;
 }
 
 interface StoredPendingToolCall {
@@ -381,6 +393,18 @@ export async function processCustomerMessage(
       conversation.humanTakeoverActive = false;
     }
 
+    if (input.transcriptionUsage) {
+      await recordUsage(tx, {
+        tenantId: input.tenantId,
+        agentId: input.agentId,
+        conversationId: conversation.id,
+        provider: input.transcriptionUsage.provider,
+        modelId: input.transcriptionUsage.modelId,
+        inputTokens: input.transcriptionUsage.inputTokens,
+        outputTokens: input.transcriptionUsage.outputTokens,
+      });
+    }
+
     // ---- Live human takeover ------------------------------------------------
     // A staff member has taken this specific conversation over (see
     // conversations.routes.ts's takeover/release endpoints) — record the
@@ -400,16 +424,17 @@ export async function processCustomerMessage(
           agentId: input.agentId,
           conversationId: conversation.id,
           role: "customer",
-          content: input.customerMessage,
+          content: input.storedContent ?? input.customerMessage,
           sentimentScore: scoreSentiment(input.customerMessage),
         },
       });
       return {
         conversationId: conversation.id,
-        reply: "A team member is handling this conversation and will reply here shortly.",
+        reply: notice("takeover", conversation.replyLanguage),
         toolInvocations: [],
         handoffTriggered: false,
         humanTakeoverActive: true,
+        replyLanguage: conversation.replyLanguage,
       };
     }
 
@@ -454,6 +479,7 @@ export async function processCustomerMessage(
     let humanApprovalRequested = false;
     let retrievedKnowledge: RetrievedKnowledgeChunk[] = [];
     let finalText = "";
+    let turnLanguage: string | null = conversation.replyLanguage;
 
     const storedPending = conversation.pendingToolCall as StoredPendingToolCall | null;
     const resolvingConfirmation = Boolean(storedPending && input.confirmToolCallId === storedPending.id);
@@ -553,7 +579,7 @@ export async function processCustomerMessage(
         // tenant's configured fallback — reusing that path rather than
         // inventing a new notification mechanism here.
         finalText =
-          "Sorry, I wasn't able to complete that action. Our team has been notified and will follow up.";
+          notice("actionFailed", conversation.replyLanguage);
       }
     } else {
       // ---- RETRIEVE -----------------------------------------------------
@@ -565,7 +591,7 @@ export async function processCustomerMessage(
       let detectedLang: string | null = null;
       // A conversation already in another language checks every message, so
       // a switch back to English is noticed too.
-      if (history.length > 0 || conversation.replyLanguage || !looksLikeEnglish(input.customerMessage)) {
+      if (input.inputKind !== "media" && (history.length > 0 || conversation.replyLanguage || !looksLikeEnglish(input.customerMessage))) {
         try {
           const rewrite = await deps.router.generate({
             messages: searchQueryMessages(history, input.customerMessage),
@@ -620,6 +646,8 @@ export async function processCustomerMessage(
         detected: detectedLang,
         message: input.customerMessage,
       });
+      // While offering a switch, the reply itself is already in the new language.
+      turnLanguage = language.languageOffer ?? language.replyLanguage;
       if (language.replyLanguage !== conversation.replyLanguage || language.languageOffer !== conversation.languageOffer) {
         await tx.conversation.update({
           where: { id: conversation.id },
@@ -866,7 +894,7 @@ export async function processCustomerMessage(
         agentId: input.agentId,
         conversationId: conversation.id,
         role: "customer",
-        content: input.customerMessage,
+        content: input.storedContent ?? input.customerMessage,
         sentimentScore,
       },
     });
@@ -995,6 +1023,7 @@ export async function processCustomerMessage(
       toolInvocations,
       handoffTriggered,
       handoffSummary,
+      replyLanguage: turnLanguage,
     };
   });
 }

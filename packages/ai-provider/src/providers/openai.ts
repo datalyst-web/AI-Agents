@@ -1,5 +1,7 @@
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import type {
+  TranscribeOptions,
+  TranscribeResult,
   AIProvider,
   ChatMessage,
   EmbedOptions,
@@ -167,6 +169,25 @@ export class OpenAIProvider implements AIProvider {
         model: options.model,
         provider: this.name,
         usage: { inputTokens: resp.usage.prompt_tokens },
+      };
+    } catch (err) {
+      throw mapOpenAIError(err);
+    }
+  }
+
+  async transcribe(options: TranscribeOptions): Promise<TranscribeResult> {
+    const model = options.model ?? "gpt-4o-mini-transcribe";
+    try {
+      const resp = await this.client.audio.transcriptions.create({
+        file: await toFile(Buffer.from(options.audio), options.filename, { type: options.mimeType }),
+        model,
+      });
+      const usage = (resp as { usage?: { input_tokens?: number; output_tokens?: number } }).usage;
+      return {
+        text: resp.text.trim(),
+        model,
+        provider: this.name,
+        usage: { inputTokens: usage?.input_tokens ?? 0, outputTokens: usage?.output_tokens ?? Math.ceil(resp.text.length / 4) },
       };
     } catch (err) {
       throw mapOpenAIError(err);

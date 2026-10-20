@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AuthProvider } from "@/lib/auth";
+import { ErrorReporter } from "@/components/ErrorReporter";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: PUBLIC_THEME_BOOTSTRAP }} />
       </head>
       <body className="font-sans antialiased">
+        <ErrorReporter />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

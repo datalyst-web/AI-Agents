@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { withTenant } from "@chat-agent/db";
 import type { AppContext } from "../lib/context.js";
 import { processCustomerMessage } from "../engine/agentLoop.js";
-import { isAffirmative } from "../engine/language.js";
+import { isAffirmative, notice } from "../engine/language.js";
 import { verifyWidgetToken } from "../lib/widgetToken.js";
 import { checkUsageAllowance } from "../lib/usageEnforcement.js";
 import { isSubscriptionLapsed } from "../lib/subscriptionAccess.js";
@@ -41,6 +41,15 @@ export async function registerChatRoutes(app: FastifyInstance, ctx: AppContext) 
     }
 
     const body = SendMessageSchema.parse(request.body);
+    // The visitor's conversation language, so even the fallback messages
+    // below read in it (engine/language.ts notice()).
+    const replyLanguage = body.conversationId
+      ? await withTenant(ctx.prisma, { tenantId: claim.tenantId, agentId }, (tx) =>
+          tx.conversation.findFirst({ where: { id: body.conversationId, tenantId: claim.tenantId, agentId }, select: { replyLanguage: true } }),
+        )
+          .then((c) => c?.replyLanguage ?? null)
+          .catch(() => null)
+      : null;
 
     // claim.tenantId comes from a signed widget token, so — unlike the
     // pre-auth lookups elsewhere — the tenant is already known and trusted
@@ -51,7 +60,7 @@ export async function registerChatRoutes(app: FastifyInstance, ctx: AppContext) 
       // Never delete data on expiry — route to a graceful fallback instead (CLAUDE.md Client Lifecycle).
       reply.code(503).send({
         error: "agent_unavailable",
-        message: "This assistant is temporarily unavailable. Please contact the business directly.",
+        message: notice("unavailable", replyLanguage),
       });
       return;
     }
@@ -66,7 +75,7 @@ export async function registerChatRoutes(app: FastifyInstance, ctx: AppContext) 
       request.log.warn({ tenantId: claim.tenantId, tokensUsed: allowance.tokensUsed }, "tenant over usage hard cap — refusing message");
       reply.code(503).send({
         error: "agent_unavailable",
-        message: "This assistant is temporarily unavailable. Please contact the business directly.",
+        message: notice("unavailable", replyLanguage),
       });
       return;
     }
@@ -102,7 +111,7 @@ export async function registerChatRoutes(app: FastifyInstance, ctx: AppContext) 
       request.log.error(err);
       reply.code(502).send({
         error: "agent_temporarily_unavailable",
-        message: "Sorry, I'm having trouble responding right now. Please try again in a moment.",
+        message: notice("trouble", replyLanguage),
       });
     }
   });

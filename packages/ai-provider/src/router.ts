@@ -7,6 +7,8 @@ import type {
   HealthCheckResult,
   ProviderName,
   StreamChunk,
+  TranscribeOptions,
+  TranscribeResult,
 } from "./types.js";
 import { AIProviderError } from "./types.js";
 
@@ -117,12 +119,12 @@ export class ModelRouter {
     return ordered.filter((p) => this.providers[p] !== undefined);
   }
 
-  private isCoolingDown(kind: "generate" | "embed", name: ProviderName): boolean {
+  private isCoolingDown(kind: "generate" | "embed" | "transcribe", name: ProviderName): boolean {
     const until = this.unhealthyUntil[`${kind}:${name}`];
     return until !== undefined && until > Date.now();
   }
 
-  private markUnhealthy(kind: "generate" | "embed", name: ProviderName): void {
+  private markUnhealthy(kind: "generate" | "embed" | "transcribe", name: ProviderName): void {
     this.unhealthyUntil[`${kind}:${name}`] = Date.now() + this.cooldownMs;
   }
 
@@ -235,6 +237,26 @@ export class ModelRouter {
       }
     }
     throw lastError instanceof Error ? lastError : new Error("No embedding provider available.");
+  }
+
+  /**
+   * Voice notes to text. OpenAI's speech-to-text first, Gemini (which hears
+   * audio directly) as failover; Anthropic has no audio input. Gemini uses
+   * the configured chat model id, since it transcribes through generation.
+   */
+  async transcribe(req: TranscribeOptions): Promise<TranscribeResult> {
+    let lastError: unknown;
+    for (const name of ["openai", "gemini"] as const) {
+      const provider = this.providers[name];
+      if (!provider || this.isCoolingDown("transcribe", name)) continue;
+      try {
+        return await provider.transcribe({ ...req, model: name === "gemini" ? this.modelIds.gemini : req.model });
+      } catch (err) {
+        lastError = err;
+        this.markUnhealthy("transcribe", name);
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("No transcription provider available.");
   }
 
   async healthCheckAll(): Promise<Record<ProviderName, HealthCheckResult>> {

@@ -619,6 +619,9 @@ export async function registerAuthRoutes(app: FastifyInstance, ctx: AppContext) 
       notifyEscalationSms: user.notifyEscalationSms,
       notifyEscalationPush: user.notifyEscalationPush,
       phoneNumber: user.phoneNumber,
+      // SMS alerts are only offered once an SMS provider is connected —
+      // otherwise the option would silently never deliver.
+      smsAlertsAvailable: Boolean(env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_FROM_NUMBER),
     });
   });
 

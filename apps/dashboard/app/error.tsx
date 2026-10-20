@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { BrandMark, StatusScreen } from "@/components/StatusScreen";
+import { reportError } from "@/lib/reportError";
 
 /**
  * Catches a page that throws while rendering. Without it Next.js shows
@@ -13,6 +14,7 @@ import { BrandMark, StatusScreen } from "@/components/StatusScreen";
 export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     console.error(error);
+    reportError(error, "render", error.digest);
   }, [error]);
 
   return (

@@ -11,7 +11,8 @@ import { graphApiSend, telegramCall } from "../lib/channelSend.js";
 import { servedAgentConfig } from "../lib/publishedAgentConfig.js";
 import { checkUsageAllowance } from "../lib/usageEnforcement.js";
 import { processCustomerMessage, type AgentTurnResult } from "./agentLoop.js";
-import { isAffirmative, isNegative } from "./language.js";
+import { isAffirmative, isNegative, notice } from "./language.js";
+import type { PreparedMessage } from "../lib/channelMedia.js";
 import { env } from "../env.js";
 
 /**
@@ -46,6 +47,8 @@ export interface ChannelInbound {
   text: string;
   /** WhatsApp's message id — lets us mark it read and show typing. */
   inboundMessageId?: string;
+  /** A voice note's transcript or a photo/file placeholder (lib/channelMedia.ts); `text` is what the agent reads. */
+  prepared?: Omit<PreparedMessage, "text">;
 }
 
 interface ChannelReplyJob {
@@ -62,6 +65,10 @@ interface ChannelReplyJob {
   burstToken?: string;
   inboundMessageId?: string;
   pacing: ReplyPacing;
+  /** Voice/media details; `encStored` is encrypted like the text. Never merged into a burst. */
+  inputKind?: PreparedMessage["inputKind"];
+  encStored?: string;
+  transcriptionUsage?: PreparedMessage["transcriptionUsage"];
 }
 
 const MAX_DELAY_SECONDS = 900;
@@ -207,7 +214,7 @@ export async function handleChannelInbound(ctx: AppContext, inbound: ChannelInbo
     // Anything still waiting in a burst goes out with this answer, and the
     // waiting job then finds nothing to do.
     let text = inbound.text;
-    if (pacing?.mergeBurst) {
+    if (pacing?.mergeBurst && !inbound.prepared) {
       const key = burstKey(inbound.connectionId, inbound.sender);
       const waiting = ((await burstStore().eval(FLUSH_BURST_SCRIPT, 2, `${key}:msgs`, `${key}:token`).catch(() => null)) as string[] | null) ?? [];
       if (waiting.length) text = [...waiting.map((m) => decryptChannelCredential(m)), inbound.text].join("\n");
@@ -227,8 +234,15 @@ export async function handleChannelInbound(ctx: AppContext, inbound: ChannelInbo
     encSender: encryptChannelCredential(inbound.sender),
     inboundMessageId: inbound.inboundMessageId,
     pacing,
+    ...(inbound.prepared
+      ? {
+          inputKind: inbound.prepared.inputKind,
+          encStored: encryptChannelCredential(inbound.prepared.storedContent),
+          transcriptionUsage: inbound.prepared.transcriptionUsage,
+        }
+      : {}),
   };
-  if (pacing.mergeBurst) {
+  if (pacing.mergeBurst && !inbound.prepared) {
     // Each new message restarts the wait: only the newest job's token answers.
     const key = burstKey(inbound.connectionId, inbound.sender);
     const token = randomUUID();
@@ -277,6 +291,10 @@ export async function runChannelReplyJob(ctx: AppContext, job: ChannelReplyJob):
     inboundMessageId: job.inboundMessageId,
     credential,
     pacing: job.pacing,
+    prepared:
+      job.inputKind && job.encStored
+        ? { inputKind: job.inputKind, storedContent: decryptChannelCredential(job.encStored), transcriptionUsage: job.transcriptionUsage }
+        : undefined,
   });
   if (!job.burstToken) {
     await run(); // a throw lets the queue retry this same job
@@ -296,7 +314,8 @@ export async function runChannelReplyJob(ctx: AppContext, job: ChannelReplyJob):
 async function answer(ctx: AppContext, a: ChannelInbound & { credential: string; pacing: ReplyPacing | null }): Promise<void> {
   if (a.pacing?.typingIndicator) await markSeen(a).catch(() => undefined);
   // Telegram confirms with its buttons; a typed yes works on every channel.
-  const confirmToolCallId = isAffirmative(a.text) ? ((await pendingToolCallId(ctx, a).catch(() => null)) ?? undefined) : undefined;
+  const confirmToolCallId =
+    a.prepared?.inputKind !== "media" && isAffirmative(a.text) ? ((await pendingToolCallId(ctx, a).catch(() => null)) ?? undefined) : undefined;
   const result = await processCustomerMessage(ctx, {
     tenantId: a.tenantId,
     agentId: a.agentId,
@@ -304,6 +323,9 @@ async function answer(ctx: AppContext, a: ChannelInbound & { credential: string;
     customerMessage: a.text,
     customerIdentifier: { type: a.identifierType, value: a.sender },
     confirmToolCallId,
+    inputKind: a.prepared?.inputKind,
+    storedContent: a.prepared?.storedContent,
+    transcriptionUsage: a.prepared?.transcriptionUsage,
   });
   // A person is handling this chat — stay silent, no placeholder.
   if (result.humanTakeoverActive) return;
@@ -330,8 +352,8 @@ async function deliver(a: ChannelInbound & { credential: string }, result: Agent
         reply_markup: {
           inline_keyboard: [
             [
-              { text: "✅ Confirm", callback_data: `confirm:${result.pendingConfirmation.toolCallId}` },
-              { text: "❌ Cancel", callback_data: `cancel:${result.pendingConfirmation.toolCallId}` },
+              { text: notice("confirmButton", result.replyLanguage), callback_data: `confirm:${result.pendingConfirmation.toolCallId}` },
+              { text: notice("cancelButton", result.replyLanguage), callback_data: `cancel:${result.pendingConfirmation.toolCallId}` },
             ],
           ],
         },
@@ -342,7 +364,7 @@ async function deliver(a: ChannelInbound & { credential: string }, result: Agent
     return;
   }
   const text = result.pendingConfirmation
-    ? `${result.pendingConfirmation.confirmationPrompt}\n\nReply YES to confirm or NO to cancel (hongu / kwete, yebo / hatshi).`
+    ? `${result.pendingConfirmation.confirmationPrompt}\n\n${notice("confirmHint", result.replyLanguage)}`
     : result.reply;
   if (!text) return;
   if (a.channel === "WHATSAPP") {

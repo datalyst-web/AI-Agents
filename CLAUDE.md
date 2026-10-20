@@ -551,6 +551,17 @@ invoiced and reported on separately.
   query, because knowledge bases are mostly English and "Imarii?" alone
   matches nothing. A typed yes in any language confirms a pending action on
   every channel (WhatsApp/Messenger/Instagram have no buttons).
+- **Voice notes and attachments** — `lib/channelMedia.ts`. A voice note on
+  WhatsApp, Telegram, Messenger or Instagram is downloaded and transcribed
+  through `router.transcribe()` (OpenAI speech-to-text, Gemini failover;
+  Anthropic has no audio), answered like typed text, shown to staff as
+  "🎤 Voice note: …" and billed as usage. Photos, files, stickers and
+  locations get a polite "please tell me in words" in the conversation's
+  language — never silence. Customer-visible fixed text (takeover note,
+  failures, confirm buttons) comes from `notice()` in `engine/language.ts`.
+- **Dashboard crashes** reach Sentry through `POST /v1/client-errors`
+  (rate-limited, error text only) — `lib/reportError.ts`. SMS alert options
+  only show once `TWILIO_*` is set.
 - **Voice input** — the widget, standalone page and Test Agent chat have a
   mic using the browser's own speech recognition: words land in the box to
   be checked before sending, no audio reaches us, and the button is hidden

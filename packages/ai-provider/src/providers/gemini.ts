@@ -1,5 +1,7 @@
 import { GoogleGenerativeAI, type Content, type FunctionDeclaration, SchemaType } from "@google/generative-ai";
 import type {
+  TranscribeOptions,
+  TranscribeResult,
   AIProvider,
   ChatMessage,
   EmbedOptions,
@@ -205,6 +207,30 @@ export class GeminiProvider implements AIProvider {
         model: options.model,
         provider: this.name,
         usage: { inputTokens: options.input.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0) },
+      };
+    } catch (err) {
+      throw mapGeminiError(err);
+    }
+  }
+
+  async transcribe(options: TranscribeOptions): Promise<TranscribeResult> {
+    const model = options.model ?? "gemini-3.5-flash-lite";
+    try {
+      const m = this.client.getGenerativeModel({ model });
+      const result = await m.generateContent([
+        { inlineData: { mimeType: options.mimeType.split(";")[0]!, data: Buffer.from(options.audio).toString("base64") } },
+        {
+          text:
+            "Transcribe this voice message exactly as spoken, in the language spoken (it may be Shona, Ndebele, English or any other). " +
+            "Output only the transcript — no translation, labels or commentary. If nothing intelligible is said, output nothing.",
+        },
+      ]);
+      const meta = result.response.usageMetadata;
+      return {
+        text: result.response.text().trim(),
+        model,
+        provider: this.name,
+        usage: { inputTokens: meta?.promptTokenCount ?? 0, outputTokens: meta?.candidatesTokenCount ?? 0 },
       };
     } catch (err) {
       throw mapGeminiError(err);

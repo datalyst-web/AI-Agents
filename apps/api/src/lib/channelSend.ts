@@ -16,7 +16,7 @@ export async function telegramCall(botToken: string, method: string, body?: Reco
 // WhatsApp/Messenger/Instagram all run through one Meta App and one Graph
 // API surface (see META_APP_SECRET's comment in packages/config) — a single
 // pinned API version keeps every call in this file consistent.
-const GRAPH_API = "https://graph.facebook.com/v19.0";
+export const GRAPH_API = "https://graph.facebook.com/v19.0";
 
 export async function graphApiGet(accessToken: string, path: string, fields: string) {
   const resp = await fetch(`${GRAPH_API}/${path}?fields=${encodeURIComponent(fields)}`, {

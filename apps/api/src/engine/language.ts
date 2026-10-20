@@ -239,3 +239,73 @@ export function isNegative(text: string): boolean {
   const t = normaliseReply(text);
   return NEGATIVE.has(t) || (t.split(" ").every((w) => NEGATIVE.has(w)) && t.length > 0);
 }
+
+/**
+ * The few fixed messages customers can see without a model writing them,
+ * in the languages we're confident read naturally. Anything else falls back
+ * to English — never a machine-guessed sentence in a language we can't vouch for.
+ */
+type NoticeKey = "takeover" | "actionFailed" | "unavailable" | "trouble" | "confirmHint" | "confirmButton" | "cancelButton";
+const NOTICES: Record<string, Record<NoticeKey, string>> = {
+  english: {
+    takeover: "A team member is handling this conversation and will reply here shortly.",
+    actionFailed: "Sorry, I wasn't able to complete that action. Our team has been notified and will follow up.",
+    unavailable: "This assistant is temporarily unavailable. Please contact the business directly.",
+    trouble: "Sorry, I'm having trouble responding right now. Please try again in a moment.",
+    confirmHint: "Reply YES to confirm or NO to cancel.",
+    confirmButton: "✅ Confirm",
+    cancelButton: "❌ Cancel",
+  },
+  shona: {
+    takeover: "Mumwe wechikwata chedu ari kubatsira pahurukuro iyi uye achakupindurai pano munguva pfupi.",
+    actionFailed: "Ndine urombo, handina kukwanisa kupedzisa izvozvo. Chikwata chedu chaziviswa uye chichakudzokerai.",
+    unavailable: "Mubatsiri uyu haasi kuwanikwa parizvino. Ndapota batai bhizinesi zvakananga.",
+    trouble: "Ndine urombo, ndiri kunetseka kupindura parizvino. Ndapota edzai zvakare munguva pfupi.",
+    confirmHint: "Pindurai HONGU kubvuma kana KWETE kukanzura.",
+    confirmButton: "✅ Hongu",
+    cancelButton: "❌ Kwete",
+  },
+  ndebele: {
+    takeover: "Omunye weqembu lethu uphethe lingxoxo, uzakuphendula lapha masinyane.",
+    actionFailed: "Uxolo, angikwanisanga ukuqedela lokho. Iqembu lethu selitsheliwe, lizakubuyela kuwe.",
+    unavailable: "Lumsizi akatholakali okwamanje. Sicela uthintane lebhizinisi ngqo.",
+    trouble: "Uxolo, nginobunzima bokuphendula khathesi. Sicela uzame futhi emva kwesikhatshana.",
+    confirmHint: "Phendula YEBO ukuvuma kumbe HATSHI ukukhansela.",
+    confirmButton: "✅ Yebo",
+    cancelButton: "❌ Hatshi",
+  },
+  french: {
+    takeover: "Un membre de l'équipe s'occupe de cette conversation et vous répondra ici sous peu.",
+    actionFailed: "Désolé, je n'ai pas pu effectuer cette action. Notre équipe a été prévenue et reviendra vers vous.",
+    unavailable: "Cet assistant est momentanément indisponible. Veuillez contacter l'entreprise directement.",
+    trouble: "Désolé, j'ai du mal à répondre pour le moment. Veuillez réessayer dans un instant.",
+    confirmHint: "Répondez OUI pour confirmer ou NON pour annuler.",
+    confirmButton: "✅ Confirmer",
+    cancelButton: "❌ Annuler",
+  },
+  portuguese: {
+    takeover: "Um membro da equipa está a tratar desta conversa e responderá aqui em breve.",
+    actionFailed: "Desculpe, não consegui concluir essa ação. A nossa equipa foi avisada e entrará em contacto.",
+    unavailable: "Este assistente está temporariamente indisponível. Contacte diretamente a empresa.",
+    trouble: "Desculpe, estou com dificuldade em responder agora. Tente novamente daqui a pouco.",
+    confirmHint: "Responda SIM para confirmar ou NÃO para cancelar.",
+    confirmButton: "✅ Confirmar",
+    cancelButton: "❌ Cancelar",
+  },
+  swahili: {
+    takeover: "Mmoja wa timu yetu anashughulikia mazungumzo haya na atakujibu hapa hivi karibuni.",
+    actionFailed: "Samahani, sikuweza kukamilisha hilo. Timu yetu imearifiwa na itawasiliana nawe.",
+    unavailable: "Msaidizi huyu hapatikani kwa sasa. Tafadhali wasiliana na biashara moja kwa moja.",
+    trouble: "Samahani, ninapata shida kujibu kwa sasa. Tafadhali jaribu tena baada ya muda mfupi.",
+    confirmHint: "Jibu NDIYO kuthibitisha au HAPANA kughairi.",
+    confirmButton: "✅ Thibitisha",
+    cancelButton: "❌ Ghairi",
+  },
+};
+
+/** `language` is a conversation's replyLanguage (null = English). */
+export function notice(key: NoticeKey, language: string | null | undefined): string {
+  const base = baseLanguage(language ?? "English").toLowerCase().replace(/^isi|^chi/, "");
+  const match = Object.keys(NOTICES).find((name) => base.startsWith(name) || name.startsWith(base));
+  return NOTICES[match ?? "english"]![key];
+}

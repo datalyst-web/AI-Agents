@@ -95,6 +95,23 @@ export interface EmbedResult {
   usage: { inputTokens: number };
 }
 
+/** Speech-to-text for customer voice notes (WhatsApp, Telegram, Messenger, Instagram). */
+export interface TranscribeOptions {
+  audio: Uint8Array;
+  /** e.g. "audio/ogg", "audio/mpeg", "audio/mp4". */
+  mimeType: string;
+  /** With an extension the provider recognises, e.g. "voice.ogg". */
+  filename: string;
+  model?: string;
+}
+
+export interface TranscribeResult {
+  text: string;
+  model: string;
+  provider: ProviderName;
+  usage: { inputTokens: number; outputTokens: number };
+}
+
 export interface HealthCheckResult {
   healthy: boolean;
   latencyMs?: number;
@@ -118,6 +135,9 @@ export interface AIProvider {
   toolCall(options: GenerateOptions & { tools: ToolSpec[] }): Promise<GenerateResult>;
 
   embed(options: EmbedOptions): Promise<EmbedResult>;
+
+  /** Throws `invalid_request` on a provider with no audio input (Anthropic); the router skips it. */
+  transcribe(options: TranscribeOptions): Promise<TranscribeResult>;
 
   countTokens(text: string, model: string): Promise<number>;
 

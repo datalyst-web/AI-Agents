@@ -64,6 +64,7 @@ import { registerSecurityFlagRoutes } from "./routes/securityFlags.routes.js";
 import { registerPlatformAnalyticsRoutes } from "./routes/platformAnalytics.routes.js";
 import { registerMemoryRoutes, registerPublicMemoryRoutes } from "./routes/memory.routes.js";
 import { registerPaynowBillingRoutes } from "./routes/paynowBilling.routes.js";
+import { registerClientErrorRoutes } from "./routes/clientErrors.routes.js";
 
 export async function buildApp(ctx: AppContext = buildAppContext()) {
   const app = Fastify({
@@ -179,6 +180,7 @@ export async function buildApp(ctx: AppContext = buildAppContext()) {
   await registerSecurityFlagRoutes(app, ctx);
   await registerPlatformAnalyticsRoutes(app, ctx);
   await registerMemoryRoutes(app, ctx);
+  await registerClientErrorRoutes(app);
   await registerPaynowBillingRoutes(app, ctx); // includes a server-to-server webhook — CORS is moot there, no browser involved
 
   return app;
