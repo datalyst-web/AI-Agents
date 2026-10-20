@@ -477,6 +477,9 @@ interface ChatResponse {
 
   async function sendMessage(text: string, confirmation?: { confirmToolCallId: string }) {
     if (!config) return;
+    // A typed reply settles any waiting confirmation on the server (a yes in
+    // any language confirms it, anything else drops it) — old buttons go.
+    if (text) confirmationEl.hidden = true;
     if (text) appendMessage("customer", text);
 
     const typing = document.createElement("div");
@@ -580,7 +583,17 @@ interface ChatResponse {
   let hintTimer: ReturnType<typeof setTimeout> | undefined;
   const SILENCE_MS = 2500;
   const MAX_LISTEN_MS = 60_000;
-  if (SpeechRecognitionCtor && window.isSecureContext) micBtn.hidden = false;
+  // A host site can forbid the microphone outright (a Permissions-Policy
+  // header with `microphone=()`, common on security-hardened hosting). The
+  // browser then refuses without even asking, so the button would only
+  // ever show an error — hide it instead. Browsers without the policy API
+  // (Safari) fall through to the normal permission prompt.
+  const policyDoc = document as unknown as {
+    permissionsPolicy?: { allowsFeature(f: string): boolean };
+    featurePolicy?: { allowsFeature(f: string): boolean };
+  };
+  const micForbiddenBySite = (policyDoc.permissionsPolicy ?? policyDoc.featurePolicy)?.allowsFeature("microphone") === false;
+  if (SpeechRecognitionCtor && window.isSecureContext && !micForbiddenBySite) micBtn.hidden = false;
 
   function showVoiceHint(text: string, tone: "info" | "error", autoHideMs?: number) {
     clearTimeout(hintTimer);

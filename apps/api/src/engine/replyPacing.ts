@@ -11,6 +11,7 @@ import { graphApiSend, telegramCall } from "../lib/channelSend.js";
 import { servedAgentConfig } from "../lib/publishedAgentConfig.js";
 import { checkUsageAllowance } from "../lib/usageEnforcement.js";
 import { processCustomerMessage, type AgentTurnResult } from "./agentLoop.js";
+import { isAffirmative, isNegative } from "./language.js";
 import { env } from "../env.js";
 
 /**
@@ -151,6 +152,37 @@ async function humanIsHandling(ctx: AppContext, inbound: ChannelInbound): Promis
   });
 }
 
+/**
+ * The action waiting for this customer's yes, if any. WhatsApp, Messenger
+ * and Instagram have no confirm button, so the customer types their answer;
+ * a yes in any language (engine/language.ts) confirms exactly this pending
+ * call. Anything else goes to the model as usual, which drops the pending
+ * action — the same as tapping Cancel.
+ */
+async function pendingToolCallId(ctx: AppContext, inbound: ChannelInbound): Promise<string | null> {
+  return withTenant(ctx.prisma, { tenantId: inbound.tenantId, agentId: inbound.agentId }, async (tx) => {
+    const identity = await tx.customerIdentity.findUnique({
+      where: {
+        tenantId_agentId_identifierType_identifierHash: {
+          tenantId: inbound.tenantId,
+          agentId: inbound.agentId,
+          identifierType: inbound.identifierType,
+          identifierHash: hashIdentifier(inbound.sender),
+        },
+      },
+      select: { id: true },
+    });
+    if (!identity) return null;
+    const open = await tx.conversation.findFirst({
+      where: { tenantId: inbound.tenantId, agentId: inbound.agentId, channel: inbound.channel, customerIdentityId: identity.id, outcome: "IN_PROGRESS" },
+      orderBy: { startedAt: "desc" },
+      select: { pendingToolCall: true },
+    });
+    const pending = open?.pendingToolCall as { id?: unknown } | null | undefined;
+    return typeof pending?.id === "string" ? pending.id : null;
+  });
+}
+
 async function servedPacing(ctx: AppContext, inbound: ChannelInbound): Promise<ReplyPacing | null> {
   return withTenant(ctx.prisma, { tenantId: inbound.tenantId, agentId: inbound.agentId }, async (tx) => {
     const agent = await tx.agent.findFirst({ where: { id: inbound.agentId, tenantId: inbound.tenantId } });
@@ -167,7 +199,10 @@ async function servedPacing(ctx: AppContext, inbound: ChannelInbound): Promise<R
 export async function handleChannelInbound(ctx: AppContext, inbound: ChannelInbound, credential: string): Promise<void> {
   const pacing = await servedPacing(ctx, inbound).catch(() => null);
   const immediate =
-    !pacing || (pacing.urgentBypass && isUrgent(inbound.text)) || (await humanIsHandling(ctx, inbound).catch(() => false));
+    !pacing ||
+    (pacing.urgentBypass && isUrgent(inbound.text)) ||
+    ((isAffirmative(inbound.text) || isNegative(inbound.text)) && Boolean(await pendingToolCallId(ctx, inbound).catch(() => null))) ||
+    (await humanIsHandling(ctx, inbound).catch(() => false));
   if (immediate) {
     // Anything still waiting in a burst goes out with this answer, and the
     // waiting job then finds nothing to do.
@@ -260,12 +295,15 @@ export async function runChannelReplyJob(ctx: AppContext, job: ChannelReplyJob):
 
 async function answer(ctx: AppContext, a: ChannelInbound & { credential: string; pacing: ReplyPacing | null }): Promise<void> {
   if (a.pacing?.typingIndicator) await markSeen(a).catch(() => undefined);
+  // Telegram confirms with its buttons; a typed yes works on every channel.
+  const confirmToolCallId = isAffirmative(a.text) ? ((await pendingToolCallId(ctx, a).catch(() => null)) ?? undefined) : undefined;
   const result = await processCustomerMessage(ctx, {
     tenantId: a.tenantId,
     agentId: a.agentId,
     channel: a.channel,
     customerMessage: a.text,
     customerIdentifier: { type: a.identifierType, value: a.sender },
+    confirmToolCallId,
   });
   // A person is handling this chat — stay silent, no placeholder.
   if (result.humanTakeoverActive) return;
@@ -304,7 +342,7 @@ async function deliver(a: ChannelInbound & { credential: string }, result: Agent
     return;
   }
   const text = result.pendingConfirmation
-    ? `${result.pendingConfirmation.confirmationPrompt}\n\nReply YES to confirm or NO to cancel.`
+    ? `${result.pendingConfirmation.confirmationPrompt}\n\nReply YES to confirm or NO to cancel (hongu / kwete, yebo / hatshi).`
     : result.reply;
   if (!text) return;
   if (a.channel === "WHATSAPP") {

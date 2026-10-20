@@ -79,7 +79,7 @@ const GOAL_BEHAVIOUR: Record<IntakeAnswers["goals"][number], string> = {
 const LANGUAGE_CODES: Record<string, string> = {
   english: "en", shona: "sn", ndebele: "nd", "isindebele": "nd", zulu: "zu", isizulu: "zu", xhosa: "xh", swahili: "sw", kiswahili: "sw",
   french: "fr", portuguese: "pt", spanish: "es", arabic: "ar", afrikaans: "af", chichewa: "ny", nyanja: "ny", tswana: "tn",
-  setswana: "tn", sotho: "st", sesotho: "st", tonga: "to", venda: "ve", tsonga: "ts", amharic: "am", yoruba: "yo", igbo: "ig",
+  setswana: "tn", sotho: "st", sesotho: "st", tonga: "toi", chitonga: "toi", venda: "ve", tshivenda: "ve", tsonga: "ts", shangani: "ts", xitsonga: "ts", kalanga: "kck", tjikalanga: "kck", nambya: "nmq", ndau: "ndc", chibarwe: "bwg", chishona: "sn", chewa: "ny", amharic: "am", yoruba: "yo", igbo: "ig",
   hausa: "ha", somali: "so", kinyarwanda: "rw", luganda: "lg", german: "de", italian: "it", chinese: "zh", mandarin: "zh", hindi: "hi",
 };
 
@@ -127,9 +127,11 @@ export function buildSystemInstructions(a: IntakeAnswers): string {
     "",
     "HOW YOU SOUND",
     `- Be ${TONE_WORDS[a.tone]}. Keep replies short and easy to read on a phone.`,
+    // Never a restriction: a customer who writes in any other language still
+    // gets answered in it (engine/language.ts).
     langs.names.length
-      ? `- Reply in the language the customer writes in when it is one of: ${langs.names.join(", ")}. Otherwise reply in ${langs.names[0]}.`
-      : "- Reply in the language the customer writes in.",
+      ? `- Most customers write in ${langs.names.join(", ")}, but always reply in whatever language the customer uses, and switch when they do.`
+      : "- Always reply in whatever language the customer uses, and switch when they do.",
     "- Use the customer's name once they have given it.",
     "",
     "FACTS",

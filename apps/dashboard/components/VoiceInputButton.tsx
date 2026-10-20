@@ -36,6 +36,12 @@ const ERRORS: Record<string, string> = {
 
 function recognitionCtor(): (new () => Recognition) | undefined {
   if (typeof window === "undefined" || !window.isSecureContext) return undefined;
+  // The page forbids the microphone (Permissions-Policy) — it could never work.
+  const policyDoc = document as unknown as {
+    permissionsPolicy?: { allowsFeature(f: string): boolean };
+    featurePolicy?: { allowsFeature(f: string): boolean };
+  };
+  if ((policyDoc.permissionsPolicy ?? policyDoc.featurePolicy)?.allowsFeature("microphone") === false) return undefined;
   const w = window as unknown as Record<string, unknown>;
   return (w.SpeechRecognition ?? w.webkitSpeechRecognition) as (new () => Recognition) | undefined;
 }

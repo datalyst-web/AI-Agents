@@ -480,6 +480,12 @@ model Conversation {
   /// stable across turns) — see engine/agentLoop.ts. Cleared once resolved
   /// or superseded by a later message that isn't a matching confirmation.
   pendingToolCall    Json?                @map("pending_tool_call")
+  /// The language the agent is replying in (null = English, the default).
+  /// When the customer writes in another language the agent answers in it and
+  /// offers to switch; `languageOffer` holds that offer until they reply.
+  /// See apps/api/src/engine/language.ts.
+  replyLanguage      String?              @map("reply_language")
+  languageOffer      String?              @map("language_offer")
   startedAt          DateTime             @default(now()) @map("started_at")
   endedAt            DateTime?            @map("ended_at")
   /// Set once NO_REPLY_TIMEOUT has fired for this conversation, so the

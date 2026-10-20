@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { withTenant } from "@chat-agent/db";
 import type { AppContext } from "../lib/context.js";
 import { processCustomerMessage } from "../engine/agentLoop.js";
+import { isAffirmative } from "../engine/language.js";
 import { verifyWidgetToken } from "../lib/widgetToken.js";
 import { checkUsageAllowance } from "../lib/usageEnforcement.js";
 import { isSubscriptionLapsed } from "../lib/subscriptionAccess.js";
@@ -71,6 +72,19 @@ export async function registerChatRoutes(app: FastifyInstance, ctx: AppContext) 
     }
 
     try {
+      // A visitor who types "yes" (in any language) instead of pressing
+      // Confirm means the same thing — confirm the action that's waiting.
+      let confirmToolCallId = body.confirmToolCallId;
+      if (!confirmToolCallId && body.conversationId && isAffirmative(body.message)) {
+        const conversation = await withTenant(ctx.prisma, { tenantId: claim.tenantId, agentId }, (tx) =>
+          tx.conversation.findFirst({
+            where: { id: body.conversationId, tenantId: claim.tenantId, agentId },
+            select: { pendingToolCall: true },
+          }),
+        );
+        const pending = conversation?.pendingToolCall as { id?: unknown } | null | undefined;
+        if (typeof pending?.id === "string") confirmToolCallId = pending.id;
+      }
       const result = await processCustomerMessage(
         { prisma: ctx.prisma, router: ctx.router, secrets: ctx.secrets, queue: ctx.queue },
         {
@@ -80,7 +94,7 @@ export async function registerChatRoutes(app: FastifyInstance, ctx: AppContext) 
           channel: "WIDGET",
           customerMessage: body.message,
           customerIdentifier: body.customerIdentifier,
-          confirmToolCallId: body.confirmToolCallId,
+          confirmToolCallId,
         },
       );
       reply.send(result);

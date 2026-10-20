@@ -21,6 +21,7 @@ import { writeAuditLog } from "../lib/audit.js";
 import { encryptChannelCredential } from "../lib/channelCrypto.js";
 import { env } from "../env.js";
 import { servedAgentConfig } from "../lib/publishedAgentConfig.js";
+import { LANGUAGE_TEXT, cleanSearchQuery, detectedLanguage, languageTurn, looksLikeEnglish, searchQueryMessages } from "./language.js";
 
 // Identifier types whose raw value is the destination for an outbound
 // message (a Telegram chat_id, a WhatsApp/Messenger/Instagram sender id) —
@@ -201,7 +202,6 @@ How to write every reply — short, warm and easy to act on, like a great salesp
 - Plain text only. No markdown: no asterisks, no #, no tables, no [text](link) — the chat shows them literally.
 - Sound confident and specific, never like a brochure. No filler: no "Great question!", "I hope this helps", "Feel free to...", or repeating the question back.
 - Vary your wording; never open two replies the same way.
-- Reply in the customer's language.
 - Only go past 50 words when the customer explicitly asks for detail, or the business's instructions require it.
 - Never cut a fact, price condition or caveat just to be shorter — accuracy beats brevity.`.trim();
 
@@ -261,12 +261,16 @@ export function buildSystemPrompt(
   priorFacts: { fact: string }[],
   retrievedKnowledge: { textSnippet: string }[],
   toolNames: string[] = [],
+  /** This turn's language instruction (engine/language.ts languageTurn). */
+  languageInstruction?: string,
 ): string {
   return [
     tenantSystemInstructions,
     GUARDRAIL_SYSTEM_TEXT,
     capabilitiesText(toolNames),
     REPLY_STYLE_TEXT,
+    LANGUAGE_TEXT,
+    languageInstruction ?? "",
     priorFacts.length
       ? fenceUntrustedContext(
           "Known facts about this returning customer (only reference these if relevant, and never claim they said something they didn't)",
@@ -553,14 +557,56 @@ export async function processCustomerMessage(
       }
     } else {
       // ---- RETRIEVE -----------------------------------------------------
+      // The customer's own words, plus — for a follow-up or a message that
+      // isn't plain English — a standalone English search query, because
+      // most knowledge bases are English and "Imarii?" alone matches
+      // nothing (engine/language.ts). A failed rewrite just falls back.
+      const searchQueries = [input.customerMessage];
+      let detectedLang: string | null = null;
+      // A conversation already in another language checks every message, so
+      // a switch back to English is noticed too.
+      if (history.length > 0 || conversation.replyLanguage || !looksLikeEnglish(input.customerMessage)) {
+        try {
+          const rewrite = await deps.router.generate({
+            messages: searchQueryMessages(history, input.customerMessage),
+            failoverChain: modelRouting.failoverChain,
+            preferredProvider: modelRouting.preferredProvider,
+            anthropicModelTier: modelRouting.anthropicModelTier,
+            reasoningEffort: "low",
+            maxOutputTokens: 512,
+          });
+          await recordUsage(tx, {
+            tenantId: input.tenantId,
+            agentId: input.agentId,
+            conversationId: conversation.id,
+            provider: rewrite.provider,
+            modelId: rewrite.model,
+            inputTokens: rewrite.usage.inputTokens,
+            outputTokens: rewrite.usage.outputTokens,
+          });
+          detectedLang = detectedLanguage(rewrite.content);
+          const query = cleanSearchQuery(rewrite.content);
+          if (query && query.toLowerCase() !== input.customerMessage.trim().toLowerCase()) searchQueries.push(query);
+        } catch {
+          // Search with the original words only.
+        }
+      }
       try {
-        retrievedKnowledge = await retrieveKnowledge(tx, deps.router, {
-          tenantId: input.tenantId,
-          agentId: input.agentId,
-          query: input.customerMessage,
-          embeddingModel: EMBEDDING_MODEL,
-          limit: 5,
-        });
+        const byChunk = new Map<string, RetrievedKnowledgeChunk>();
+        for (const query of searchQueries) {
+          const found = await retrieveKnowledge(tx, deps.router, {
+            tenantId: input.tenantId,
+            agentId: input.agentId,
+            query,
+            embeddingModel: EMBEDDING_MODEL,
+            limit: 5,
+          });
+          for (const chunk of found) {
+            const seen = byChunk.get(chunk.chunkId);
+            if (!seen || chunk.score > seen.score) byChunk.set(chunk.chunkId, chunk);
+          }
+        }
+        retrievedKnowledge = [...byChunk.values()].sort((a, b) => b.score - a.score).slice(0, 5);
       } catch {
         // Knowledge base may be empty/not yet embedded — proceed without
         // grounding rather than failing the whole turn; the guardrail
@@ -568,11 +614,25 @@ export async function processCustomerMessage(
         retrievedKnowledge = [];
       }
 
+      const language = languageTurn({
+        current: conversation.replyLanguage,
+        offered: conversation.languageOffer,
+        detected: detectedLang,
+        message: input.customerMessage,
+      });
+      if (language.replyLanguage !== conversation.replyLanguage || language.languageOffer !== conversation.languageOffer) {
+        await tx.conversation.update({
+          where: { id: conversation.id },
+          data: { replyLanguage: language.replyLanguage, languageOffer: language.languageOffer },
+        });
+      }
+
       const systemPrompt = buildSystemPrompt(
         personality.systemInstructions,
         priorFacts,
         retrievedKnowledge,
         toolRegistry.listToolSpecs().map((t) => t.name),
+        language.instruction,
       );
 
       const messages: ChatMessage[] = [

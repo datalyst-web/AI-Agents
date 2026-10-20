@@ -540,6 +540,17 @@ invoiced and reported on separately.
   answers at once. Delayed replies are durable queue jobs consumed by the
   API (`engine/replyPacing.ts`, started in `server.ts`, not `buildApp`); a
   conversation a person has taken over is never delayed.
+- **Languages** — `engine/language.ts`. English is the default; when a
+  customer writes in another language (any major one, or Zimbabwe's:
+  Shona, Ndebele, Ndau, Tonga, Kalanga, Nambya, Venda, Shangani, Chewa,
+  Sotho, Tswana, Xhosa, Chibarwe) the agent answers in it and asks once
+  whether to continue in it; yes (in any language) or simply carrying on
+  switches, no stays. State lives on `Conversation.replyLanguage` /
+  `languageOffer`. A follow-up or non-English message also gets a cheap
+  rewrite call that names the language and produces an English search
+  query, because knowledge bases are mostly English and "Imarii?" alone
+  matches nothing. A typed yes in any language confirms a pending action on
+  every channel (WhatsApp/Messenger/Instagram have no buttons).
 - **Voice input** — the widget, standalone page and Test Agent chat have a
   mic using the browser's own speech recognition: words land in the box to
   be checked before sending, no audio reaches us, and the button is hidden
